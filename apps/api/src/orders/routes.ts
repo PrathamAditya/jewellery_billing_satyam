@@ -17,6 +17,7 @@ import {
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
 import { classifyReplay } from "../db/idempotency";
+import { printedNumberSql, printedNumberValues } from "../db/numbering";
 import { readJson, validationBody } from "../http";
 import { refundedOf } from "../payments/routes";
 import { settingsSnapshot } from "../settings/routes";
@@ -142,10 +143,10 @@ orderRoutes.post("/", async (c) => {
       db
         .prepare(
           `INSERT INTO orders (id, created_at, created_by, updated_at, updated_by, order_no, fy, serial, customer_id, description, expected_date, status, remarks, header_json)
-           VALUES (?1, ?2, ?3, ?2, ?3, 'ORD-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'ORD' AND fy = ?4)), ?4,
+           VALUES (?1, ?2, ?3, ?2, ?3, ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'ORD' AND fy = ?4)", ["?10", "?11", "?12"])}, ?4,
                    (SELECT last_no FROM number_series WHERE series = 'ORD' AND fy = ?4), ?5, ?6, ?7, 'open', ?8, ?9)`,
         )
-        .bind(id, now, user.id, fy, b.customerId, b.description ?? "", b.expectedDate ?? null, b.remarks ?? null, JSON.stringify({ business: settings.business })),
+        .bind(id, now, user.id, fy, b.customerId, b.description ?? "", b.expectedDate ?? null, b.remarks ?? null, JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo }), ...printedNumberValues(settings.numbering, "ORD", fy)),
       auditStatement(db, { actor: user.id, action: "order_create", entity: "order", entityId: id, detail: { customerId: b.customerId } }),
     ]);
   } catch (e) {

@@ -24,6 +24,27 @@ export function allocateNumberStatement(
     .bind(series, fy);
 }
 
+/**
+ * Spec 003 R6, R10: the three values that print a number for one series and financial year:
+ * the prefix, the "2026-27-" part (only when fyInNumber is on) and the printf format ("%04d").
+ * Read the settings just before the batch and bind these values into it.
+ */
+export function printedNumberValues(
+  numbering: { prefixes: Record<string, string>; fyInNumber: boolean; padDigits: number },
+  series: NumberSeries,
+  fy: string,
+): [string, string, string] {
+  return [numbering.prefixes[series] ?? series, numbering.fyInNumber ? `${fy}-` : "", `%0${numbering.padDigits}d`];
+}
+
+/**
+ * SQL for the printed number, e.g. 'INV-2026-27-0001'. `serialSql` is the SQL that yields the serial.
+ * `at` are the three placeholders (e.g. "?24") that hold the values from printedNumberValues, in order.
+ */
+export function printedNumberSql(serialSql: string, at: [string, string, string]): string {
+  return `${at[0]} || '-' || ${at[1]} || printf(${at[2]}, ${serialSql})`;
+}
+
 /** Allocates one number on its own, e.g. "INV/2026-27/0001". */
 export async function allocateNumber(
   db: D1Database,

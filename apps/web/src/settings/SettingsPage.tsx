@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { financialYearOf } from "@jewellery/calc";
 import {
   formatMoney,
+  indiaDate,
   parseRateInput,
   settingsSchemas,
   type SettingsKey,
@@ -237,7 +239,8 @@ function NumberingForm({ s, onSaved }: { s: SettingsSnapshot; onSaved: (s: Setti
   const { save, busy, error, fieldErrors, saved } = useSave("numbering", (value) => onSaved({ ...s, numbering: value }));
   const [counters, setCounters] = useState<{ series: string; fy: string; last_no: number }[]>([]);
   const [series, setSeries] = useState("INV");
-  const [fy, setFy] = useState("");
+  const currentFy = financialYearOf(indiaDate());
+  const [fy, setFy] = useState(currentFy);
   const [nextNo, setNextNo] = useState("");
   const [nextMsg, setNextMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
@@ -298,12 +301,12 @@ function NumberingForm({ s, onSaved }: { s: SettingsSnapshot; onSaved: (s: Setti
       </section>
 
       <section className="flex flex-col gap-3 border-t border-stone-200 pt-4">
-        <h3 className="font-semibold">Last number used</h3>
-        {counters.length === 0 ? (
-          <p className="text-sm text-stone-500">No numbers used yet.</p>
+        <h3 className="font-semibold">Last number used this year ({currentFy})</h3>
+        {counters.filter((c) => c.series === "C" || c.fy === currentFy).length === 0 ? (
+          <p className="text-sm text-stone-500">No numbers used yet this year.</p>
         ) : (
           <ul className="text-sm flex flex-col gap-1">
-            {counters.map((c) => (
+            {counters.filter((c) => c.series === "C" || c.fy === currentFy).map((c) => (
               <li key={`${c.series}-${c.fy}`}>
                 {c.series === "C" ? "Customer numbers" : `${c.series} ${c.fy}`}: {c.last_no}
               </li>
