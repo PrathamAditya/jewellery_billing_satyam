@@ -8,6 +8,7 @@ import { niceDate } from "../rates/api";
 import Breakdown from "./Breakdown";
 import { getInvoice, getInvoiceHistory, voidInvoice } from "./api";
 import ReceiveDialog from "../payments/ReceiveDialog";
+import SettlementTab from "../settlement/SettlementTab";
 import { formatMoney as fm } from "@jewellery/shared";
 import { useAuth } from "../auth";
 
@@ -85,7 +86,7 @@ export default function InvoicePage({ id }: { id: string }) {
   const { can } = useAuth();
   const [inv, setInv] = useState<InvoiceResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"details" | "history">("details");
+  const [tab, setTab] = useState<"details" | "settlement" | "history">("details");
   const [voiding, setVoiding] = useState(false);
   const [receiving, setReceiving] = useState(false);
 
@@ -109,7 +110,7 @@ export default function InvoicePage({ id }: { id: string }) {
       <dd className="break-words">{value || <span className="text-stone-400">-</span>}</dd>
     </div>
   );
-  const tabBtn = (t: "details" | "history", label: string) => (
+  const tabBtn = (t: "details" | "settlement" | "history", label: string) => (
     <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-sm border-b-2 ${tab === t ? "border-stone-900 font-medium" : "border-transparent text-stone-500"}`}>
       {label}
     </button>
@@ -163,6 +164,7 @@ export default function InvoicePage({ id }: { id: string }) {
 
       <div className="flex gap-1 border-b border-stone-200">
         {tabBtn("details", "Details")}
+        {tabBtn("settlement", "Settlement")}
         {tabBtn("history", "History")}
       </div>
 
@@ -228,6 +230,7 @@ export default function InvoicePage({ id }: { id: string }) {
           <Breakdown r={calc} descriptions={inv.lines.map((l) => l.description)} />
         </div>
       )}
+      {tab === "settlement" && <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} />}
       {tab === "history" && <History id={inv.id} current={inv.revisionNo} onOpen={(rev) => (setTab("details"), load(rev))} />}
 
       {receiving && (

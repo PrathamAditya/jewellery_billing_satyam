@@ -1,6 +1,6 @@
 # 017: Settlement (the invoice's money page)
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (settlement API, remarks, use advances, reverse, screens, tests). Owner review pending. Printing the reverse page is spec 014.
 Depends on: 013, 015, 016, 018
 Open questions used with defaults: Q66 (the HTML "v84" file may arrive later and refine this, never contradict D1)
 

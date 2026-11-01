@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateOldGold } from "@jewellery/calc";
 import { OLD_GOLD_STATUS, formatMoney, formatPerGram, formatWeightGrams, parseRateInput, parseWeightGrams, amountInWords, newId, type CustomerResponse, type OldGoldTreatment } from "@jewellery/shared";
-import { ApiError } from "../api";
+import { ApiError, api } from "../api";
 import { useAuth } from "../auth";
 import CustomerPicker from "../customers/CustomerPicker";
 import { useDebounced } from "../customers/useDebounced";
@@ -63,7 +63,23 @@ export function OldGoldListPage() {
 }
 
 export function NewOldGoldPage() {
+  // Spec 017 R8: opened from an invoice's settlement page, the seller and invoice are filled in.
+  const [prefill] = useState<{ customerId: string; invoiceId: string } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem("oldGoldPrefill");
+      sessionStorage.removeItem("oldGoldPrefill");
+      return raw ? (JSON.parse(raw) as { customerId: string; invoiceId: string }) : null;
+    } catch {
+      return null;
+    }
+  });
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
+  useEffect(() => {
+    if (!prefill) return;
+    api<CustomerResponse>(`/api/customers/${prefill.customerId}`).then(setCustomer).catch(() => undefined);
+    setTreatment("invoice_adjustment");
+    setInvoiceId(prefill.invoiceId);
+  }, [prefill]);
   const [date, setDate] = useState("");
   const [rows, setRows] = useState<Row[]>([blankRow()]);
   const [treatment, setTreatment] = useState<OldGoldTreatment>("advance");
