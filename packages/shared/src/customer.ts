@@ -45,10 +45,10 @@ export function maskAadhaar(aadhaar: string): string {
   return `XXXX XXXX ${aadhaar.slice(-4)}`;
 }
 
-/** Spec 010 R2: "C-0001". Pads to 4 digits and grows beyond. */
+/** Spec 003 R8: "C0001". Pads to 4 digits and grows beyond. */
 export function formatCustomerNumber(n: number): string {
   if (!Number.isSafeInteger(n) || n < 1) throw new RangeError(`Invalid number: ${n}`);
-  return `C-${String(n).padStart(4, "0")}`;
+  return `C${String(n).padStart(4, "0")}`;
 }
 
 /** A blank optional field means "nothing". */

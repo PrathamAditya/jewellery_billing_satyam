@@ -43,8 +43,8 @@ describe("other cleaners (R3, R4)", () => {
     expect(maskAadhaar("123456789012")).toBe("XXXX XXXX 9012");
   });
   it("customer number pads to 4 digits and grows", () => {
-    expect(formatCustomerNumber(1)).toBe("C-0001");
-    expect(formatCustomerNumber(12345)).toBe("C-12345");
+    expect(formatCustomerNumber(1)).toBe("C0001");
+    expect(formatCustomerNumber(12345)).toBe("C12345");
     expect(() => formatCustomerNumber(0)).toThrow(RangeError);
   });
 });

@@ -86,7 +86,7 @@ customerRoutes.get("/", async (c) => {
     // A full number typed with +91 or 0 is cleaned the same way as when saving (R3), so it still matches.
     const digits = digitsOnly ? (cleanMobile(q) ?? q.replace(/\D/g, "")) : "";
     const numberMatch = /^c-?(\d+)$/i.exec(q);
-    const wanted = numberMatch ? `C-${numberMatch[1]!.padStart(4, "0")}` : null;
+    const wanted = numberMatch ? `C${numberMatch[1]!.padStart(4, "0")}` : null;
 
     const ors = [`name_search LIKE ${add(`%${lower}%`)} ESCAPE '\\'`];
     const exact = [`name_search = ${add(nameSearchKey(q))}`];
