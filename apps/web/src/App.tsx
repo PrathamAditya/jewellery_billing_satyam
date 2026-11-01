@@ -23,6 +23,8 @@ import OrderPage from "./orders/OrderPage";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
+import ThemeToggle from "./ThemeToggle";
+import { applyTheme, currentTheme } from "./theme";
 
 // The print views carry the print fonts and stylesheet, so they load only when a print page is opened (spec 014 R3).
 const PrintRoute = lazy(() => import("./print/PrintPages").then((m) => ({ default: m.PrintRoute })));
@@ -93,6 +95,9 @@ function Page({ path, meId }: { path: string; meId: string }) {
 function Shell() {
   const path = usePath();
   const { can, user } = useAuth();
+  // Print views are always light (spec 014 R6); the chosen screen theme comes back when leaving them.
+  const onPrint = path.startsWith("/print/");
+  useEffect(() => applyTheme(onPrint ? "light" : currentTheme()), [onPrint]);
   // Print views show only the document, with no app header (spec 014 R1).
   if (path.startsWith("/print/")) {
     return (
@@ -131,7 +136,10 @@ function Shell() {
           {can("settings.view") && link("#/settings", "Settings", inSettings)}
           {can("users.manage") && link("#/users", "People", path.startsWith("/users"))}
         </nav>
-        <AccountMenu />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <AccountMenu />
+        </div>
       </header>
       <main className="flex-1 w-full max-w-5xl mx-auto p-4">
         <Page path={path} meId={user?.id ?? ""} />
