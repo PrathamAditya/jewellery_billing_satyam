@@ -2,19 +2,21 @@
 
 Status: Draft (needs owner approval)
 Depends on: 000, 001, 002
-Open questions: Q1 to Q3 in section 8. Adds O9 to `docs/decisions.md` (blocks 012 and 018, not this spec).
+Open questions: none block this spec. Section 8 has the owner's answers and two points to confirm. Adds O9 (blocks 012 and 018) and O10 (blocks 011b) to `docs/decisions.md`.
 
 ## 1. Goal
-The owner enters the day's rates once: 24K995 gold, 22K916 gold and silver. Every later feature asks "what is the applicable rate for this date?" and gets one clear answer. Past rates are kept forever, and changing a rate never touches an invoice that was already saved (the saved invoice keeps its own copy, see CLAUDE.md rule 5).
+The owner types the day's rates: 24K995 gold, 22K916 gold and silver, per kg or per gram, and sees both figures. Every later feature asks "what is the applicable rate for this date?" and gets one clear answer. Invoices use only the rate the owner typed. Past rates are kept forever, and changing a rate never touches an invoice that was already saved (the saved invoice keeps its own copy, see CLAUDE.md rule 5).
+
+Live IBJA rates fetched from the internet are a separate spec (011b). They will be shown as a reference and can pre-fill the typing box, but they never go onto an invoice unless the owner saves them as the day's rate.
 
 ## 2. Rules
 
 **What is stored**
 - R1. Three rate kinds: `gold_24k995`, `gold_22k916`, `silver`. No other kinds in this spec (see O9).
 - R2. One rate per kind per business date (India date). The business date is `YYYY-MM-DD`.
-- R3. The owner enters the rate in the unit shops quote it, and it is stored in that unit as whole paise: **gold per 10 g, silver per 1 kg** (proposed as decision D13, see Q1). Entry is in rupees with up to 2 decimals, commas allowed (`1,20,000` or `120000.50`) and is converted to paise with no floats. The unit is fixed per kind, not stored per row.
-- R4. A price must be greater than 0 and at most ₹1,00,00,000 per unit. Anything else is rejected with a clear message.
-- R5. For display only, the screen also shows the per-gram figure (`₹12,000.00 per gram`). It is never stored. How later specs turn a price into an amount is decided in spec 012: they multiply weight in mg by the price and divide by the unit in mg (10,000 mg or 1,000,000 mg), and round once with the single rounding function.
+- R3. Every rate is stored as whole paise **per 1 kg** (`price_paise_per_kg`), for gold and silver alike. The owner may type it **per kg or per gram** (a switch on each row). Typing is in rupees, commas and a rupee sign allowed (`1,20,00,000` or `₹ 12,000`). Per kg allows up to 2 decimals. Per gram allows up to 3 decimals, which is always an exact number of paise per kg (`150.123` per gram is `₹1,50,123` per kg). The conversion uses whole-number arithmetic with no floats, and more decimals than allowed are rejected, never rounded.
+- R4. A price must be greater than 0 and at most ₹10,00,00,000 per kg (₹1,00,000 per gram). Anything else is rejected with a clear message.
+- R5. The screen always shows both figures for each rate, per kg and per gram (`₹12,000.00 per gram`, `₹1,20,00,000 per kg`). The per-gram figure is display only and is shown with 2 to 3 decimals. How later specs turn a price into an amount is decided in spec 012: they multiply weight in mg by the price and divide by 1,000,000 mg, and round once with the single rounding function.
 
 **Dates**
 - R6. A rate can be saved for today or any earlier date. Future dates are rejected. Past dates are allowed (to enter old data) and the screen asks "This is not today's date. Save anyway?".
@@ -35,20 +37,20 @@ The owner enters the day's rates once: 24K995 gold, 22K916 gold and silver. Ever
 ## 3. Data
 New table `rates` (migration follows 001 conventions, including the no-delete trigger):
 - standard columns (`id`, `created_at`, `created_by`, `updated_at`, `updated_by`)
-- `rate_date` (`YYYY-MM-DD`), `kind` (one of R1, checked), `price_paise` (integer, `CHECK (price_paise > 0)`)
+- `rate_date` (`YYYY-MM-DD`), `kind` (one of R1, checked), `price_paise_per_kg` (integer, `CHECK (price_paise_per_kg > 0)`)
 - unique `(rate_date, kind)`, and an index on `(kind, rate_date)` for the "latest before" lookup.
 
-Units live in code (`packages/calc`): `RATE_UNIT_MG = { gold_24k995: 10_000, gold_22k916: 10_000, silver: 1_000_000 }`.
+The unit is one constant in code (`packages/calc`): `RATE_UNIT_MG = 1_000_000` (1 kg), with the exact per-gram conversions kept next to it and tested.
 
 API (all under `/api/rates`):
 - `GET /applicable?date=YYYY-MM-DD` (date defaults to today): the three applicable rates per R8.
 - `GET /?from=&to=`: saved rows grouped by date, newest first (default: last 60 days), with a cursor for older ones.
-- `PUT /:date/:kind` body `{ price: "1,20,000", reason?, confirmLargeChange? }`: create or edit. 201 on create, 200 on edit or no-op.
+- `PUT /:date/:kind` body `{ price: "12,000", unit: "gram" | "kg", reason?, confirmLargeChange? }`: create or edit. 201 on create, 200 on edit or no-op.
 - `GET /:date/:kind/history`: the earlier values with who changed them and when.
 
 ## 4. Screens and printing
 **PC: Rates page** (new "Rates" link in the top bar)
-- Top card "Rates for today (date)": three rows (24K995, 22K916, Silver). Each shows the unit ("per 10 g"), an input, the per-gram figure, and either "saved today" or "from 1 Nov (not set today)".
+- Top card "Rates for today (date)": three rows (24K995, 22K916, Silver). Each row has an input with a "per gram | per kg" switch, both figures shown live as the owner types, and either "saved today" or "from 1 Nov (not set today)".
 - One Save button saves the rows that changed. Inline messages from R4. The typo-guard prompt (R12) and the past-date prompt (R6) appear before saving.
 - Below it, a history table: date, 24K995, 22K916, silver. Clicking a cell opens that value's history and an Edit action with an optional reason.
 
@@ -63,55 +65,60 @@ API (all under `/api/rates`):
 - Only gold entered for today: gold is "saved today", silver is carried forward and flagged.
 - Entering yesterday's missing rate after today's invoices exist: allowed, saved invoices unchanged (R9).
 - Two devices save the same date and kind at once: the later save is an edit, and the first value is kept as a revision.
-- Price typed with spaces, a rupee sign or letters: `₹ 1,20,000` is accepted (symbol and commas removed), anything else non-numeric is rejected.
-- More than 2 decimals (`1,20,000.555`) is rejected, not rounded.
+- Price typed with spaces or a rupee sign: `₹ 12,000` is accepted (symbol and commas removed), anything else non-numeric is rejected.
+- More decimals than R3 allows is rejected, not rounded.
 - The typo guard compares with the applicable rate, so the first rate ever has nothing to compare with and never prompts.
 - Clock near midnight: the date comes from the server in India time, so a page left open overnight still saves for the real date unless the owner picked a date.
 
 ## 6. Test cases
 Entry conversion (R3, R4):
 
-| Kind | Typed | Stored `price_paise` |
-|------|-------|----------------------|
-| gold_24k995 | `1,20,000` | 12,000,000 |
-| gold_24k995 | `₹ 120000.50` | 12,000,050 |
-| silver | `1,50,000` | 15,000,000 |
-| silver | `150000.5` | 15,000,050 |
-| gold_22k916 | `0` | rejected |
-| gold_22k916 | `-5` | rejected |
-| gold_22k916 | `1,20,000.555` | rejected |
-| gold_22k916 | `abc` | rejected |
-| gold_22k916 | `1,00,00,001` | rejected |
+| Kind | Typed | Unit | Stored `price_paise_per_kg` |
+|------|-------|------|-----------------------------|
+| gold_24k995 | `12,000` | gram | 1,200,000,000 |
+| gold_24k995 | `1,20,00,000` | kg | 1,200,000,000 |
+| gold_22k916 | `₹ 11,000.5` | gram | 1,100,050,000 |
+| silver | `150` | gram | 15,000,000 |
+| silver | `150.123` | gram | 15,012,300 |
+| silver | `1,50,123` | kg | 15,012,300 |
+| silver | `1,50,123.45` | kg | 15,012,345 |
+| silver | `150.1234` | gram | rejected (more than 3 decimals) |
+| silver | `1,50,000.555` | kg | rejected (more than 2 decimals) |
+| gold_22k916 | `0` or `-5` or `abc` | either | rejected |
+| gold_22k916 | `1,00,00,001` | kg | rejected (above the limit) |
+| gold_22k916 | `1,00,001` | gram | rejected (above the limit) |
 
-Applicable rate (R8, R9), with gold_24k995 saved as ₹1,20,000 on 2026-11-01 and ₹1,22,000 on 2026-11-04:
+Applicable rate (R8, R9), with gold_24k995 saved as ₹12,000 per gram on 2026-11-01 and ₹12,200 per gram on 2026-11-04:
 
 | Asked for | Result |
 |-----------|--------|
 | 2026-10-31 | `null` |
-| 2026-11-01 | 12,000,000, `rateDate` 2026-11-01, `carriedForward` false |
-| 2026-11-03 | 12,000,000, `rateDate` 2026-11-01, `carriedForward` true |
-| 2026-11-04 | 12,200,000, `carriedForward` false |
-| 2026-11-09 | 12,200,000, `rateDate` 2026-11-04, `carriedForward` true |
+| 2026-11-01 | 1,200,000,000, `rateDate` 2026-11-01, `carriedForward` false |
+| 2026-11-03 | 1,200,000,000, `rateDate` 2026-11-01, `carriedForward` true |
+| 2026-11-04 | 1,220,000,000, `carriedForward` false |
+| 2026-11-09 | 1,220,000,000, `rateDate` 2026-11-04, `carriedForward` true |
 
 Other:
-- Per-gram display: 12,000,000 paise per 10 g shows `₹12,000.00`. 15,000,050 paise per kg shows `₹150.00` (R5, display only).
-- Edit 24K995 for 2026-11-01 from 12,000,000 to 12,100,000: one revision holds 12,000,000, the audit row lists the old and new price and the reason, and `rate_date` and `id` are unchanged (R10).
+- Display (R5): 1,200,000,000 paise per kg shows `₹12,000.00 per gram` and `₹1,20,00,000 per kg`. 15,012,300 shows `₹150.123 per gram`.
+- Edit 24K995 for 2026-11-01 from 1,200,000,000 to 1,210,000,000: one revision holds 1,200,000,000, the audit row lists the old and new price and the reason, and `rate_date` and `id` are unchanged (R10).
 - Save the same price again: no revision, no audit row (R10).
-- 12,000,000 to 13,500,000 (+12.5%) without confirmation: 409 `needs_confirmation`, nothing saved. With `confirmLargeChange: true`: saved (R12). 12,000,000 to 13,200,000 (exactly +10%): saved without a prompt.
+- 1,200,000,000 to 1,350,000,000 (+12.5%) without confirmation: 409 `needs_confirmation`, nothing saved. With `confirmLargeChange: true`: saved (R12). 1,200,000,000 to 1,320,000,000 (exactly +10%): saved without a prompt.
 - A future date is 400. An invalid date such as `2026-02-30` is 400 (R6).
 - Past date is accepted. "Today" is computed in India time: at 2026-11-01T19:00:00Z (00:30 on 2 Nov in India) saving for `2026-11-02` is accepted and `2026-11-03` is rejected (R7).
 - History returns every earlier value, newest first, with who and when (R10, R11).
 - `DELETE` on `rates` fails (R11, 001 R9).
 - Every route is 401 without a session, and `created_by` is the user id (R13).
-- Browser: save three rates, see them on the home card, edit one with a reason and see it in the history, carried-forward warning appears the next day, phone view is read-only.
+- Browser: switch a row between per gram and per kg and see both figures update, save three rates, see them on the home card, edit one with a reason and see it in the history, carried-forward warning appears the next day, phone view is read-only.
 
 ## 7. Out of scope
-Rates for other purities (18K750, 14K, 24K999, others) and how old gold uses a rate (O9, and specs 012 and 018), converting a price into an invoice amount (spec 012), copying the rate onto a saved invoice (013), automatic fetching of market rates from the internet, separate buying and selling rates, rate change alerts or notifications, a rates report.
+Rates for other purities (18K750, 14K, 24K999, others) and how old gold uses a rate (O9, and specs 012 and 018), converting a price into an invoice amount (spec 012), copying the rate onto a saved invoice (013), fetching live IBJA rates from a paid service and showing them (spec 011b, needs O10), separate buying and selling rates, rate change alerts or notifications, a rates report.
 
-## 8. Questions for the owner
-- Q1. **Units.** Is it right to enter gold per 10 g and silver per 1 kg, as most shops quote? This is the proposed decision D13. It replaces the earlier "rates are paise per gram" note, because a silver price per kg in whole rupees is not a whole number of paise per gram (₹1,50,123 per kg is ₹150.123 per gram). Storing the quoted price keeps every figure exact.
-- Q2. **Missing rate.** When today's rate has not been entered yet, should invoicing use the last saved rate and show a warning (proposed, R8), or be blocked until today's rate is entered?
-- Q3. **Same-day changes.** Is one rate per kind per day enough? If gold changes at 3 pm, the owner edits today's value and the earlier invoices keep what they used (proposed, R10). The alternative is a separate entry for every change with a time, which is more to enter and to read.
+## 8. Owner answers (2026-11-01) and points to confirm
+- Q1. Units: **both gold and silver in kg and gram**. Built as R3 and R5 (stored per kg, typed per kg or per gram, both shown). Gold is not typed per 10 g.
+- Q2. Rates on invoices: **only the rate the owner types**. Live rates never go on an invoice by themselves.
+- Q3. Live rates: **fetched from a paid IBJA rate service and displayed on the website**. This is spec 011b, not this spec, because it needs a provider and an API key first (O10).
+- To confirm (1). **Today's rate not typed yet.** The owner asked to "display the fresh rate live" in that situation. Until 011b exists, this spec uses the last typed rate and shows an amber "Today's rate is not set" warning (R8). Once 011b exists, the live IBJA rate is shown next to that warning with a "Use this rate" button that fills the typing box. Invoices still do not use it until it is saved. Say if you want invoicing blocked instead.
+- To confirm (2). **Changes during the day.** "Live rates daily" is read as one typed rate per kind per day. A change in the afternoon is an edit, the old value stays in the history, and earlier invoices keep what they used (R10). Say if you want a separate timed entry for every change.
 
 ## 9. Acceptance checklist
 - [ ] R1 to R13 implemented and tested

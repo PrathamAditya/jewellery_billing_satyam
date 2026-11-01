@@ -17,6 +17,6 @@ No code is written for a feature before its spec is Approved.
 | 001 | Database foundation | Done (owner approved 2026-11-01) |
 | 002 | Owner login | Done (owner approved 2026-11-01) |
 | 010 | Customers | Built, awaiting deploy and owner check |
-| 011 | Daily gold and silver rates | Draft, needs approval |
+| 011 | Daily gold and silver rates | Draft, needs approval (owner answers recorded) |
 
 The full list is in `docs/roadmap.md`.
