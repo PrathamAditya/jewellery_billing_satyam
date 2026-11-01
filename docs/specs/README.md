@@ -14,5 +14,6 @@ No code is written for a feature before its spec is Approved.
 | Spec | Name | Status |
 |------|------|--------|
 | 000 | Project scaffold, CI, deploy | Done |
+| 001 | Database foundation | Draft, needs approval |
 
 The full list is in `docs/roadmap.md`.
