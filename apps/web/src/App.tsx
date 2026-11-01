@@ -13,6 +13,8 @@ import InvoicePage from "./invoice/InvoicePage";
 import { EditInvoicePage, NewInvoicePage } from "./invoice/pages";
 import RatesPage from "./rates/RatesPage";
 import TodayRates from "./rates/TodayRates";
+import SettingsPage from "./settings/SettingsPage";
+import BusinessBanner from "./settings/BusinessBanner";
 
 type ApiStatus = "checking" | "ok" | "unreachable";
 
@@ -34,6 +36,7 @@ function Home() {
   return (
     <div className="flex flex-col items-center gap-2 py-8">
       <div className="w-full max-w-xl mb-8">
+        <BusinessBanner />
         <TodayRates />
       </div>
       <h1 className="text-3xl font-semibold">Jewellery Billing</h1>
@@ -62,6 +65,7 @@ function Page({ path }: { path: string }) {
     return <InvoicePage id={parts[1]!} />;
   }
   if (parts[0] === "rates") return <RatesPage />;
+  if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
   return <Home />;
@@ -72,6 +76,7 @@ function Shell() {
   const inCustomers = path.startsWith("/customers");
   const inRates = path.startsWith("/rates");
   const inInvoices = path.startsWith("/invoices");
+  const inSettings = path.startsWith("/settings");
   const inCalculator = path.startsWith("/calculator");
   const link = (href: string, label: string, active: boolean, extra = "") => (
     <a href={href} className={`px-2 sm:px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
@@ -88,6 +93,7 @@ function Shell() {
           {link("#/customers", "Customers", inCustomers)}
           {link("#/rates", "Rates", inRates)}
           {link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
+          {link("#/settings", "Settings", inSettings)}
         </nav>
         <AccountMenu />
       </header>
