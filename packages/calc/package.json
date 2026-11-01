@@ -1,5 +1,5 @@
 {
-  "name": "@jewlray/calc",
+  "name": "@jewellery/calc",
   "private": true,
   "type": "module",
   "main": "src/index.ts",

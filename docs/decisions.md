@@ -14,7 +14,7 @@ Locked decisions are changed only by editing this file in a commit that says why
 | D6 | Users | One owner login. Every record still carries `created_by` / `updated_by` so roles can be added later without a migration. | 2026-11-01 |
 | D7 | Old gold (CA pending) | Build the receipt, the amount calculation and all four settlement cases now. Stock inward and GST/ledger posting sit behind a clearly marked setting until the CA decides. | 2026-11-01 |
 | D8 | E-invoice | Not needed. Normal GST invoice only. The invoice model stays e-invoice-ready (GSTIN, HSN, tax split per line). | 2026-11-01 |
-| D9 | Repo | `jewlray_billing_satyam`, private, on GitHub account PrathamAditya. | 2026-11-01 |
+| D9 | Repo | `jewellery_billing_satyam`, private, on GitHub account PrathamAditya. | 2026-11-01 |
 | D10 | Printing | Browser print with CSS `@page`. PDF export may come later as its own feature. | 2026-11-01 |
 | D11 | Numbering | Financial-year series, reset each 1 April: `INV/2026-27/0001`, `PR/2026-27/0001`, `OG/2026-27/0001`. | 2026-11-01 |
 | D12 | Workflow | One feature at a time: spec, user approves, build, test, commit. No code before the spec is approved. | 2026-11-01 |

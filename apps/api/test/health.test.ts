@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { healthResponseSchema } from "@jewlray/shared";
+import { healthResponseSchema } from "@jewellery/shared";
 import app from "../src/index";
 
 describe("api", () => {

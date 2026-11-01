@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
-  service: z.literal("jewlray-billing"),
+  service: z.literal("jewellery-billing"),
   time: z.string().datetime(),
 });
 

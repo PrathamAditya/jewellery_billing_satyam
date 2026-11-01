@@ -10,7 +10,7 @@ An empty but real app is live on Cloudflare, the checks run on every push, and t
 ## 2. Rules
 - R1. npm workspaces monorepo: `apps/web` (React + Vite + Tailwind), `apps/api` (Hono on a Cloudflare Worker), `packages/shared` (Zod schemas), `packages/calc` (pure calculation code).
 - R2. One Worker serves both the API (`/api/*`) and the built web app (static assets, SPA fallback).
-- R3. `GET /api/health` returns `{ status: "ok", service: "jewlray-billing", time: <ISO string> }`, validated by a schema in `packages/shared`. Unknown `/api/*` paths return JSON 404.
+- R3. `GET /api/health` returns `{ status: "ok", service: "jewellery-billing", time: <ISO string> }`, validated by a schema in `packages/shared`. Unknown `/api/*` paths return JSON 404.
 - R4. `roundOffPaise(paise)` in `packages/calc` is the only function that rounds money to a rupee. Input: non-negative integer paise. Below 50 paise rounds down, 50 paise or more rounds up. It returns integer paise (a multiple of 100). Negative or non-integer input throws `RangeError`.
 - R5. `npm run typecheck`, `npm test` and `npm run build` pass locally and in GitHub Actions.
 - R6. `npm run deploy` builds the web app and deploys the Worker to workers.dev.

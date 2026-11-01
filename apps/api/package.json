@@ -1,5 +1,5 @@
 {
-  "name": "@jewlray/api",
+  "name": "@jewellery/api",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@jewlray/shared": "*",
+    "@jewellery/shared": "*",
     "hono": "^4.13.16"
   },
   "devDependencies": {

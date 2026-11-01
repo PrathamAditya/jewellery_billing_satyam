@@ -1,4 +1,4 @@
-# jewlray_billing_satyam
+# jewellery_billing_satyam
 
 Web billing, inventory and business management system for one gold and silver jewellery showroom. It is jewellery retail software, not a generic GST app.
 
