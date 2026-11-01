@@ -1,6 +1,6 @@
 # 012b: Job work (HSN 9988), polish percent, HSN categories
 
-Status: Approved (the owner's answers 4, 5, 6, 7, 8 of 2026-11-01 are the specification)
+Status: Approved (Wave 1: the owner's answers 4, 5, 6, 7, 8 of 2026-11-01 are the specification), not built
 Depends on: 012, 013
 Open questions: none for this spec. One interpretation to confirm is listed in section 8. Discounts and stones are spec 012c.
 

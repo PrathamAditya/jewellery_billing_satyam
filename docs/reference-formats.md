@@ -62,7 +62,7 @@ The owner says each sequence resets every 1 April. With no year in the number, `
 **Old gold:** net 22.98 g x purity 75.26% x ₹14,800 per gram = 25,596,227 paise = **₹2,55,962.27**, round-off −₹0.27, final **₹2,55,962.00**. Purity is typed as a percentage on each receipt (75.26 here) and the rate is typed per receipt. "Less" is a weight deduction typed on the receipt (gross 25.00 - 2.02 = net 22.98). The amount formula itself has no other deduction, as the owner said.
 
 ## 7. Differences from what was assumed earlier
-1. Invoice page is **A4 portrait** in the sample, but the owner's answers say A4 landscape. Which one (Q63)?
+1. Invoice page is **A4 portrait** in the sample, and the owner's answers said landscape. Settled 2026-11-01 (Q63): portrait.
 2. Numbers have no financial-year part (section 5).
 3. Old gold has a **Less (gm)** column and a typed **purity percentage**, not a fixed list.
 4. **Order references (`ORD-`)** exist, and advances are tied to an order.

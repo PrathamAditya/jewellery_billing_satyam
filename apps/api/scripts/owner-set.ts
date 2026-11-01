@@ -52,9 +52,12 @@ async function main() {
     process.exit(2);
   }
 
-  const password = await readHidden("New owner password (hidden): ");
+  // Only for the local test database: OWNER_PASSWORD skips the prompt so browser tests and agents can seed an owner.
+  // The live database (--remote) always asks with hidden input.
+  const fromEnv = target === "--local" ? process.env.OWNER_PASSWORD : undefined;
+  const password = fromEnv ?? (await readHidden("New owner password (hidden): "));
   if (password.length < MIN_LENGTH) throw new Error(`Password must be at least ${MIN_LENGTH} characters.`);
-  if ((await readHidden("Type it again: ")) !== password) throw new Error("The two passwords do not match.");
+  if (!fromEnv && (await readHidden("Type it again: ")) !== password) throw new Error("The two passwords do not match.");
 
   const sql = ownerUpsertSql({
     id: newId(),

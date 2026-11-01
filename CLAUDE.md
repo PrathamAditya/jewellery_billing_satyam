@@ -1,5 +1,7 @@
 # jewellery_billing_satyam
 
+> The project is being handed to Codex. The full contract for any coding agent is in `AGENTS.md`, the current state in `docs/HANDOFF.md`, and the Wave 1 work order in `docs/wave1-plan.md`. This file keeps the rules in short form.
+
 Web billing, inventory and business management system for one gold and silver jewellery showroom. It is jewellery retail software, not a generic GST app.
 
 Read first: `docs/decisions.md` (locked choices and open questions), `docs/tech-stack.md`, `docs/roadmap.md`, `docs/requirements.md` (the owner's full requirements).
@@ -22,5 +24,5 @@ Read first: `docs/decisions.md` (locked choices and open questions), `docs/tech-
 6. Reprinting never creates a transaction.
 7. A payment, advance or old-gold amount is never counted twice. Partly used advances leave only the unused part available.
 8. Do not change the invoice first page or the settlement page while building other features. Do not break earlier specs.
-9. Print layouts: invoice A4 landscape, settlement on the back page, payment receipt and old-gold receipt A5 landscape. Internal calculation fields and UI controls must not print.
+9. Print layouts: invoice A4 portrait (confirmed by the owner 2026-11-01), settlement on the back page, payment receipt and old-gold receipt A5 landscape. Internal calculation fields and UI controls must not print.
 10. Never commit secrets, real customer data, GSTIN, or `.env` files.

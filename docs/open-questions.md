@@ -150,7 +150,7 @@ Each item says what to look for. One real example of each is enough, two if they
 **Documents and numbers**
 - **Q61. Printed numbers.** `DEFAULT`. The samples show `INV-0001`, `PAY-0001`, `OGP-0001`, `ORD-0001`, and the owner says every sequence restarts on 1 April. So `INV-0001` appears again in each financial year. Default: print exactly that format, store the financial year with every number, and show the year in lists and searches when two documents share a number. Is it all right that the numbers repeat each year? The alternative is `INV-2026-27-0001`.
 - **Q62. Customer reference.** `DEFAULT`. The old gold sample shows `C0001` (no hyphen), the customers already built show `C-0001`. Default: change to `C0001` everywhere. OK?
-- **Q63. Invoice paper orientation.** `OPEN`. The owner's answer says A4 landscape, but the sample invoice and settlement page are A4 portrait. Which one is right? Default: portrait, because that is the real sample.
+- **Q63. Invoice paper orientation.** `DONE` 2026-11-01: A4 **portrait**, as in the sample.
 - **Q64. HUID line.** `DEFAULT`. The sample invoice has a `HUID` label under the item name, but HUID printing is not required. Default: leave the label out.
 - **Q65. U No. format.** `OPEN`. The rule says four-character item code plus a two-digit serial, but the examples are `RING01` (4 + 2), `CHAIN01` (5 + 2) and `T00001` (4 + 2 only if the code is `T000`). Please state the rule exactly: how long is the item code, is it letters only, and what happens after serial 99 for one code?
 - **Q66. v84 and the HTML file.** `OPEN`. Can the existing HTML billing file be shared (test data only)? It would show the settlement behaviour and every calculation exactly. Without it, the settlement page is built from the PDF sample and requirements section 7.
@@ -176,6 +176,12 @@ Each item says what to look for. One real example of each is enough, two if they
 
 **Timeline**
 - **Q84. 1 December start of testing.** `OPEN`. Parallel testing is meant to start in about a month. Please see the proposed plan in `docs/roadmap.md`: the core billing, printing, payments, advances, old gold, customers, staff logins and backups can be ready for it, and inventory, karigar, reports and offline-first follow during the testing months. Is that the order you want, or is something else needed on the first day of testing?
+
+## N. Defaults used in Wave 1
+
+The agent building Wave 1 adds every default or interpretation it uses here (ID, what was assumed, spec affected). The list of planned defaults is in `docs/wave1-plan.md`.
+
+(none yet)
 
 ## J. Defaults I chose without asking (tell me if any is wrong)
 
