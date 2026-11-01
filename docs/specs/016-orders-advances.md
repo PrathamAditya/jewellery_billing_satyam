@@ -1,6 +1,6 @@
 # 016: Orders and advances
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (orders, advances, opening advances, refunds, cancel, API, screens, tests). Owner review pending.
 Depends on: 015
 Open questions used with defaults: Q76 (order references)
 

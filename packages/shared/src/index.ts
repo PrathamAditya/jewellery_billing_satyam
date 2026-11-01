@@ -9,6 +9,7 @@ export * from "./invoice";
 export * from "./permissions";
 export * from "./words";
 export * from "./payments";
+export * from "./orders";
 export * from "./settings";
 
 export const healthResponseSchema = z.object({

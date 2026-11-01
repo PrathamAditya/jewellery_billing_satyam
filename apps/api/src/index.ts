@@ -7,6 +7,7 @@ import { customerRoutes } from "./customers/routes";
 import { invoiceRoutes } from "./invoices/routes";
 import { roleRoutes, userRoutes } from "./users/routes";
 import { allocationRoutes, paymentRoutes } from "./payments/routes";
+import { customerAdvances, orderRoutes, refundRoutes } from "./orders/routes";
 import { rateRoutes } from "./rates/routes";
 import { settingsRoutes } from "./settings/routes";
 
@@ -48,6 +49,9 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/roles", roleRoutes);
   app.route("/api/payments", paymentRoutes);
   app.route("/api/allocations", allocationRoutes);
+  app.route("/api/orders", orderRoutes);
+  app.route("/api/refunds", refundRoutes);
+  app.get("/api/customers/:id/advances", async (c) => c.json({ items: await customerAdvances(c.env.DB, c.req.param("id")) }));
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
   return app;

@@ -12,6 +12,8 @@ import { newId } from "@jewellery/shared";
 type Props = {
   /** Fixed customer (opened from a customer or invoice). */
   customer?: { id: string; name: string };
+  /** Fixed order: the advance is put on it (spec 016 R2). */
+  order?: { id: string; orderNo: string };
   /** Fixed invoice: offers "At sale" as well. */
   invoice?: { id: string; invoiceNo: string; balanceDuePaise: number; customerId: string | null };
   onClose: () => void;
@@ -19,7 +21,7 @@ type Props = {
 };
 
 /** Spec 015 section 5: receive a payment, advance or against invoices, with a preview of where the money goes. */
-export default function ReceiveDialog({ customer: fixed, invoice, onClose, onSaved }: Props) {
+export default function ReceiveDialog({ customer: fixed, invoice, order, onClose, onSaved }: Props) {
   const [today, setToday] = useState("");
   const [picked, setPicked] = useState<CustomerResponse | null>(null);
   const customerId = fixed?.id ?? invoice?.customerId ?? picked?.id ?? null;
@@ -28,7 +30,8 @@ export default function ReceiveDialog({ customer: fixed, invoice, onClose, onSav
   const [mode, setMode] = useState<"cash" | "upi" | "card" | "cheque" | "bank_transfer">("upi");
   const [reference, setReference] = useState("");
   const [amountText, setAmountText] = useState("");
-  const [purpose, setPurpose] = useState<"advance" | "against_invoices" | "at_sale">(invoice ? "at_sale" : "advance");
+  const [purpose, setPurpose] = useState<"advance" | "against_invoices" | "at_sale" | "opening_advance">(invoice ? "at_sale" : "advance");
+  const [oldRef, setOldRef] = useState("");
   const [open, setOpen] = useState<InvoiceSummary[]>([]);
   const [manual, setManual] = useState(false);
   const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
@@ -88,7 +91,13 @@ export default function ReceiveDialog({ customer: fixed, invoice, onClose, onSav
     if (amountPaise === null) return setFieldError("Enter the amount in rupees, like 14,500");
     if (!date) return setFieldError("Choose the date");
     if (cashWarning && !warnConfirmed) return setError("Please confirm the cash amount first (tick the box below).");
+    if (purpose === "opening_advance" && !oldRef.trim()) return setFieldError("Enter the receipt number from the old booklet");
     const body: Record<string, unknown> = { id, date, mode, reference: reference || undefined, amountPaise, purpose, customerId: customerId ?? undefined };
+    if (order && purpose === "advance") body.orderId = order.id;
+    if (purpose === "opening_advance") {
+      body.oldReference = oldRef.trim();
+      if (order) body.orderId = order.id;
+    }
     if (purpose === "at_sale" && invoice) body.invoiceId = invoice.id;
     if (purpose === "against_invoices" && manual && plan) {
       body.allocation = plan.rows.filter((r) => r.amountPaise > 0).map((r) => ({ invoiceId: r.invoice.id, amountPaise: r.amountPaise }));
@@ -148,9 +157,17 @@ export default function ReceiveDialog({ customer: fixed, invoice, onClose, onSav
           {invoice && (
             <label className="flex items-center gap-2"><input type="radio" checked={purpose === "at_sale"} onChange={() => setPurpose("at_sale")} /> Received at the time of sale (on {invoice.invoiceNo})</label>
           )}
-          <label className="flex items-center gap-2"><input type="radio" checked={purpose === "advance"} onChange={() => setPurpose("advance")} /> Advance for a future order (no invoice yet)</label>
+          <label className="flex items-center gap-2"><input type="radio" checked={purpose === "advance"} onChange={() => setPurpose("advance")} /> {order ? `Advance on ${order.orderNo}` : "Advance for a future order (no invoice yet)"}</label>
+          <label className="flex items-center gap-2"><input type="radio" checked={purpose === "opening_advance"} onChange={() => setPurpose("opening_advance")} /> Advance from the old booklet (already received before)</label>
           <label className="flex items-center gap-2"><input type="radio" checked={purpose === "against_invoices"} onChange={() => setPurpose("against_invoices")} disabled={!customerId} /> Pay outstanding invoices</label>
         </fieldset>
+
+        {purpose === "opening_advance" && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Receipt number in the old booklet *"><input className={inputClass} value={oldRef} onChange={(e) => setOldRef(e.target.value)} maxLength={60} /></Field>
+            <p className="text-sm text-stone-600 self-end">This is not a new receipt and it is not counted as money received today.</p>
+          </div>
+        )}
 
         {purpose === "against_invoices" && customerId && (
           <div className="flex flex-col gap-2 border border-stone-200 rounded-lg p-3">
