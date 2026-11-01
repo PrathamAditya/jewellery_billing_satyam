@@ -1,6 +1,6 @@
 # 015: Payments and receipts (the money model)
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (API, screens, tests). Owner review pending. Gaps listed in the PR.
 Depends on: 003, 004, 010, 013
 Open questions used with defaults: Q73 (payment modes), Q74 (cash limit), Q75 (cheques come in Wave 2), Q77 (copies)
 This spec defines the money model used by 016 (orders and advances), 017 (settlement), 018 (old gold) and 019 (ledger). Read it first.
