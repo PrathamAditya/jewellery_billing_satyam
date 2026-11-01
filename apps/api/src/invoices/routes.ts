@@ -15,6 +15,7 @@ import {
   type InvoiceRequest,
   type InvoiceResponse,
   type InvoiceSummary,
+  type DiscountsBody,
 } from "@jewellery/shared";
 import { financialYearOf } from "@jewellery/calc";
 import { settingsSnapshot } from "../settings/routes";
@@ -63,9 +64,18 @@ type DbInvoice = {
   voided_at: string | null;
   voided_by: string | null;
   void_reason: string | null;
+  /** Spec 012c: the discounts as entered ('{}' when none) and their total. Old rows predate them. */
+  discount_json?: string;
+  discount_paise?: number;
 };
 
 type DbLine = {
+  pricing_mode?: "weight" | "separate" | "combined";
+  stone_weight_mg?: number;
+  stone_amount_paise?: number;
+  total_amount_paise?: number;
+  discount_paise?: number;
+  taxable_paise?: number;
   line_no: number;
   description: string;
   purity: InvoiceLineResponse["purity"];
@@ -118,7 +128,21 @@ const toLine = (l: DbLine): InvoiceLineResponse => ({
   labourAmountPaise: l.labour_amount_paise,
   amountPaise: l.amount_paise,
   displayRatePaisePerGram: l.display_rate_paise_per_gram,
+  // Spec 012c R8. Old rows read as a plain weight line: no stone, no discount, taxable = amount.
+  pricingMode: l.pricing_mode ?? "weight",
+  stoneWeightMg: l.stone_weight_mg ?? 0,
+  stoneAmountPaise: l.stone_amount_paise ?? 0,
+  totalAmountPaise: l.total_amount_paise ?? 0,
+  discountPaise: l.discount_paise ?? 0,
+  taxablePaise: l.taxable_paise ?? l.amount_paise,
 });
+
+/** Spec 012c R9: the discounts as entered; null when there are none. */
+function parseDiscounts(json: string | undefined): DiscountsBody | null {
+  if (!json) return null;
+  const d = JSON.parse(json) as DiscountsBody;
+  return Object.keys(d).length ? d : null;
+}
 
 /** Everything shown comes from the stored columns, never from a fresh calculation (spec 013 R6). */
 const toResponse = (r: DbInvoice, lines: DbLine[], isEarlierVersion: boolean, received = 0): InvoiceResponse => ({
@@ -132,6 +156,8 @@ const toResponse = (r: DbInvoice, lines: DbLine[], isEarlierVersion: boolean, re
   reverseCharge: r.reverse_charge === 1,
   remarks: r.remarks,
   rates: JSON.parse(r.rates_json) as InvoiceResponse["rates"],
+  discounts: parseDiscounts(r.discount_json),
+  discountPaise: r.discount_paise ?? 0,
   lines: lines.map(toLine),
   calc: JSON.parse(r.calc_json) as unknown,
   createdAt: r.created_at,
@@ -153,6 +179,7 @@ function canonicalInput(b: InvoiceRequest) {
     taxMode: b.taxMode,
     reverseCharge: b.reverseCharge ?? false,
     remarks: b.remarks,
+    discounts: b.discounts ?? null,
     lines: b.lines.map((l) => ({
       description: l.description,
       purity: l.purity,
@@ -163,14 +190,26 @@ function canonicalInput(b: InvoiceRequest) {
       goldRatePaisePerKg: l.goldRatePaisePerKg,
       labourRatePaisePerKg: l.labourRatePaisePerKg,
       gstRateBps: l.gstRateBps,
+      pricingMode: l.pricingMode ?? "weight",
+      stoneWeightMg: l.stoneWeightMg ?? 0,
+      stoneAmountPaise: l.stoneAmountPaise ?? 0,
+      totalAmountPaise: l.totalAmountPaise ?? 0,
     })),
   };
 }
 
 type Canon = ReturnType<typeof canonicalInput>;
 
+/** Spec 012c: versions saved before the pricing and discount fields existed read as plain weight lines with no discounts. */
+const LINE_DEFAULTS = { pricingMode: "weight", stoneWeightMg: 0, stoneAmountPaise: 0, totalAmountPaise: 0 } as const;
+function normalizedCanon(c: Canon): Canon {
+  return { ...c, discounts: c.discounts ?? null, lines: c.lines.map((l) => ({ ...LINE_DEFAULTS, ...l })) } as Canon;
+}
+
 /** Names of the parts that differ between two saved versions (for audit rows and history). */
-function changedParts(a: Canon, b: Canon): string[] {
+function changedParts(a0: Canon, b0: Canon): string[] {
+  const a = normalizedCanon(a0);
+  const b = normalizedCanon(b0);
   const out: string[] = [];
   if (a.invoiceDate !== b.invoiceDate) out.push("date");
   if (a.customerId !== b.customerId || a.customerName !== b.customerName || a.customerMobile !== b.customerMobile || a.customerAddress !== b.customerAddress || a.customerPan !== b.customerPan) out.push("customer");
@@ -178,6 +217,7 @@ function changedParts(a: Canon, b: Canon): string[] {
   if (a.reverseCharge !== b.reverseCharge) out.push("reverseCharge");
   if (a.remarks !== b.remarks) out.push("remarks");
   if (JSON.stringify(a.lines) !== JSON.stringify(b.lines)) out.push("lines");
+  if (JSON.stringify(a.discounts) !== JSON.stringify(b.discounts)) out.push("discounts");
   return out;
 }
 
@@ -248,6 +288,7 @@ async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, 
 
   const outcome = calculateInvoice({
     taxMode: body.taxMode,
+    discounts: body.discounts,
     lines: body.lines.map((l) => ({ ...l, hsn: l.hsn.trim(), polishMg: polishWeightMg(l.netWeightMg, l.polishBps), gstRateBps: l.hsn.trim() === "9988" ? 500 : 300 })),
   });
   if (!outcome.ok) return { ok: false, status: 400, body: { error: "calculation", errors: outcome.errors } };
@@ -260,15 +301,22 @@ async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, 
 const INSERT_LINE = `INSERT INTO invoice_lines
   (id, invoice_id, revision_no, line_no, description, purity, hsn, gross_weight_mg, net_weight_mg, polish_mg, polish_bps,
    gold_rate_paise_per_kg, labour_rate_paise_per_kg, gst_rate_bps, chargeable_weight_mg, gold_amount_paise,
-   labour_amount_paise, amount_paise, display_rate_paise_per_gram)
-  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)`;
+   labour_amount_paise, amount_paise, display_rate_paise_per_gram,
+   pricing_mode, stone_weight_mg, stone_amount_paise, total_amount_paise, discount_paise, taxable_paise)
+  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)`;
 
 function lineStatements(db: D1Database, invoiceId: string, revisionNo: number, body: InvoiceRequest, result: InvoiceResult) {
   return body.lines.map((l, i) => {
     const r = result.lines[i]!;
+    // Spec 012c R1: the stone and total fields only mean something for their own pricing mode.
+    const mode = l.pricingMode ?? "weight";
     return db
       .prepare(INSERT_LINE)
-      .bind(newId(), invoiceId, revisionNo, i + 1, l.description, l.purity, l.hsn.trim(), l.grossWeightMg, l.netWeightMg, polishWeightMg(l.netWeightMg, l.polishBps), l.polishBps, l.goldRatePaisePerKg, l.labourRatePaisePerKg, l.hsn.trim() === "9988" ? 500 : 300, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram);
+      .bind(
+        newId(), invoiceId, revisionNo, i + 1, l.description, l.purity, l.hsn.trim(), l.grossWeightMg, l.netWeightMg, polishWeightMg(l.netWeightMg, l.polishBps), l.polishBps,
+        l.goldRatePaisePerKg, l.labourRatePaisePerKg, l.hsn.trim() === "9988" ? 500 : 300, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram,
+        mode, mode === "separate" ? (l.stoneWeightMg ?? 0) : 0, r.stoneAmountPaise, mode === "combined" ? (l.totalAmountPaise ?? 0) : 0, r.discountPaise, r.taxablePaise,
+      );
   });
 }
 
@@ -347,17 +395,18 @@ invoiceRoutes.post("/", async (c) => {
              (id, created_at, created_by, updated_at, updated_by, invoice_no, fy, serial, header_json, invoice_date, customer_id, customer_name,
               customer_name_search, customer_mobile, customer_address, customer_pan, tax_mode, reverse_charge, remarks,
               rates_json, input_json, taxable_paise, tax_paise, total_before_round_off_paise, round_off_paise,
-              payable_paise, calc_json, revision_no)
+              payable_paise, calc_json, discount_json, discount_paise, revision_no)
            VALUES (?1, ?2, ?3, ?2, ?3,
               ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4)", ["?24", "?25", "?26"])}, ?4,
               (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4), ?5,
-              ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, 1)`,
+              ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?27, ?28, 1)`,
         )
         .bind(
           id, now, user.id, fy, JSON.stringify(header), body.invoiceDate, body.customerId ?? null, body.customerName, nameSearchKey(body.customerName),
           body.customerMobile, body.customerAddress, body.customerPan, body.taxMode, body.reverseCharge ? 1 : 0, body.remarks,
           JSON.stringify(rates), JSON.stringify(canon), result.taxablePaise, result.taxPaise, result.totalBeforeRoundOffPaise,
           result.roundOffPaise, result.payablePaise, JSON.stringify(result), ...printedNumberValues(header.numbering, "INV", fy),
+          JSON.stringify(body.discounts ?? {}), result.discountPaise,
         ),
       ...lineStatements(db, id, 1, body, result),
       auditStatement(db, {
@@ -444,14 +493,15 @@ invoiceRoutes.put("/:id", async (c) => {
           `UPDATE invoices SET updated_at = ?2, updated_by = ?3, invoice_date = ?4, customer_id = ?5, customer_name = ?6,
              customer_name_search = ?7, customer_mobile = ?8, customer_address = ?9, customer_pan = ?10, tax_mode = ?11,
              reverse_charge = ?12, remarks = ?13, rates_json = ?14, input_json = ?15, taxable_paise = ?16, tax_paise = ?17,
-             total_before_round_off_paise = ?18, round_off_paise = ?19, payable_paise = ?20, calc_json = ?21, revision_no = ?22
+             total_before_round_off_paise = ?18, round_off_paise = ?19, payable_paise = ?20, calc_json = ?21, revision_no = ?22,
+             discount_json = ?24, discount_paise = ?25
            WHERE id = ?1 AND revision_no = ?23`,
         )
         .bind(
           row.id, now, user.id, body.invoiceDate, body.customerId ?? null, body.customerName, nameSearchKey(body.customerName),
           body.customerMobile, body.customerAddress, body.customerPan, body.taxMode, body.reverseCharge ? 1 : 0, body.remarks,
           JSON.stringify(rates), JSON.stringify(canon), result.taxablePaise, result.taxPaise, result.totalBeforeRoundOffPaise,
-          result.roundOffPaise, result.payablePaise, JSON.stringify(result), next, row.revision_no,
+          result.roundOffPaise, result.payablePaise, JSON.stringify(result), next, row.revision_no, JSON.stringify(body.discounts ?? {}), result.discountPaise,
         ),
       ...lineStatements(db, row.id, next, body, result),
       auditStatement(db, {

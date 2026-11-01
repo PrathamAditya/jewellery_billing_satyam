@@ -1,6 +1,6 @@
 # 012c: Discounts, stones and diamonds
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (engine, migration 0018, API, screens, tests). Owner review pending.
 Depends on: 012, 012b, 013
 Open questions used with defaults: Q68 (discounts), Q69 (stones). Both answers below are defaults for the owner to confirm later. The calculation order is chosen so that changing a default later only changes this spec's engine functions.
 
@@ -81,6 +81,6 @@ Discount approval limits, discount reasons, per-line discounts typed on the line
 Q68: GST on the discounted amount, a total discount shared in proportion across lines, no negative discount, no approval limit. Q69: separate stone amount typed as a fixed amount, stone weight is informational and part of gross, stones taxed at the line's rate, combined mode is a single typed total.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R9 implemented and tested, old calc tests unchanged and green
-- [ ] Migration applied locally and by CI
-- [ ] Browser test matches example A, B and C to the paisa
+- [x] R1 to R9 implemented and tested. Old calc tests: unchanged except two expectations (a plain line now also carries `pricingMode`, `stoneAmountPaise`, `discountPaise` and `taxablePaise`, and one test ignores the string field when checking figures are whole numbers). The values are unchanged.
+- [x] Migration 0018 applied locally (tests apply it on an empty database; CI does the same). Production: owner runs `npm run db:migrate:remote -w @jewellery/api`.
+- [x] Browser test matches example A, B and C to the paisa (`e2e/discounts.mjs`)

@@ -27,7 +27,7 @@ ok(await page.locator("text=Type a net weight and a gold rate").count() === 1, "
 await page.click('button:has-text("Fill with the Baba Jewellers example")');
 await totals.waitFor();
 let t = await totalsText();
-ok(t.includes("Amount Before Tax ₹2,800.06"), "A: amount before tax ₹2,800.06");
+ok(t.includes("Taxable value ₹2,800.06"), "A: amount before tax ₹2,800.06");
 ok(t.includes("SGST @ 1.5% ₹42.00") && t.includes("CGST @ 1.5% ₹42.00"), "A: SGST and CGST ₹42.00 each");
 ok(t.includes("Total Amount after Tax ₹2,884.06"), "A: total after tax ₹2,884.06 (as on the paper bill)");
 ok(t.includes("Round-off -₹0.06") && t.includes("Payable ₹2,884.00"), "A: round-off -₹0.06, payable ₹2,884.00");
@@ -45,7 +45,7 @@ await page.fill('input[aria-label="Polish % line 1"]', "5");
 await page.fill('input[aria-label="Net g line 1"]', "10");
 await page.fill('input[aria-label="Gross g line 1"]', "10");
 t = await totalsText();
-ok(t.includes("Amount Before Tax ₹3,000.06") && t.includes("Payable ₹3,09,000.00".replace("3,09,000","3,090")), "D: polish 0.5 g -> ₹3,000.06 and payable ₹3,090.00");
+ok(t.includes("Taxable value ₹3,000.06") && t.includes("Payable ₹3,09,000.00".replace("3,09,000","3,090")), "D: polish 0.5 g -> ₹3,000.06 and payable ₹3,090.00");
 
 // F. two rate groups
 await page.fill('input[aria-label="Polish % line 1"]', "");

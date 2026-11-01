@@ -1,9 +1,13 @@
 export { roundOffPaise, divRoundHalfUp } from "./round";
 export { NUMBER_SERIES, financialYearOf, formatDocumentNumber } from "./numbering";
 export type { NumberSeries } from "./numbering";
-export { calculateInvoice, LIMITS, polishWeightMg } from "./invoice";
+export { calculateInvoice, LIMITS, PRICING_MODES, polishWeightMg, shareProportionally } from "./invoice";
 export type {
   CalculateOutcome,
+  DiscountInput,
+  DiscountTarget,
+  DiscountsInput,
+  PricingMode,
   GroupResult,
   InvoiceError,
   InvoiceInput,
