@@ -68,6 +68,9 @@ describe("the owner's sample receipt (spec 018 section 6A)", () => {
     expect(body.payment!.remainingPaise).toBe(25_596_200);
     const pay = await one<{ kind: string; mode: string; amount_paise: number }>("SELECT kind, mode, amount_paise FROM payments WHERE source_ogp_id = (SELECT id FROM old_gold_purchases WHERE receipt_no = ?1)", body.receiptNo);
     expect(pay).toEqual({ kind: "old_gold", mode: "old_gold", amount_paise: 25_596_200 });
+    // The linked PAY receipt stores the full header (spec 003 R5), so it prints with the same details and copy labels.
+    const payHeader = await one<{ header_json: string }>("SELECT header_json FROM payments WHERE receipt_no = ?1", body.payment!.receiptNo);
+    expect(JSON.parse(payHeader!.header_json).texts.copyLabels).toEqual(["SHOP COPY", "CUSTOMER COPY"]);
   });
 
   it("the owner's split sample: ₹25,596,200 = direct 0 + invoice 250,000 + advance 25,346,200; the payment keeps ₹2,53,462.00 after ₹2,500 goes to the invoice", async () => {

@@ -18,6 +18,7 @@ import {
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
 import { classifyReplay } from "../db/idempotency";
+import { printedNumberSql, printedNumberValues } from "../db/numbering";
 import { readJson, validationBody } from "../http";
 import { advanceHeld, refundedOf } from "../payments/routes";
 import { settingsSnapshot } from "../settings/routes";
@@ -199,16 +200,18 @@ oldGoldRoutes.post("/", async (c) => {
   ];
   // receipt_no is assigned by the database from the counter in the same batch (a failed save never uses a number).
   const receiptValues = receiptCols.map((_, i) => `?${i + 1}`);
+  const ogpFormat = printedNumberValues(settings.numbering, "OGP", fy);
+  const ogpAt = [1, 2, 3].map((i) => `?${receiptCols.length + i}`) as [string, string, string];
   statements.push(db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('OGP', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy));
   if (paymentId) statements.push(db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('PAY', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy));
   statements.push(
     db
       .prepare(
         `INSERT INTO old_gold_purchases (${[...receiptCols.map(([c]) => c), "receipt_no", "serial"].join(", ")})
-         VALUES (${receiptValues.join(", ")}, 'OGP-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'OGP' AND fy = ?6)),
+         VALUES (${receiptValues.join(", ")}, ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'OGP' AND fy = ?6)", ogpAt)},
                  (SELECT last_no FROM number_series WHERE series = 'OGP' AND fy = ?6))`,
       )
-      .bind(...receiptCols.map(([, v]) => v)),
+      .bind(...receiptCols.map(([, v]) => v), ...ogpFormat),
   );
 
   if (paymentId) {
@@ -219,16 +222,18 @@ oldGoldRoutes.post("/", async (c) => {
       ["reference", null], ["amount_paise", advance + inv], ["order_id", advance > 0 ? b.orderId ?? null : null],
       ["source_ogp_id", id], ["input_json", "{}"],
       ["advance_summary_json", JSON.stringify({ previousRemainingPaise: previous, thisRemainingPaise: advance, totalAvailablePaise: previous + advance })],
-      ["header_json", JSON.stringify({ business: settings.business })],
+      // Same full bundle as the old gold receipt, so the PAY receipt prints with the same details and copy labels (spec 003 R5).
+      ["header_json", JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo })],
     ];
+    const payAt = [1, 2, 3].map((i) => `?${payCols.length + i}`) as [string, string, string];
     statements.push(
       db
         .prepare(
           `INSERT INTO payments (${[...payCols.map(([c]) => c), "receipt_no", "serial"].join(", ")})
-           VALUES (${payCols.map((_, i) => `?${i + 1}`).join(", ")}, 'PAY-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7)),
+           VALUES (${payCols.map((_, i) => `?${i + 1}`).join(", ")}, ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7)", payAt)},
                    (SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7))`,
         )
-        .bind(...payCols.map(([, v]) => v)),
+        .bind(...payCols.map(([, v]) => v), ...printedNumberValues(settings.numbering, "PAY", fy)),
     );
     if (inv > 0) {
       statements.push(db.prepare("INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)").bind(newId(), paymentId, b.invoiceId, inv, now, user.id));

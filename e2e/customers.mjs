@@ -79,6 +79,16 @@ await page.goto(B + "/#/customers");
 await page.fill('input[aria-label="Search customers"]', "kumar " + uniq);
 await page.waitForFunction(() => document.querySelectorAll("tbody tr").length === 1, null, { timeout: 5000 }).catch(() => {});
 ok(await page.locator("tbody tr").count() === 1 && await page.locator(`a:has-text("Ramesh Kumar ${uniq}")`).count() === 1, "search by name finds exactly that customer");
+
+// Customer numbers are C0001 style (spec 003 R6, R8): shown in the list, and found by number in lower case too.
+const customerNo = await page.evaluate(async (q) => (await (await fetch("/api/customers?q=" + encodeURIComponent(q))).json()).items[0]?.customerNo, `Ramesh Kumar ${uniq}`);
+ok(/^C\d{4,}$/.test(customerNo ?? ""), "customer number has the C0001 format (" + customerNo + ")");
+ok(await page.locator(`tbody td:has-text("${customerNo}") >> visible=true`).count() === 1, "the list shows the same customer number");
+await page.fill('input[aria-label="Search customers"]', customerNo.toLowerCase());
+await page.waitForFunction(() => document.querySelectorAll("tbody tr").length === 1, null, { timeout: 5000 }).catch(() => {});
+ok(await page.locator("tbody tr").count() === 1 && await page.locator(`a:has-text("Ramesh Kumar ${uniq}")`).count() === 1, "search by customer number finds that customer");
+await page.fill('input[aria-label="Search customers"]', "kumar " + uniq);
+await page.waitForFunction(() => document.querySelectorAll("tbody tr").length === 1, null, { timeout: 5000 }).catch(() => {});
 await page.screenshot({ path: `${S}/shot-list.png` });
 
 // void / restore
@@ -102,6 +112,7 @@ ok(true, "restored");
 await page.goto(B + "/#/picker-demo");
 await page.fill('input[aria-label="Find customer"]', "ramesh kumar " + uniq);
 await page.waitForSelector('[role="option"]');
+ok((await page.locator('[role="option"]').first().innerText()).includes(customerNo), "picker shows the customer number " + customerNo);
 await page.click('[role="option"]');
 await page.waitForSelector("text=Picked:");
 ok(true, "picker: search and pick");

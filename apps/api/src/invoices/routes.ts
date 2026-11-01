@@ -16,10 +16,11 @@ import {
   type InvoiceResponse,
   type InvoiceSummary,
 } from "@jewellery/shared";
-import { financialYearOf, formatDocumentNumber } from "@jewellery/calc";
+import { financialYearOf } from "@jewellery/calc";
 import { settingsSnapshot } from "../settings/routes";
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
+import { printedNumberSql, printedNumberValues } from "../db/numbering";
 import { classifyReplay } from "../db/idempotency";
 import { revisionStatement } from "../db/revisions";
 import { readJson, validationBody } from "../http";
@@ -348,7 +349,7 @@ invoiceRoutes.post("/", async (c) => {
               rates_json, input_json, taxable_paise, tax_paise, total_before_round_off_paise, round_off_paise,
               payable_paise, calc_json, revision_no)
            VALUES (?1, ?2, ?3, ?2, ?3,
-              'INV-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4)), ?4,
+              ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4)", ["?24", "?25", "?26"])}, ?4,
               (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4), ?5,
               ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, 1)`,
         )
@@ -356,7 +357,7 @@ invoiceRoutes.post("/", async (c) => {
           id, now, user.id, fy, JSON.stringify(header), body.invoiceDate, body.customerId ?? null, body.customerName, nameSearchKey(body.customerName),
           body.customerMobile, body.customerAddress, body.customerPan, body.taxMode, body.reverseCharge ? 1 : 0, body.remarks,
           JSON.stringify(rates), JSON.stringify(canon), result.taxablePaise, result.taxPaise, result.totalBeforeRoundOffPaise,
-          result.roundOffPaise, result.payablePaise, JSON.stringify(result),
+          result.roundOffPaise, result.payablePaise, JSON.stringify(result), ...printedNumberValues(header.numbering, "INV", fy),
         ),
       ...lineStatements(db, id, 1, body, result),
       auditStatement(db, {

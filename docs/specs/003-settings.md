@@ -1,6 +1,6 @@
 # 003: Settings, number formats and document headers
 
-Status: Approved (Wave 1). Built so far: settings API, validation, revisions and audit, header snapshot on invoices, number format PREFIX-NNNN with per-year uniqueness, set-next-number. Still to do: Settings screen (section 4), Numbers screen, banner, logo upload UI, customer copy format test in browser.
+Status: Approved (Wave 1). Built and checked on branch `spec-003-leftovers` (2026-11-02, PR open, not yet owner-checked): settings API, validation, revisions and audit, Settings screen with all tabs, logo upload, header snapshot on invoices, payments, old gold receipts and orders, number formats from the settings (prefix, digits, year), per-year uniqueness, set-next-number, missing-details banner on Home and on the invoice print preview (screen only, never printed). Not done: migration tests on seeded old rows (R7, R8), and browser tests for a changed prefix (API tests only).
 Depends on: 000, 001, 002, 010, 013
 Open questions used with defaults: Q61, Q62, Q64, Q74, Q77 (see section 8)
 
@@ -65,8 +65,8 @@ Multiple businesses, tax settings, per-user preferences, e-invoice fields, email
 Q61: `INV-0001` format without the year, year stored separately, repeats yearly. Q62: `C0001`. Q64: no HUID label on documents. Q74: cash warning at ₹2,00,000 or more. Q77: two copy labels (shop and customer).
 
 ## 9. Acceptance checklist
-- [ ] R1 to R10 implemented and tested
-- [ ] Migration applied locally and by CI on an empty database
-- [ ] Settings screen works in the browser, header snapshot proven
-- [ ] Customer and invoice numbers show the new formats everywhere (list, page, search, picker)
-- [ ] Earlier tests and browser scripts updated for the new formats and still green
+- [ ] R1 to R10 implemented and tested. Implemented and tested: R1, R3, R5, R6 (prefix, digits, year), R9, and the snapshot and numbering examples in section 6. Not done: a migration test on seeded old rows (R7, R8; migration 0011 runs on an empty database in every test). R10 is done with `printedNumberSql` and `printedNumberValues` in `apps/api/src/db/numbering.ts`, not the name `allocateNumberStatements`. The PAN sample and the 300 KB logo file-size check (done in the form, not the API) have no test of their own.
+- [x] Migrations apply to an empty local database (`npm run db:migrate -w @jewellery/api`) and to every test database. The live database is not migrated (owner).
+- [x] Settings screen works in the browser (`e2e/settings.mjs`: save, banner, logo, next number, phone view), header snapshot proven through the API response (`e2e/settings.mjs` and `apps/api/test/settings.test.ts`)
+- [x] Customer and invoice numbers show the new formats everywhere: list, page, search and picker (`e2e/customers.mjs`, `e2e/invoices.mjs`)
+- [x] Earlier tests and browser scripts updated for the new formats and still green (vitest 513 tests, `e2e/run-all.mjs` all passed)
