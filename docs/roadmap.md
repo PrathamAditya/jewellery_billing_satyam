@@ -33,7 +33,6 @@ Everything needed to make a real bill, print it on the Brother, take the money a
 | 018 | Old gold purchase `OGP-`, linked or standalone | A5 receipt, advance created as a `PAY-` receipt. |
 | 017 | Settlement | Pulls in payments, advances and old gold, balance due. Needs Q66 if the HTML file arrives. |
 | 019 | Customer ledger and opening balances | Both directions. |
-| 050 | Backups: daily to the cloud with versions, manual download, restore | Local PC copy needs Q81. |
 
 ## Wave 2: during testing (December and January)
 | Spec | Name |
@@ -58,6 +57,7 @@ Everything needed to make a real bill, print it on the Brother, take the money a
 | 040 | Android install and phone screens with create and edit by role |
 | 023 | Karigar job work (issue, receive, wastage, labour, balance) |
 | 025 | Monthly stock reconciliation |
+| 050 | Backups: daily to the cloud with versions, manual download, restore. Moved here from Wave 1 by the owner on 2026-11-02. Local PC copy needs Q81. |
 | 052 | Data integrity checks |
 | 053 | Print verification on the Brother DCP-T830DW |
 | 011b | Live IBJA reference rates (needs a provider and key, O10), can move earlier if decided |

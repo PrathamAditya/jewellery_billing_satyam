@@ -25,8 +25,7 @@ Numbers are spec numbers. This is the build order, which differs from the number
 | 8 | 017 | `specs/017-settlement.md` | Settlement tab and API | 5, 6, 7 |
 | 9 | 019 | `specs/019-ledger-opening.md` | Ledger, outstanding, opening balances | 5 to 8 |
 | 10 | 014 | `specs/014-print.md` | Print invoice and settlement (duplex), A5 receipts | 2, 5 to 9 |
-| 11 | 050 | `specs/050-backups.md` | Daily cloud backups, download, restore script | all |
-| 12 | Final | this file, "Final pass" | Hardening, full e2e, docs, PR | all |
+| 11 | Final | this file, "Final pass" | Hardening, full e2e, docs, PR | all |
 
 Why 003 and 004 come early: number formats and permissions touch every module, so doing them first avoids rewriting later modules. Why 014 is late: the settlement page and receipts print stored data that only exists after 015 to 019.
 
@@ -75,7 +74,7 @@ grep -rIn -E "[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]" . --exclude-dir=no
 
 ## Final pass (step 12)
 - Run every browser script on a fresh local database (delete `.wrangler/state`, migrate, seed owner, build, e2e).
-- Click through the whole flow once as a person would and fix rough edges: customer, rates, new invoice, receive advance, old gold, settlement, print preview, ledger, backups.
+- Click through the whole flow once as a person would and fix rough edges: customer, rates, new invoice, receive advance, old gold, settlement, print preview, ledger.
 - Check every screen at 390 px for sideways scroll and every permission-hidden button for the `staff` and `viewer` roles.
 - Search the code for `TODO` and unfinished placeholders, and for disabled "coming in spec" buttons that Wave 1 should have enabled (the invoice Print button, the customer Ledger tab).
 - Write the handoff and the PR description. Do not deploy.

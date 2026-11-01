@@ -1,6 +1,6 @@
 # 050: Backups and restore
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Approved, not built. Moved from Wave 1 to the last wave (Wave 3, before launch) by the owner on 2026-11-02.
 Depends on: 004, and all earlier specs (it backs up every table)
 Open questions used with defaults: Q81 (local PC copy), O14
 

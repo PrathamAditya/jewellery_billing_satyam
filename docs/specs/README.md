@@ -30,6 +30,6 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 017 | Settlement | Built, owner review pending |
 | 019 | Customer ledger and opening balances | Built, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
-| 050 | Backups and restore | Wave 1, approved, not built |
+| 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |
 
 The full list is in `docs/roadmap.md`.
