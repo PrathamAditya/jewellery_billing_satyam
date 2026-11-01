@@ -1,6 +1,6 @@
 # 011: Daily gold and silver rates
 
-Status: Draft (needs owner approval)
+Status: Building (owner approved 2026-11-01, with the two proposed defaults in section 8)
 Depends on: 000, 001, 002
 Open questions: none block this spec. Section 8 has the owner's answers and two points to confirm. Adds O9 (blocks 012 and 018) and O10 (blocks 011b) to `docs/decisions.md`.
 
@@ -40,11 +40,11 @@ New table `rates` (migration follows 001 conventions, including the no-delete tr
 - `rate_date` (`YYYY-MM-DD`), `kind` (one of R1, checked), `price_paise_per_kg` (integer, `CHECK (price_paise_per_kg > 0)`)
 - unique `(rate_date, kind)`, and an index on `(kind, rate_date)` for the "latest before" lookup.
 
-The unit is one constant in code (`packages/calc`): `RATE_UNIT_MG = 1_000_000` (1 kg), with the exact per-gram conversions kept next to it and tested.
+The unit is one constant in `packages/shared` (used by the screens and the API, and later by `packages/calc`): `RATE_UNIT_MG = 1_000_000` (1 kg). The typing, conversion and display helpers live beside it and are tested.
 
 API (all under `/api/rates`):
 - `GET /applicable?date=YYYY-MM-DD` (date defaults to today): the three applicable rates per R8.
-- `GET /?from=&to=`: saved rows grouped by date, newest first (default: last 60 days), with a cursor for older ones.
+- `GET /?before=YYYY-MM-DD&limit=30`: saved rows grouped by date, newest first, starting from today (or the day before `before`), with a cursor for older ones.
 - `PUT /:date/:kind` body `{ price: "12,000", unit: "gram" | "kg", reason?, confirmLargeChange? }`: create or edit. 201 on create, 200 on edit or no-op.
 - `GET /:date/:kind/history`: the earlier values with who changed them and when.
 
