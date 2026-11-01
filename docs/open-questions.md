@@ -193,6 +193,7 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 | D-d | Calculation: tax once per rate group, rounded half up to the paisa, final payable rounded to the rupee | spec 012 |
 | D-e | Phone screens are read-only | decision D5 |
 | D-f | Nothing is ever deleted, only voided or edited with the old version kept | decision D12 / rule 4 |
+| D-h | Discounts (Q68): GST on the discounted amount; gold, labour and total discounts shared by largest remainder, the total in proportion to the amount after the other two; no negative discount; no approval limit. Stones (Q69): stone amount typed as a fixed rupee amount; stone weight is information and part of gross; stone taxed at the line's rate; combined mode is one typed total. | spec 012c |
 | D-g | Print: the invoice does not print an Aadhaar reference line (invoices do not store Aadhaar). The payment receipt has no order column yet (the receipt does not carry the order number). Discount rows wait for 012c. | spec 014 |
 
 ## K. Things for the owner to check on what is already built

@@ -5,6 +5,7 @@ export { indiaDate } from "./dates";
 export * from "./customer";
 export * from "./rates";
 export * from "./weight";
+export * from "./pricing";
 export * from "./invoice";
 export * from "./permissions";
 export * from "./words";

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { calculateInvoice, type TaxMode } from "@jewellery/calc";
-import { newId, type ApplicableRatesResponse, type CustomerResponse, type InvoiceResponse } from "@jewellery/shared";
+import { blankDiscounts, discountTextsFrom, newId, parseDiscountTexts, type ApplicableRatesResponse, type CustomerResponse, type DiscountTexts, type InvoiceResponse } from "@jewellery/shared";
 import { ApiError } from "../api";
 import CustomerPicker from "../customers/CustomerPicker";
 import { Alert, Field, btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { getApplicable } from "../rates/api";
 import Breakdown from "./Breakdown";
+import DiscountsEditor from "./DiscountsEditor";
 import LinesEditor from "./LinesEditor";
 import { createInvoice, updateInvoice } from "./api";
 import { blankLine, isTouched, lineTextFromSaved, parseLine, type LineText } from "./lines";
@@ -31,6 +32,8 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
   const [remarks, setRemarks] = useState(invoice?.remarks ?? "");
   const [reason, setReason] = useState("");
   const [rows, setRows] = useState<LineText[]>(invoice ? invoice.lines.map(lineTextFromSaved) : [blankLine("22K916")]);
+  // Spec 012c R4: the three discount rows. Empty means no discount.
+  const [discounts, setDiscounts] = useState<DiscountTexts>(invoice ? discountTextsFrom(invoice.discounts) : blankDiscounts());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [rowErrors, setRowErrors] = useState<Record<number, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -55,7 +58,12 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
 
   const active = useMemo(() => rows.map((t, i) => ({ t, i, p: parseLine(t) })).filter(({ t }) => isTouched(t)), [rows]);
   const allParsed = active.length > 0 && active.every(({ p }) => p.input);
-  const preview = useMemo(() => (allParsed ? calculateInvoice({ taxMode, lines: active.map(({ p }) => p.input!) }) : null), [allParsed, taxMode, active]);
+  const discountParse = useMemo(() => parseDiscountTexts(discounts), [discounts]);
+  const discountsOk = Object.keys(discountParse.errors).length === 0;
+  const preview = useMemo(
+    () => (allParsed && discountsOk ? calculateInvoice({ taxMode, lines: active.map(({ p }) => p.input!), discounts: discountParse.discounts }) : null),
+    [allParsed, discountsOk, taxMode, active, discountParse],
+  );
 
   function pick(c: CustomerResponse) {
     setCustomerId(c.id);
@@ -71,6 +79,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
     setFieldErrors({});
     setRowErrors({});
     if (!allParsed) return setFormError("Fix the highlighted boxes on the lines first.");
+    if (!discountsOk) return setFormError("Fix the discount amounts first.");
     setBusy(true);
     const body: Record<string, unknown> = {
       invoiceDate: date,
@@ -83,6 +92,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
       reverseCharge,
       remarks,
       lines: active.map(({ p }) => p.input),
+      discounts: discountParse.discounts,
     };
     try {
       const saved = editing
@@ -183,6 +193,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} rates={rates} showPurity />
         {err("lines") && <Alert>{err("lines")}</Alert>}
         <p className="text-xs text-stone-500">Choosing a purity fills today's rate. You can overtype it. Gross defaults to net when left blank. Rates are typed per gram.</p>
+        <DiscountsEditor value={discounts} onChange={setDiscounts} />
       </section>
 
       {preview?.ok && <Breakdown r={preview.result} descriptions={active.map(({ t }) => t.description)} />}

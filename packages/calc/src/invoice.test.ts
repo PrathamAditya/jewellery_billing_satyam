@@ -32,6 +32,11 @@ describe("A. the client's real invoice (docs/client-invoice-reference.md)", () =
       amountPaise: 280_006, // 2,800.06
       displayRatePaisePerGram: 28_572, // 285.72
       gstRateBps: 300,
+      // Spec 012c R8 added these three keys. For a plain weight line they are 0, weight and the amount.
+      pricingMode: "weight",
+      stoneAmountPaise: 0,
+      discountPaise: 0,
+      taxablePaise: 280_006,
     });
     expect(r.groups).toEqual([{ gstRateBps: 300, taxablePaise: 280_006, cgstPaise: 4_200, sgstPaise: 4_200, igstPaise: 0 }]);
     expect(r.taxablePaise).toBe(280_006);
@@ -228,7 +233,9 @@ describe("J. behaviour", () => {
 
   it("every figure is a safe whole number", () => {
     const r = calc([line({ goldRatePaisePerKg: 10_000_000_000, grossWeightMg: 100_000_000, netWeightMg: 100_000_000 })]);
-    const nums: number[] = [r.taxablePaise, r.taxPaise, r.totalBeforeRoundOffPaise, r.roundOffPaise, r.payablePaise, ...r.lines.flatMap((l) => Object.values(l)), ...r.groups.flatMap((g) => Object.values(g))];
+    // Only the numeric figures: a line also carries its pricing mode, a word (spec 012c R1).
+    const isNum = (v: unknown): v is number => typeof v === "number";
+    const nums: number[] = [r.taxablePaise, r.taxPaise, r.totalBeforeRoundOffPaise, r.roundOffPaise, r.payablePaise, ...r.lines.flatMap((l) => Object.values(l).filter(isNum)), ...r.groups.flatMap((g) => Object.values(g))];
     for (const n of nums) expect(Number.isSafeInteger(n)).toBe(true);
   });
 

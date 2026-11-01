@@ -43,7 +43,7 @@ await page.fill('input[aria-label="Net g line 1"]', "9.800");
 await page.fill('input[aria-label="Gold rate line 1"]', "285.72");
 await page.waitForSelector('[aria-label="Totals"]');
 let t = await totalsText();
-ok(t.includes("Amount Before Tax ₹2,800.06") && t.includes("Payable ₹2,884.00"), "preview shows the paper bill: ₹2,800.06 and payable ₹2,884.00");
+ok(t.includes("Taxable value ₹2,800.06") && t.includes("Payable ₹2,884.00"), "preview shows the paper bill: ₹2,800.06 and payable ₹2,884.00");
 await page.screenshot({ path: `${S}/shot-invoice-form.png` });
 await page.click('button:has-text("Save invoice")');
 await page.waitForSelector("h1:has-text('INV-')");
