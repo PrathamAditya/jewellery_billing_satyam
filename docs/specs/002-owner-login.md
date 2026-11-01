@@ -1,6 +1,6 @@
 # 002: Owner login
 
-Status: Building (owner approved 2026-11-01)
+Status: Built and live 2026-11-01, awaiting owner check on PC and Android
 Depends on: 000, 001
 Open questions: closes O7 (login method)
 
@@ -84,9 +84,9 @@ New tables (migrations follow spec 001 conventions):
 Staff accounts and roles (the `role` column and user ids are there so they can be added without a migration), two-factor login, password reset by email (recovery is the script in R3), "remember this device" options, login while offline.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R14 implemented and tested
-- [ ] Owner password set on the remote database using the script
+- [x] R1 to R14 implemented and tested (81 tests)
+- [x] Owner password set on the remote database using the script (audit row `owner_password_set` present)
 - [ ] Login, logout and change password work on the live site, on PC and on Android
-- [ ] CPU limit risk checked on the live Worker
-- [ ] Nothing in specs 000 and 001 broke
+- [x] CPU limit risk checked on the live Worker: a wrong-password login runs the full PBKDF2 (100,000 iterations) and returns 401 in about 0.7 s with no CPU-limit error, so the free plan is enough for now. Re-check if logins ever return Cloudflare error 1102.
+- [x] Nothing in specs 000 and 001 broke (live `/api/health` is public and returns `db: "ok"`; migrations 0002 and 0003 applied)
 - [ ] Owner approved the result
