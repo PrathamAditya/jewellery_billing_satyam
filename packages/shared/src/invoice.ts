@@ -121,6 +121,7 @@ export type InvoiceSummary = {
 };
 
 export type InvoiceResponse = InvoiceSummary & {
+  header: Record<string, unknown> | null;
   customerId: string | null;
   customerAddress: string | null;
   customerPan: string | null;

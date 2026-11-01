@@ -142,9 +142,11 @@ export default function InvoicePage({ id }: { id: string }) {
           {inv.voidedAt && <p className="text-red-700 text-sm mt-1">Voided: {inv.voidReason}</p>}
         </div>
         <div className={`flex gap-2 ${pcOnly}`}>
-          <button className={btnSecondary} disabled title="The print layout comes in spec 014">
-            Print
-          </button>
+          {can("invoices.print") && (
+            <button className={btnSecondary} onClick={() => navigate(`/print/invoice/${inv.id}`)}>
+              Print
+            </button>
+          )}
           {!inv.voidedAt && !inv.isEarlierVersion && (
             <>
               {can("invoices.edit") && (

@@ -1,6 +1,6 @@
 # 014: Printing (invoice and settlement, payment and old gold receipts)
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 on branch `spec-014-print` (PR to `main`, stacked on the unmerged spec 019 PR #21). Waiting for the owner's Brother print check (open-questions C3) and approval.
 Depends on: 003, 013, 015, 016, 017, 018 (build it after them)
 Open questions used with defaults: Q63 (portrait, DONE), Q64 (no HUID), Q77 (copies)
 Reference: `docs/reference-formats.md` and the four PDFs in `docs/reference/`. The printed result must look like them and print the same figures.
@@ -68,7 +68,7 @@ PDF download or emailing, WhatsApp sharing, bulk printing, label printing, GST r
 Q64: no `HUID` label. Q77: shop copy and customer copy with a selector. Print settings advice (A4, duplex long-edge, 100%) is only text.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R19 implemented, all three kinds of test pass
-- [ ] The reference documents reproduce exactly (strings and figures)
-- [ ] PDFs saved for the owner to compare against the originals and to print on the Brother
-- [ ] Browser tests and earlier tests green
+- [x] R1 to R19 implemented, all three kinds of test pass. Not built, with reasons: R9 Aadhaar line (invoices do not store Aadhaar), R13 discount rows and R11 stone sub-lines (spec 012c), the order column of R18 (receipts do not carry the order number yet), the "Business details are not filled in" warning in section 5. See open-questions J, D-g.
+- [x] The reference documents reproduce exactly (strings and figures): invoice ₹2,06,323.00 with taxable 2,00,313.30, CGST and SGST 3,004.70, round-off + ₹0.30, the amount in words, settlement balance 1,89,323.00; old gold 2,55,962.27, round-off - ₹0.27, final 2,55,962.00. Checked in `e2e/print.mjs` and `apps/web/src/print/InvoicePrint.test.ts`. The payment receipt example (14,500.00) is not checked yet.
+- [ ] PDFs saved for the owner to compare against the originals (`e2e/screenshots/print-*.pdf`, git-ignored, made by `npm run e2e`) and to print on the Brother (open-questions C3)
+- [x] Browser tests and earlier tests green: 505 unit and API tests, all browser scripts including `e2e/print.mjs`

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { healthResponseSchema } from "@jewellery/shared";
 import AccountMenu from "./AccountMenu";
 import Login from "./Login";
@@ -23,6 +23,9 @@ import OrderPage from "./orders/OrderPage";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
+
+// The print views carry the print fonts and stylesheet, so they load only when a print page is opened (spec 014 R3).
+const PrintRoute = lazy(() => import("./print/PrintPages").then((m) => ({ default: m.PrintRoute })));
 
 type ApiStatus = "checking" | "ok" | "unreachable";
 
@@ -90,6 +93,14 @@ function Page({ path, meId }: { path: string; meId: string }) {
 function Shell() {
   const path = usePath();
   const { can, user } = useAuth();
+  // Print views show only the document, with no app header (spec 014 R1).
+  if (path.startsWith("/print/")) {
+    return (
+      <Suspense fallback={<main className="p-6 text-stone-500">Loading...</main>}>
+        <PrintRoute path={path} />
+      </Suspense>
+    );
+  }
   const inCustomers = path.startsWith("/customers");
   const inRates = path.startsWith("/rates");
   const inInvoices = path.startsWith("/invoices");

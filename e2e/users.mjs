@@ -38,7 +38,8 @@ await owner.fill('div[role="dialog"] label:has-text("Temporary password") input'
 await owner.click('div[role="dialog"] button:has-text("Add person")');
 await owner.locator("text=Person added. >> visible=true").first().waitFor({ timeout: 10000 });
 ok(true, "owner adds a staff person with a temporary password");
-ok(await owner.locator(`tr:has-text("${username}") >> text=Must change password`).count() >= 1, "the new person shows 'Must change password'");
+// The list reloads after the dialog closes, so wait for the row rather than counting it once.
+ok(await owner.locator(`tr:has-text("${username}") >> text=Must change password`).first().waitFor({ timeout: 10000 }).then(() => true, () => false), "the new person shows 'Must change password'");
 
 // Owner can see the activity of a person
 await owner.click(`tr:has-text("${username}") button:has-text("Activity")`);

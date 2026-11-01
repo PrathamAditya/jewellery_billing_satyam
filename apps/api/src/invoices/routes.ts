@@ -122,6 +122,8 @@ const toLine = (l: DbLine): InvoiceLineResponse => ({
 /** Everything shown comes from the stored columns, never from a fresh calculation (spec 013 R6). */
 const toResponse = (r: DbInvoice, lines: DbLine[], isEarlierVersion: boolean, received = 0): InvoiceResponse => ({
   ...toSummary(r, received),
+  /** The business header saved with the invoice (spec 003 R5). Printing uses this, never the current settings. */
+  header: r.header_json ? (JSON.parse(r.header_json) as Record<string, unknown>) : null,
   customerId: r.customer_id,
   customerAddress: r.customer_address,
   customerPan: r.customer_pan,
@@ -394,6 +396,18 @@ invoiceRoutes.get("/:id", async (c) => {
   const old = JSON.parse(snap.snapshot_json) as DbInvoice;
   // The void mark belongs to the invoice as a whole, so it shows on every version.
   return c.json(toResponse({ ...old, voided_at: row.voided_at, voided_by: row.voided_by, void_reason: row.void_reason }, await loadLines(db, row.id, n), true));
+});
+
+// ---- print event (spec 014 R1): printing is read-only; the one write is this audit row ----
+invoiceRoutes.post("/:id/print-event", async (c) => {
+  const db = c.env.DB;
+  const user = c.get("user");
+  const row = await loadRow(db, c.req.param("id"));
+  if (!row) return c.json({ error: "not_found" }, 404);
+  const body = (await readJson(c)) as { copy?: unknown } | undefined;
+  const copy = typeof body?.copy === "string" ? body.copy.trim().slice(0, 40) : "";
+  await auditStatement(db, { actor: user.id, action: "invoice_print", entity: "invoice", entityId: row.id, detail: { copy, revision: row.revision_no } }).run();
+  return c.json({ ok: true });
 });
 
 // ---- edit (R10, R11) ----

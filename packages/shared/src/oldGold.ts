@@ -77,6 +77,7 @@ export type OldGoldResponse = {
   voidReason: string | null;
   createdAt: string;
   createdBy: string;
+  header: Record<string, unknown> | null;
 };
 export type OldGoldSummary = { id: string; receiptNo: string; receiptDate: string; customerName: string; finalPaise: number; treatment: OldGoldTreatment; voided: boolean };
 export type OldGoldListResponse = { items: OldGoldSummary[]; nextCursor: string | null };
