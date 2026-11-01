@@ -57,6 +57,11 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "POST", path: "/api/refunds/:id/reverse", permission: "payments.refund" },
   { method: "GET", path: "/api/customers/:id/advances", permission: "advances.view" },
 
+  { method: "GET", path: "/api/old-gold", permission: "oldgold.view" },
+  { method: "POST", path: "/api/old-gold", permission: "oldgold.create" },
+  { method: "GET", path: "/api/old-gold/:id", permission: "oldgold.view" },
+  { method: "POST", path: "/api/old-gold/:id/void", permission: "oldgold.void" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },
