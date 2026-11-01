@@ -1,8 +1,8 @@
 # 010: Customers
 
-Status: Draft (needs owner approval)
+Status: Built 2026-11-01, awaiting deploy and owner check
 Depends on: 000, 001, 002
-Open questions: none in `decisions.md`. Three questions for the owner are in section 8 (Q1 to Q3).
+Open questions: none. The owner answered Q1 to Q3 on 2026-11-01 (section 8).
 
 ## 1. Goal
 The owner can create, search, view and edit customers. Later features (invoice, receipt, old gold, ledger) pick a customer by searching here and load the details automatically. Editing never loses the old details.
@@ -100,14 +100,15 @@ Other:
 ## 7. Out of scope
 Customer ledger and balances (019), blocking void when documents exist (added in 013, 015, 016, 018), invoice-time snapshot copy (013), import from the old booklet or spreadsheet (a separate small feature if wanted), customer photos, birthdays and anniversary reminders, WhatsApp or SMS sending.
 
-## 8. Questions for the owner
-- Q1. Should Aadhaar be stored at all? The safest choice is not to store it and type it only on the document that needs it. This spec stores it, masked on screen (R14), because the requirements list it. If you do not need it saved, say so and I will remove it from R1, R4 and R14.
-- Q2. Is it fine that several customers can share one mobile number (R5)? Say if you want it blocked instead.
-- Q3. Customer numbers `C-0001` that never reset: is that what you want, or should they follow the financial year like invoices?
+## 8. Owner answers (2026-11-01)
+- Q1. Aadhaar: **store it, masked on screen** (as drafted in R1, R4, R14).
+- Q2. Shared mobile numbers: **allowed, with a warning** (as drafted in R5).
+- Q3. Customer numbers: **never reset** (`C-0001`, `C-0002`, as drafted in R2).
 
 ## 9. Acceptance checklist
-- [ ] R1 to R15 implemented and tested
-- [ ] Migration applied locally, in CI and on the remote database
-- [ ] Create, search, edit, history, void and restore work on the live site (PC), and view-only works on Android
-- [ ] Nothing in specs 000, 001 and 002 broke
+- [x] R1 to R15 implemented and tested (136 tests in total, 55 of them new; search over 20,000 customers is under 200 ms)
+- [ ] Migrations 0004 and 0005 applied on the remote database (applied locally and in tests; CI applies them to an empty database)
+- [x] Create, search, edit, history, void, restore, Aadhaar reveal and the picker work in a real browser against a local Worker (PC), and the phone view is read-only with no sideways scroll
+- [ ] The same checked on the live site, after deploy
+- [x] Nothing in specs 000, 001 and 002 broke (their tests still pass)
 - [ ] Owner approved the result
