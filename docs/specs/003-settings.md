@@ -1,6 +1,6 @@
 # 003: Settings, number formats and document headers
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Approved (Wave 1). Built so far: settings API, validation, revisions and audit, header snapshot on invoices, number format PREFIX-NNNN with per-year uniqueness, set-next-number. Still to do: Settings screen (section 4), Numbers screen, banner, logo upload UI, customer copy format test in browser.
 Depends on: 000, 001, 002, 010, 013
 Open questions used with defaults: Q61, Q62, Q64, Q74, Q77 (see section 8)
 
