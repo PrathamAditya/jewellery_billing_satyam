@@ -1,4 +1,5 @@
-import { newId } from "@jewellery/shared";
+import { newId, type Permission } from "@jewellery/shared";
+import { permissionsForRole } from "./permissions";
 import { auditStatement } from "../db/audit";
 
 export const COOKIE_NAME = "__Host-session";
@@ -8,7 +9,15 @@ const SESSION_MS = SESSION_DAYS * DAY_MS;
 /** Spec 002 R6: using a session more than 1 day after the last refresh extends it. */
 const REFRESH_AFTER_MS = DAY_MS;
 
-export type AuthUser = { id: string; username: string; role: string };
+/** The logged-in person for one request (spec 004). Permissions come from the role on every request. */
+export type AuthUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  role: string;
+  permissions: Permission[];
+  mustChangePassword: boolean;
+};
 
 export const SESSION_MAX_AGE_SECONDS = SESSION_DAYS * 24 * 60 * 60;
 
@@ -40,7 +49,7 @@ export async function lookupSession(db: D1Database, token: string, now: Date): P
   const tokenHash = await sha256Hex(token);
   const row = await db
     .prepare(
-      `SELECT s.last_seen_at, s.expires_at, u.id, u.username, u.role, u.disabled_at
+      `SELECT s.last_seen_at, s.expires_at, u.id, u.username, u.role, u.disabled_at, u.display_name, u.must_change_password
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?1`,
     )
@@ -52,6 +61,8 @@ export async function lookupSession(db: D1Database, token: string, now: Date): P
       username: string;
       role: string;
       disabled_at: string | null;
+      display_name: string;
+      must_change_password: number;
     }>();
   if (!row) return { ok: false };
 
@@ -69,7 +80,16 @@ export async function lookupSession(db: D1Database, token: string, now: Date): P
       .run();
     refreshed = true;
   }
-  return { ok: true, user: { id: row.id, username: row.username, role: row.role }, tokenHash, refreshed };
+  const permissions = await permissionsForRole(db, row.role);
+  const user: AuthUser = {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name || row.username,
+    role: row.role,
+    permissions,
+    mustChangePassword: row.must_change_password === 1,
+  };
+  return { ok: true, user, tokenHash, refreshed };
 }
 
 /** Statements that create a session and its audit row, for one atomic batch (R4, R14). */

@@ -6,6 +6,7 @@ export * from "./customer";
 export * from "./rates";
 export * from "./weight";
 export * from "./invoice";
+export * from "./permissions";
 export * from "./settings";
 
 export const healthResponseSchema = z.object({
@@ -38,6 +39,9 @@ export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
 export const userResponseSchema = z.object({
   id: z.string(),
   username: z.string(),
+  displayName: z.string(),
   role: z.string(),
+  permissions: z.array(z.string()),
+  mustChangePassword: z.boolean(),
 });
 export type UserResponse = z.infer<typeof userResponseSchema>;

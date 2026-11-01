@@ -3,6 +3,7 @@ import { getCookie, deleteCookie } from "hono/cookie";
 import { changePasswordRequestSchema, loginRequestSchema, type UserResponse } from "@jewellery/shared";
 import type { AppEnv } from "../env";
 import { readJson } from "../http";
+import { permissionsForRole } from "./permissions";
 import { auditStatement } from "../db/audit";
 import { setSessionCookie } from "./middleware";
 import { dummyPasswordHash, hashPassword, verifyPassword } from "./password";
@@ -50,9 +51,9 @@ authRoutes.post("/login", async (c) => {
   }
 
   const user = await db
-    .prepare("SELECT id, username, role, password_hash, disabled_at FROM users WHERE username = ?1")
+    .prepare("SELECT id, username, role, password_hash, disabled_at, display_name, must_change_password FROM users WHERE username = ?1")
     .bind(username)
-    .first<{ id: string; username: string; role: string; password_hash: string; disabled_at: string | null }>();
+    .first<{ id: string; username: string; role: string; password_hash: string; disabled_at: string | null; display_name: string; must_change_password: number }>();
 
   // R11: an unknown username costs the same time as a wrong password.
   const passwordOk = await verifyPassword(parsed.data.password, user?.password_hash ?? (await dummyPasswordHash()));
@@ -72,23 +73,31 @@ authRoutes.post("/login", async (c) => {
   }
 
   const token = newSessionToken();
-  await db.batch(
-    createSessionStatements(db, {
+  await db.batch([
+    ...createSessionStatements(db, {
       tokenHash: await sha256Hex(token),
       userId: user.id,
       now,
       userAgent: c.req.header("User-Agent") ?? null,
       ip,
     }),
-  );
+    db.prepare("UPDATE users SET last_login_at = ?2 WHERE id = ?1").bind(user.id, now.toISOString()),
+  ]);
   setSessionCookie(c, token, SESSION_MAX_AGE_SECONDS);
-  const body: UserResponse = { id: user.id, username: user.username, role: user.role };
+  const body: UserResponse = {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name || user.username,
+    role: user.role,
+    permissions: await permissionsForRole(db, user.role),
+    mustChangePassword: user.must_change_password === 1,
+  };
   return c.json(body);
 });
 
 authRoutes.get("/me", (c) => {
-  const { id, username, role } = c.get("user");
-  const body: UserResponse = { id, username, role };
+  const u = c.get("user");
+  const body: UserResponse = { id: u.id, username: u.username, displayName: u.displayName, role: u.role, permissions: u.permissions, mustChangePassword: u.mustChangePassword };
   return c.json(body);
 });
 
@@ -118,7 +127,7 @@ authRoutes.post("/change-password", async (c) => {
   const token = getCookie(c, COOKIE_NAME)!;
   await db.batch([
     db
-      .prepare("UPDATE users SET password_hash = ?2, updated_at = ?3, updated_by = ?1 WHERE id = ?1")
+      .prepare("UPDATE users SET password_hash = ?2, updated_at = ?3, updated_by = ?1, must_change_password = 0 WHERE id = ?1")
       .bind(user.id, await hashPassword(parsed.data.newPassword), c.get("now").toISOString()),
     db.prepare("DELETE FROM sessions WHERE user_id = ?1 AND token_hash != ?2").bind(user.id, await sha256Hex(token)),
     auditStatement(db, { actor: user.id, action: "password_change", entity: "user", entityId: user.id }),
