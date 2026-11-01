@@ -21,6 +21,8 @@ Locked decisions are changed only by editing this file in a commit that says why
 
 ## Open (must be answered before the spec that needs it)
 
+The full list, with the papers to bring, is in `docs/open-questions.md`.
+
 | # | Question | Blocks spec | Who |
 |---|----------|-------------|-----|
 | O1 | HSN 9988 job-work calculation: what exactly is the "specified job-work calculation"? Provide a worked example (inputs and expected amount, GST and display rate). | Invoice calculation engine | Owner |
