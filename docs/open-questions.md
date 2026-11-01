@@ -2,7 +2,7 @@
 
 One place for everything that is not answered yet. Claude adds to this file instead of asking in chat. When the owner brings the receipts and answers, we go through it top to bottom, move each answered item into `docs/decisions.md` (or the spec it affects), and tick it here.
 
-Last updated: 2026-11-01. Status: `OPEN` waiting for an answer, `DEFAULT` Claude chose a default so work is not blocked (change it if wrong), `DONE` answered.
+Last updated: 2026-11-01 (spec 013 questions added). Status: `OPEN` waiting for an answer, `DEFAULT` Claude chose a default so work is not blocked (change it if wrong), `DONE` answered.
 
 How to answer: a photo of the paper document is the best answer. Write the answer next to the question or just say the number (for example "Q7: percentage, e.g. 2%"). Remove customer names, GSTIN, PAN and phone numbers from anything that goes into git. They are entered in the app's Settings, not in the repo.
 
@@ -106,6 +106,15 @@ Each item says what to look for. One real example of each is enough, two if they
 - **Q51.** Backups (spec 050): is a nightly copy to cloud storage enough, plus a "download everything" button? Who restores if something goes wrong?
 - **Q52.** O6, offline: how often is the internet down at the showroom, and for how long? If a bill is made offline, is it acceptable that its number is allocated when it syncs, or must the number be printed on the bill at once?
 - **Q53.** Android: decision D5 makes it view-only in version 1. Is there any single action that is needed on the phone from day one (for example "mark a payment received")?
+
+## L. Added while drafting spec 013 (invoices)
+
+- **Q55. Edit or credit note.** `DEFAULT`, CA. Once a bill has been handed to the customer, may the software edit it (every earlier version is kept and shown in history), or should a mistake be fixed with a credit note and a new bill? Default: editing is allowed with full history. Please ask the CA what the shop must do.
+- **Q56. Walk-in customers.** `DEFAULT`. Can a bill be made with only a name and no saved customer (no mobile)? Default: yes. Is a mobile number compulsory above some bill amount?
+- **Q57. Un-voiding.** `DEFAULT`. A voided bill cannot be brought back. A new bill is made instead. Is that how the paper book works (a cancelled bill stays in the book marked "Cancelled")?
+- **Q58. Back-dated bills.** `DEFAULT`. A bill dated 1 March made today gets a number from the March financial year even if newer bills already have higher numbers. On the paper book numbers run in date order. Should back-dating be allowed at all, and by how many days?
+- **Q59. Bill remarks.** `DEFAULT`. The remarks box on a bill is internal and is never printed. Does the shop ever write a note that must print on the customer's bill?
+- **Q60. Who may edit or void a bill.** `DEFAULT`. Only the owner (the only login, D6). Say if anyone else should be able to.
 
 ## J. Defaults I chose without asking (tell me if any is wrong)
 
