@@ -31,3 +31,4 @@ Locked decisions are changed only by editing this file in a commit that says why
 | O6 | Offline invoice numbering: reserve number blocks while online, or use an offline-only series? | Offline queue and sync | Decide in that spec |
 | O7 | Login method for the single owner: password plus session cookie, or Cloudflare Access? | Auth | Closed 2026-11-01: own login, username + password + session cookie (spec 002) |
 | O8 | GST registration facts: composition vs regular scheme, state code for CGST/SGST vs IGST. | Invoice calculation engine | Owner / CA |
+| O9 | Which daily rate applies to purities other than 24K995 and 22K916 (18K750, 14K, 24K999, others) on invoices, and which rate and percentage old gold uses for each purity (requirements 4.4, 6.3)? Give a worked example per purity. | Invoice calculation engine, old gold | Owner |
