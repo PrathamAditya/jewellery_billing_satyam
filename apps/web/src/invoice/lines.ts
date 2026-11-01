@@ -1,4 +1,5 @@
 import type { InvoiceLineInput } from "@jewellery/calc";
+import { polishWeightMg } from "@jewellery/calc";
 import {
   PURITY_RATE_KIND,
   formatWeightGrams,
@@ -40,15 +41,14 @@ export function parseLine(t: LineText): Parsed {
   // Gross is optional: blank means "same as net".
   const gross = t.gross.trim() === "" ? net : parseWeightGrams(t.gross);
   if (!gross.ok) fieldErrors.gross = gross.message;
-  const polish = t.polish.trim() === "" ? ({ ok: true, mg: 0 } as const) : parseWeightGrams(t.polish);
-  if (!polish.ok) fieldErrors.polish = polish.message;
+  const polishText = t.polish.trim() === "" ? "0" : t.polish.trim().replace(/%/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(polishText) || Number(polishText) > 100) fieldErrors.polish = "Polish must be 0% to 100% (up to 2 decimals)";
+  const polishBps = Math.round(Number(polishText) * 100);
   const gold = parseRateInput(t.gold, "gram");
   if (!gold.ok) fieldErrors.gold = gold.message;
   const labourIsZero = t.labour.trim() === "" || /^[₹\s,.0]*$/.test(t.labour);
   const labour = labourIsZero ? ({ ok: true, paisePerKg: 0 } as const) : parseRateInput(t.labour, "gram");
   if (!labour.ok) fieldErrors.labour = labour.message;
-  const gstText = t.gst.replace(/[%\s]/g, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(gstText)) fieldErrors.gst = "GST % like 3 or 1.5";
 
   if (Object.keys(fieldErrors).length) return { input: null, fieldErrors };
   return {
@@ -59,10 +59,10 @@ export function parseLine(t: LineText): Parsed {
       hsn: t.hsn.trim(),
       grossWeightMg: (gross as { mg: number }).mg,
       netWeightMg: (net as { mg: number }).mg,
-      polishMg: (polish as { mg: number }).mg,
+      polishMg: polishWeightMg((net as { mg: number }).mg, polishBps),
       goldRatePaisePerKg: (gold as { paisePerKg: number }).paisePerKg,
       labourRatePaisePerKg: (labour as { paisePerKg: number }).paisePerKg,
-      gstRateBps: Math.round(Number(gstText) * 100),
+      gstRateBps: t.hsn.trim() === "9988" ? 500 : 300,
     },
   };
 }
@@ -78,7 +78,7 @@ export const lineTextFromSaved = (l: InvoiceLineResponse): LineText => ({
   hsn: l.hsn,
   gross: formatWeightGrams(l.grossWeightMg),
   net: formatWeightGrams(l.netWeightMg),
-  polish: l.polishMg ? formatWeightGrams(l.polishMg) : "",
+  polish: l.polishBps ? String(l.polishBps / 100) : "",
   gold: paisePerKgToInput(l.goldRatePaisePerKg, "gram"),
   labour: l.labourRatePaisePerKg ? paisePerKgToInput(l.labourRatePaisePerKg, "gram") : "",
   gst: String(l.gstRateBps / 100),

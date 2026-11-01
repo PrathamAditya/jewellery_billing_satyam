@@ -105,16 +105,14 @@ describe("saving and numbering (R1 to R4)", () => {
     expect((await one<{ taxable_paise: number }>("SELECT taxable_paise FROM invoices WHERE id = ?1", i.id))!.taxable_paise).toBe(280_006);
   });
 
-  it("an HSN 9988 line is refused with the engine's message, stores nothing and does not skip a number", async () => {
+  it("an HSN 9988 line is accepted with the server-selected 5% GST", async () => {
     const before = await lastNo("2025-26");
     const count0 = await count("SELECT COUNT(*) AS n FROM invoices");
     const res = await post(bill({ lines: [silverLine(), silverLine({ hsn: "9988" })] }));
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string; errors: { line: number; code: string; message: string }[] };
-    expect(body.error).toBe("calculation");
-    expect(body.errors).toContainEqual(expect.objectContaining({ line: 2, code: "job_work_not_supported" }));
-    expect(await count("SELECT COUNT(*) AS n FROM invoices")).toBe(count0);
-    expect(await lastNo("2025-26")).toBe(before);
+    expect(res.status).toBe(201);
+    expect((await inv(res)).lines[1]).toMatchObject({ hsn: "9988", gstRateBps: 500 });
+    expect(await count("SELECT COUNT(*) AS n FROM invoices")).toBe(count0 + 1);
+    expect(await lastNo("2025-26")).toBe(before + 1);
   });
 
   it("date rules: future 400, back date fine, impossible date 400", async () => {

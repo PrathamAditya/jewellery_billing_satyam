@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { calculateInvoice, type InvoiceResult } from "@jewellery/calc";
+import { calculateInvoice, divRoundHalfUp, polishWeightMg, type InvoiceResult } from "@jewellery/calc";
 import {
   RATE_KINDS,
   cleanMobile,
@@ -67,6 +67,7 @@ type DbLine = {
   gross_weight_mg: number;
   net_weight_mg: number;
   polish_mg: number;
+  polish_bps: number;
   gold_rate_paise_per_kg: number;
   labour_rate_paise_per_kg: number;
   gst_rate_bps: number;
@@ -95,10 +96,11 @@ const toLine = (l: DbLine): InvoiceLineResponse => ({
   lineNo: l.line_no,
   description: l.description,
   purity: l.purity,
-  hsn: l.hsn,
+  hsn: l.hsn as "7113" | "9988",
   grossWeightMg: l.gross_weight_mg,
   netWeightMg: l.net_weight_mg,
   polishMg: l.polish_mg,
+  polishBps: l.polish_bps,
   goldRatePaisePerKg: l.gold_rate_paise_per_kg,
   labourRatePaisePerKg: l.labour_rate_paise_per_kg,
   gstRateBps: l.gst_rate_bps,
@@ -146,7 +148,7 @@ function canonicalInput(b: InvoiceRequest) {
       hsn: l.hsn,
       grossWeightMg: l.grossWeightMg,
       netWeightMg: l.netWeightMg,
-      polishMg: l.polishMg,
+      polishBps: l.polishBps,
       goldRatePaisePerKg: l.goldRatePaisePerKg,
       labourRatePaisePerKg: l.labourRatePaisePerKg,
       gstRateBps: l.gstRateBps,
@@ -181,7 +183,17 @@ type Prepared =
 
 /** Validation, date and customer checks, the server's own calculation, and the rate record (R2, R4, R5, R7). */
 async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, raw: unknown, forEdit: boolean): Promise<Prepared> {
-  const parsed = invoiceRequestSchema.safeParse(raw);
+  // Temporary compatibility for pre-012b clients: old payloads carried a fixed
+  // polish weight. New screens always send polishBps.
+  const compatibleRaw = raw && typeof raw === "object" && Array.isArray((raw as { lines?: unknown[] }).lines)
+    ? { ...(raw as Record<string, unknown>), lines: (raw as { lines: unknown[] }).lines.map((line) => {
+        if (!line || typeof line !== "object") return line;
+        const l = line as Record<string, unknown>;
+        if (l.polishBps !== undefined || typeof l.polishMg !== "number" || typeof l.netWeightMg !== "number" || l.netWeightMg <= 0) return l;
+        return { ...l, polishBps: Number(divRoundHalfUp(BigInt(l.polishMg) * 10_000n, BigInt(l.netWeightMg))) };
+      }) }
+    : raw;
+  const parsed = invoiceRequestSchema.safeParse(compatibleRaw);
   if (!parsed.success) {
     const body = validationBody(parsed.error);
     // Name the line for line-level problems: issues come back with a path like ["lines", 1, "netWeightMg"].
@@ -206,7 +218,7 @@ async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, 
 
   const outcome = calculateInvoice({
     taxMode: body.taxMode,
-    lines: body.lines.map((l) => ({ ...l })),
+    lines: body.lines.map((l) => ({ ...l, hsn: l.hsn.trim(), polishMg: polishWeightMg(l.netWeightMg, l.polishBps), gstRateBps: l.hsn.trim() === "9988" ? 500 : 300 })),
   });
   if (!outcome.ok) return { ok: false, status: 400, body: { error: "calculation", errors: outcome.errors } };
 
@@ -216,17 +228,17 @@ async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, 
 }
 
 const INSERT_LINE = `INSERT INTO invoice_lines
-  (id, invoice_id, revision_no, line_no, description, purity, hsn, gross_weight_mg, net_weight_mg, polish_mg,
+  (id, invoice_id, revision_no, line_no, description, purity, hsn, gross_weight_mg, net_weight_mg, polish_mg, polish_bps,
    gold_rate_paise_per_kg, labour_rate_paise_per_kg, gst_rate_bps, chargeable_weight_mg, gold_amount_paise,
    labour_amount_paise, amount_paise, display_rate_paise_per_gram)
-  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)`;
+  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)`;
 
 function lineStatements(db: D1Database, invoiceId: string, revisionNo: number, body: InvoiceRequest, result: InvoiceResult) {
   return body.lines.map((l, i) => {
     const r = result.lines[i]!;
     return db
       .prepare(INSERT_LINE)
-      .bind(newId(), invoiceId, revisionNo, i + 1, l.description, l.purity, l.hsn.trim(), l.grossWeightMg, l.netWeightMg, l.polishMg, l.goldRatePaisePerKg, l.labourRatePaisePerKg, l.gstRateBps, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram);
+      .bind(newId(), invoiceId, revisionNo, i + 1, l.description, l.purity, l.hsn.trim(), l.grossWeightMg, l.netWeightMg, polishWeightMg(l.netWeightMg, l.polishBps), l.polishBps, l.goldRatePaisePerKg, l.labourRatePaisePerKg, l.hsn.trim() === "9988" ? 500 : 300, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram);
   });
 }
 

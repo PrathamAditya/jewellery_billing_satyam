@@ -1,4 +1,5 @@
-import { PURITIES, PURITY_RATE_KIND, paisePerKgToInput, type ApplicableRatesResponse, type Purity } from "@jewellery/shared";
+import { polishWeightMg } from "@jewellery/calc";
+import { PURITIES, PURITY_RATE_KIND, formatWeightGrams, paisePerKgToInput, parseWeightGrams, type ApplicableRatesResponse, type Purity } from "@jewellery/shared";
 import { btnSecondary, inputClass } from "../customers/ui";
 import { blankLine, isTouched, parseLine, type LineText } from "./lines";
 
@@ -15,6 +16,7 @@ type Props = {
 /** The lines grid shared by the Calculator (spec 012) and the invoice form (spec 013). */
 export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, showPurity = false }: Props) {
   const setField = (i: number, k: keyof LineText, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const setHsn = (i: number, hsn: string) => onChange(rows.map((r, j) => (j === i ? { ...r, hsn, gst: hsn === "9988" ? "5" : "3" } : r)));
 
   function setPurity(i: number, purity: Purity) {
     const kind = PURITY_RATE_KIND[purity];
@@ -47,7 +49,7 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
     );
   };
 
-  const headers = ["Description", ...(showPurity ? ["Purity"] : []), "HSN", "Gross g", "Net g", "Polish g", "Gold rate / g", "Labour rate / g", "GST %", ""];
+  const headers = ["Description", ...(showPurity ? ["Purity"] : []), "HSN", "Gross g", "Net g", "Polish %", "Gold rate / g", "Labour rate / g", "GST %", ""];
   return (
     <div className="overflow-x-auto">
       <table className="text-sm">
@@ -75,13 +77,13 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
                   </select>
                 </td>
               )}
-              <td className="pr-2 pb-2">{box(i, "hsn", "HSN", "7113", "w-20")}</td>
+              <td className="pr-2 pb-2"><select className={`${inputClass} w-32`} value={r.hsn} onChange={(e) => setHsn(i, e.target.value)} aria-label={`HSN line ${i + 1}`}><option value="7113">7113 Jewellery 3%</option><option value="9988">9988 Job work 5%</option></select></td>
               <td className="pr-2 pb-2">{box(i, "gross", "Gross g", "9.800")}</td>
               <td className="pr-2 pb-2">{box(i, "net", "Net g", "9.800")}</td>
-              <td className="pr-2 pb-2">{box(i, "polish", "Polish g", "0")}</td>
+              <td className="pr-2 pb-2"><div className="flex flex-col gap-0.5">{box(i, "polish", "Polish %", "0")} {(() => { const n = parseWeightGrams(r.net); const p = Number(r.polish || 0); return n.ok && Number.isFinite(p) ? <span className="text-xs text-stone-500">= {formatWeightGrams(polishWeightMg(n.mg, Math.round(p * 100)))} g</span> : null; })()}</div></td>
               <td className="pr-2 pb-2">{box(i, "gold", "Gold rate", "285.72", "w-28")}</td>
               <td className="pr-2 pb-2">{box(i, "labour", "Labour rate", "0", "w-28")}</td>
-              <td className="pr-2 pb-2">{box(i, "gst", "GST %", "3", "w-16")}</td>
+              <td className="pr-2 pb-2"><output className="block py-2 text-sm" aria-label={`GST line ${i + 1}`}>{r.hsn === "9988" ? "5%" : "3%"}</output></td>
               <td className="pb-2">
                 <div className="flex flex-col gap-1">
                   <button

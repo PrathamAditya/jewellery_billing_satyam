@@ -55,13 +55,14 @@ const int = (message: string) => z.number({ error: message }).int(message);
 export const invoiceLineSchema = z.object({
   description: z.preprocess((v) => (typeof v === "string" ? v.trim() : v ?? ""), z.string().max(200, "Description is too long")),
   purity: z.enum(PURITIES, { error: "Choose a purity" }),
-  hsn: z.string({ error: "HSN is required" }).trim().min(1, "HSN is required").max(10, "HSN is too long"),
+  hsn: z.string({ error: "HSN is required" }).trim().refine((v) => v === "7113" || v === "9988", "Choose 7113 or 9988"),
   grossWeightMg: int("Gross weight is not valid"),
   netWeightMg: int("Net weight is not valid"),
-  polishMg: int("Polish is not valid"),
+  polishBps: int("Polish percentage is not valid").min(0, "Polish percentage cannot be negative").max(10000, "Polish percentage cannot exceed 100%").optional().default(0),
   goldRatePaisePerKg: int("Gold rate is not valid"),
   labourRatePaisePerKg: int("Labour rate is not valid"),
-  gstRateBps: int("GST rate is not valid"),
+  // Accepted for backward-compatible clients, but ignored by the server (012b R1).
+  gstRateBps: int("GST rate is not valid").optional(),
 });
 export type InvoiceLineBody = z.infer<typeof invoiceLineSchema>;
 
@@ -94,6 +95,9 @@ export const voidInvoiceSchema = z.object({ reason: z.string().trim().min(1, "Pl
 
 export type InvoiceLineResponse = InvoiceLineBody & {
   lineNo: number;
+  polishBps: number;
+  polishMg: number;
+  gstRateBps: number;
   chargeableWeightMg: number;
   goldAmountPaise: number;
   labourAmountPaise: number;
