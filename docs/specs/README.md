@@ -13,6 +13,6 @@ No code is written for a feature before its spec is Approved.
 
 | Spec | Name | Status |
 |------|------|--------|
-| 000 | Project scaffold, CI, deploy | Not written |
+| 000 | Project scaffold, CI, deploy | Approved, building |
 
 The full list is in `docs/roadmap.md`.

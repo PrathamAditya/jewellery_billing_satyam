@@ -5,7 +5,7 @@ Goal: reliable money and stock logic, one shared database, installable on PC and
 | Layer | Choice | Why |
 |-------|--------|-----|
 | Language | TypeScript everywhere | One language for UI, API and calculation code, with shared types. |
-| Repo layout | pnpm workspaces monorepo | `apps/web`, `apps/api`, `packages/calc`, `packages/shared`. |
+| Repo layout | npm workspaces monorepo (pnpm via corepack is broken on the dev machine's Node 22.22.1) | `apps/web`, `apps/api`, `packages/calc`, `packages/shared`. |
 | Frontend | React + Vite, PWA (vite-plugin-pwa) | Installable on Windows and Android, service worker for offline shell. |
 | UI | Tailwind CSS, plus a separate `print.css` per printable document | Responsive dashboard, and exact print layouts kept apart from screen styles. |
 | Server state | TanStack Query | Caching, refetch, and optimistic updates. Android stays fresh through refetch on focus and polling. |
