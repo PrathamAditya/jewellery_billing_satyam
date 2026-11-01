@@ -126,3 +126,67 @@ export const rates = sqliteTable(
     check("rates_kind_valid", sql`${t.kind} IN ('gold_24k995', 'gold_22k916', 'silver')`),
   ],
 );
+
+/** Invoices (spec 013). The header holds the current revision; older headers live in record_revisions. */
+export const invoices = sqliteTable(
+  "invoices",
+  {
+    ...standardColumns(),
+    invoiceNo: text("invoice_no").notNull().unique(),
+    invoiceDate: text("invoice_date").notNull(),
+    customerId: text("customer_id"),
+    customerName: text("customer_name").notNull(),
+    customerNameSearch: text("customer_name_search").notNull(),
+    customerMobile: text("customer_mobile"),
+    customerAddress: text("customer_address"),
+    customerPan: text("customer_pan"),
+    taxMode: text("tax_mode").notNull(),
+    reverseCharge: integer("reverse_charge").notNull().default(0),
+    remarks: text("remarks"),
+    ratesJson: text("rates_json").notNull(),
+    inputJson: text("input_json").notNull(),
+    taxablePaise: integer("taxable_paise").notNull(),
+    taxPaise: integer("tax_paise").notNull(),
+    totalBeforeRoundOffPaise: integer("total_before_round_off_paise").notNull(),
+    roundOffPaise: integer("round_off_paise").notNull(),
+    payablePaise: integer("payable_paise").notNull(),
+    calcJson: text("calc_json").notNull(),
+    revisionNo: integer("revision_no").notNull().default(1),
+    ...voidColumns(),
+  },
+  (t) => [
+    index("invoices_date_idx").on(t.invoiceDate, t.createdAt),
+    index("invoices_customer_idx").on(t.customerId),
+    index("invoices_name_search_idx").on(t.customerNameSearch),
+    index("invoices_mobile_idx").on(t.customerMobile),
+    check("invoices_tax_mode_valid", sql`${t.taxMode} IN ('intra', 'inter')`),
+    check("invoices_payable_whole_rupees", sql`${t.payablePaise} >= 0 AND ${t.payablePaise} % 100 = 0`),
+  ],
+);
+
+/** One row per line per revision. Lines are never deleted (spec 013 R11). */
+export const invoiceLines = sqliteTable(
+  "invoice_lines",
+  {
+    id: text("id").primaryKey(),
+    invoiceId: text("invoice_id").notNull(),
+    revisionNo: integer("revision_no").notNull(),
+    lineNo: integer("line_no").notNull(),
+    description: text("description").notNull().default(""),
+    purity: text("purity").notNull(),
+    hsn: text("hsn").notNull(),
+    grossWeightMg: integer("gross_weight_mg").notNull(),
+    netWeightMg: integer("net_weight_mg").notNull(),
+    polishMg: integer("polish_mg").notNull(),
+    goldRatePaisePerKg: integer("gold_rate_paise_per_kg").notNull(),
+    labourRatePaisePerKg: integer("labour_rate_paise_per_kg").notNull(),
+    gstRateBps: integer("gst_rate_bps").notNull(),
+    chargeableWeightMg: integer("chargeable_weight_mg").notNull(),
+    goldAmountPaise: integer("gold_amount_paise").notNull(),
+    labourAmountPaise: integer("labour_amount_paise").notNull(),
+    amountPaise: integer("amount_paise").notNull(),
+    displayRatePaisePerGram: integer("display_rate_paise_per_gram").notNull(),
+    inventoryItemId: text("inventory_item_id"),
+  },
+  (t) => [uniqueIndex("invoice_lines_rev_line_unique").on(t.invoiceId, t.revisionNo, t.lineNo)],
+);

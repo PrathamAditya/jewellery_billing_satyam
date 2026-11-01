@@ -8,6 +8,9 @@ import CustomerList from "./customers/CustomerList";
 import CustomerPage from "./customers/CustomerPage";
 import { EditCustomerPage, NewCustomerPage, PickerDemoPage } from "./customers/pages";
 import CalculatorPage from "./calculator/CalculatorPage";
+import InvoiceList from "./invoice/InvoiceList";
+import InvoicePage from "./invoice/InvoicePage";
+import { EditInvoicePage, NewInvoicePage } from "./invoice/pages";
 import RatesPage from "./rates/RatesPage";
 import TodayRates from "./rates/TodayRates";
 
@@ -52,6 +55,12 @@ function Page({ path }: { path: string }) {
     if (parts[2] === "edit") return <EditCustomerPage id={parts[1]!} />;
     return <CustomerPage id={parts[1]!} />;
   }
+  if (parts[0] === "invoices") {
+    if (parts.length === 1) return <InvoiceList />;
+    if (parts[1] === "new") return <NewInvoicePage />;
+    if (parts[2] === "edit") return <EditInvoicePage id={parts[1]!} />;
+    return <InvoicePage id={parts[1]!} />;
+  }
   if (parts[0] === "rates") return <RatesPage />;
   if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
@@ -62,18 +71,20 @@ function Shell() {
   const path = usePath();
   const inCustomers = path.startsWith("/customers");
   const inRates = path.startsWith("/rates");
+  const inInvoices = path.startsWith("/invoices");
   const inCalculator = path.startsWith("/calculator");
   const link = (href: string, label: string, active: boolean, extra = "") => (
-    <a href={href} className={`px-3 py-1.5 rounded-lg text-sm ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
+    <a href={href} className={`px-2 sm:px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
       {label}
     </a>
   );
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col">
-      <header className="flex items-center justify-between gap-2 px-4 py-3 bg-white border-b border-stone-200">
-        <nav className="flex items-center gap-2">
+      <header className="flex items-center justify-between gap-2 px-2 sm:px-4 py-3 bg-white border-b border-stone-200">
+        <nav className="flex items-center gap-1 sm:gap-2 min-w-0 overflow-x-auto">
           <span className="font-semibold mr-2 max-sm:hidden">Jewellery Billing</span>
           {link("#/", "Home", path === "/")}
+          {link("#/invoices", "Invoices", inInvoices)}
           {link("#/customers", "Customers", inCustomers)}
           {link("#/rates", "Rates", inRates)}
           {link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}

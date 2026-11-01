@@ -2,7 +2,7 @@
 
 Billing, inventory and business management for a gold and silver jewellery showroom. Runs in the browser on a Windows PC (full billing and printing) and on Android (view-only dashboard), backed by one shared database.
 
-Status: specs 000 (scaffold), 001 (database foundation) done; 002 (owner login) done; 010 (customers) done and live; 011 (daily rates) merged; 012 (invoice calculation) built. Live: https://jewellery-billing-satyam.prathamadityasalhotra.workers.dev
+Status: specs 000 (scaffold), 001 (database foundation) done; 002 (owner login) done; 010 (customers) done and live; 011 (daily rates) merged; 012 (invoice calculation) merged; 013 (invoices) built. Live: https://jewellery-billing-satyam.prathamadityasalhotra.workers.dev
 
 ## Docs
 

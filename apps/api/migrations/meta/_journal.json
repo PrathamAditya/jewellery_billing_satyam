@@ -57,6 +57,20 @@
       "when": 1793523711251,
       "tag": "0007_rates_no_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793525532402,
+      "tag": "0008_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793525533480,
+      "tag": "0009_invoices_no_delete",
+      "breakpoints": true
     }
   ]
 }

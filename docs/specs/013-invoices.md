@@ -1,6 +1,6 @@
 # 013: Invoices (create, save, search, edit, void, history)
 
-Status: Draft (needs owner approval)
+Status: Built 2026-11-01, awaiting deploy and owner check
 Depends on: 000, 001, 002, 010 (customers), 011 (rates), 012 (calculation)
 Open questions: none block this spec. Safe defaults are chosen for Q3, Q4, Q7, Q55 to Q58 in `docs/open-questions.md`, each marked as a default there.
 
@@ -127,9 +127,10 @@ Printing and PDF (014), payments, advances and settlement (015 to 018), the cust
 - Q58: The invoice number follows the **invoice date's financial year**, so a back-dated bill can carry a lower number than newer bills.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R16 implemented and tested
-- [ ] Migrations applied locally, in CI and on the remote database
-- [ ] Create, edit, history, void and search work on the live site (PC), and view-only works on Android
-- [ ] The client's real bill saves with the same figures as the paper bill
-- [ ] Nothing in earlier specs broke
+- [x] R1 to R16 implemented and tested (300 tests in total, 28 of them new for invoices)
+- [ ] Migrations 0008 and 0009 applied on the remote database (applied locally and in tests; CI applies them to an empty database)
+- [x] Create, edit, history, earlier version, void, search and filters work in a real browser against a local Worker (PC), and the phone view is read-only with no sideways scroll
+- [ ] The same checked on the live site, after deploy
+- [x] The client's real bill saves with the same figures as the paper bill (INV/2025-26/0001, payable 2,884.00)
+- [x] Nothing in earlier specs broke (tests and the customers, rates and calculator browser runs all still pass)
 - [ ] Owner approved the result
