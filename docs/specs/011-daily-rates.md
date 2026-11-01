@@ -23,7 +23,7 @@ Live IBJA rates fetched from the internet are a separate spec (011b). They will 
 - R7. "Today" always means the India date, never the browser or server date.
 
 **Applicable rate**
-- R8. The applicable rate for a kind on a date is the rate saved for that exact date. If there is none, it is the most recent rate saved for an earlier date, marked `carriedForward: true` with its `rateDate`. If nothing exists on or before that date, there is no applicable rate (`null`). This is the only lookup later features use (see Q2).
+- R8. The applicable rate for a kind on a date is the rate saved for that exact date. If there is none, it is the most recent rate saved for an earlier date, marked `carriedForward: true` with its `rateDate`. If nothing exists on or before that date, there is no applicable rate (`null`). This is the only lookup later features use (see "To confirm (1)" in section 8).
 - R9. A rate saved later for a past date does not change what was answered before. It only changes the answer for that date from then on, and saved invoices are not affected.
 
 **Corrections**
