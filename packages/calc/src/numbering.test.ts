@@ -19,12 +19,18 @@ describe("financialYearOf", () => {
 
 describe("formatDocumentNumber", () => {
   it.each([
-    [1, "INV/2026-27/0001"],
-    [42, "INV/2026-27/0042"],
-    [9999, "INV/2026-27/9999"],
-    [10000, "INV/2026-27/10000"],
+    [1, "INV-0001"],
+    [42, "INV-0042"],
+    [9999, "INV-9999"],
+    [10000, "INV-10000"],
   ])("%i -> %s", (n, expected) => {
     expect(formatDocumentNumber("INV", "2026-27", n)).toBe(expected);
+  });
+
+  it("adds the financial year only when fyInNumber is on (spec 003 R6)", () => {
+    expect(formatDocumentNumber("INV", "2026-27", 2, true)).toBe("INV-2026-27-0002");
+    expect(formatDocumentNumber("PAY", "2026-27", 1)).toBe("PAY-0001");
+    expect(formatDocumentNumber("OGP", "2026-27", 1)).toBe("OGP-0001");
   });
 
   it.each([0, -1, 1.5, Number.NaN])("throws for %s", (n) => {

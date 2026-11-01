@@ -16,6 +16,7 @@ export async function settingsSnapshot(db: D1Database): Promise<SettingsSnapshot
     const value = byKey.get(key) ? JSON.parse(byKey.get(key)!.value_json) : undefined;
     // Business details are intentionally blank until the owner types them; all
     // other settings have safe print defaults.
+    if (key === "logo") return [key, value === undefined ? null : schema.parse(value)];
     if (key === "business" && value === undefined) return [key, { legalName: "", tagline: "FINE GOLD · CRAFTED JEWELLERY", addressLines: [], city: "", state: "Himachal Pradesh", stateCode: "02", pincode: "", gstin: "", pan: "", phones: [], email: "" }];
     return [key, schema.parse(value ?? {})];
   })) as SettingsSnapshot;

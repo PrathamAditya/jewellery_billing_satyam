@@ -14,9 +14,12 @@ export function financialYearOf(businessDate: string): string {
   return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
 }
 
-/** Spec 003: e.g. ("INV", "2026-27", 1) -> "INV-0001". FY is stored separately. */
-export function formatDocumentNumber(series: NumberSeries, fy: string, n: number): string {
+/**
+ * Spec 003 R6: the printed number is `INV-0001`, padded to 4 digits and growing beyond.
+ * With `fyInNumber` it is `INV-2026-27-0001`. The financial year is stored separately with every document.
+ */
+export function formatDocumentNumber(series: NumberSeries, fy: string, n: number, fyInNumber = false): string {
   if (!Number.isSafeInteger(n) || n < 1) throw new RangeError(`Invalid number: ${n}`);
-  void fy;
-  return `${series}-${String(n).padStart(4, "0")}`;
+  const serial = String(n).padStart(4, "0");
+  return fyInNumber ? `${series}-${fy}-${serial}` : `${series}-${serial}`;
 }
