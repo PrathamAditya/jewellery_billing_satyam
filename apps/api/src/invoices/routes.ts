@@ -16,7 +16,8 @@ import {
   type InvoiceResponse,
   type InvoiceSummary,
 } from "@jewellery/shared";
-import { financialYearOf } from "@jewellery/calc";
+import { financialYearOf, formatDocumentNumber } from "@jewellery/calc";
+import { settingsSnapshot } from "../settings/routes";
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
 import { classifyReplay } from "../db/idempotency";
@@ -35,6 +36,9 @@ type DbInvoice = {
   updated_at: string;
   updated_by: string;
   invoice_no: string;
+  fy: string;
+  serial: number;
+  header_json: string | null;
   invoice_date: string;
   customer_id: string | null;
   customer_name: string;
@@ -296,6 +300,7 @@ invoiceRoutes.post("/", async (c) => {
   if (replay.kind === "replay") return c.json(toResponse(replay.row, await loadLines(db, id, replay.row.revision_no), false));
 
   const fy = financialYearOf(body.invoiceDate);
+  const header = await settingsSnapshot(db);
   const now = new Date().toISOString();
   try {
     await db.batch([
@@ -309,16 +314,17 @@ invoiceRoutes.post("/", async (c) => {
       db
         .prepare(
           `INSERT INTO invoices
-             (id, created_at, created_by, updated_at, updated_by, invoice_no, invoice_date, customer_id, customer_name,
+             (id, created_at, created_by, updated_at, updated_by, invoice_no, fy, serial, header_json, invoice_date, customer_id, customer_name,
               customer_name_search, customer_mobile, customer_address, customer_pan, tax_mode, reverse_charge, remarks,
               rates_json, input_json, taxable_paise, tax_paise, total_before_round_off_paise, round_off_paise,
               payable_paise, calc_json, revision_no)
            VALUES (?1, ?2, ?3, ?2, ?3,
-              'INV/' || ?4 || '/' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4)),
-              ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, 1)`,
+              'INV-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4)), ?4,
+              (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4), ?5,
+              ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, 1)`,
         )
         .bind(
-          id, now, user.id, fy, body.invoiceDate, body.customerId ?? null, body.customerName, nameSearchKey(body.customerName),
+          id, now, user.id, fy, JSON.stringify(header), body.invoiceDate, body.customerId ?? null, body.customerName, nameSearchKey(body.customerName),
           body.customerMobile, body.customerAddress, body.customerPan, body.taxMode, body.reverseCharge ? 1 : 0, body.remarks,
           JSON.stringify(rates), JSON.stringify(canon), result.taxablePaise, result.taxPaise, result.totalBeforeRoundOffPaise,
           result.roundOffPaise, result.payablePaise, JSON.stringify(result),
