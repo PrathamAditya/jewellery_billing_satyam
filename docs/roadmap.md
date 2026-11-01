@@ -1,51 +1,75 @@
-# Roadmap (proposal, awaiting approval)
+# Roadmap
 
-Each line is one feature spec in `docs/specs/`, built and committed one at a time. Status is tracked in `docs/specs/README.md`.
+Each line is one feature spec in `docs/specs/`, built and committed one at a time. Status is tracked in `docs/specs/README.md`. Re-planned on 2026-11-01 after the owner's questionnaire answers (`docs/owner-answers-2026-11-01.md`) and reference documents (`docs/reference-formats.md`).
 
-Phases follow the requirements. Foundation work comes first, and rates come before invoices because invoices read rates.
+## Dates that drive the order
+- **About 1 December 2026:** four months of parallel testing begin next to the existing billing system (owner answers 51 to 53, decision D28).
+- **1 April 2027:** the new system becomes the main one.
+- The testing months only help if the core billing flow is ready on the first day. So the work is ordered in three waves, and each wave ends with something the owner can test with the real printer.
 
-## Phase 0: Foundation
-- 000 Project scaffold, CI, and deploy to Cloudflare (empty app live)
-- 001 Database conventions: units, ids, audit and revision framework, migrations
-- 002 Owner login and session
+## Done
+| Spec | Name |
+|------|------|
+| 000 | Scaffold, CI, deploy |
+| 001 | Database foundation |
+| 002 | Owner login |
+| 010 | Customers |
+| 011 | Daily gold and silver rates |
+| 012 | Invoice calculation engine and Calculator screen |
+| 013 | Invoices (save, search, edit with history, void) |
 
-## Phase 1: Core billing
-- 010 Customers (create, search, edit with history)
-- 011 Daily gold and silver rates (typed by the owner, per kg or per gram; invoices use only these)
-- 011b Live IBJA reference rates (paid service, shown on the site, can pre-fill the typing box; needs O10)
-- 012 Invoice calculation engine (pure and heavily tested; needs O1, O2, O8)
-- 013 Invoice create, save, search, edit (revision), void, history
-- 014 Invoice print layout: page 1, A4 landscape
-- 015 Payment receipts and payment modes (A5 landscape)
-- 016 Advances (order reference, partial use, no double count)
-- 017 Settlement page and its print page (back side)
-- 018 Old gold receipt and four settlement cases (stock/GST posting off per D7)
-- 019 Customer ledger
+## Wave 1: ready for the first day of testing (target: end of November)
+Everything needed to make a real bill, print it on the Brother, take the money and settle it.
 
-## Phase 2: Inventory
-- 020 Inventory categories, items, U No. generation
-- 021 Stock movements, and automatic reduction when an invoice is saved
-- 022 Purchases and stock inward
-- 023 Karigar and job-work management
-- 024 Refining and testing (later)
+| Spec | Name | Notes |
+|------|------|-------|
+| 012b | Job work 9988, polish percent, HSN categories | Answers 4, 5, 8 are complete. Written, ready to build. |
+| 012c | Discounts, stones and diamonds | Needs Q68 and Q69, with safe defaults. |
+| 003 | Settings: business details, bank details, terms, cash limit, number formats | The invoice header and footer come from here. GSTIN and bank details are typed in, never committed. |
+| 004 | Users, roles and permissions | Staff and family testers need their own logins from day one (D24). Needs Q67, default role set meanwhile. |
+| 014 | Invoice print (A4, duplex) and the settlement page on the back | From the reference PDF. Needs Q63. |
+| 015 | Payments: receipts `PAY-`, modes, several invoices, oldest-first allocation, cash-limit warning | A5 receipt printing. |
+| 016 | Orders and advances, opening advances, cancellation (transfer or refund) | `ORD-` references. |
+| 018 | Old gold purchase `OGP-`, linked or standalone | A5 receipt, advance created as a `PAY-` receipt. |
+| 017 | Settlement | Pulls in payments, advances and old gold, balance due. Needs Q66 if the HTML file arrives. |
+| 019 | Customer ledger and opening balances | Both directions. |
+| 050 | Backups: daily to the cloud with versions, manual download, restore | Local PC copy needs Q81. |
 
-## Phase 3: Dashboard and reports
-- 030 Dashboard
-- 031 Reports (daily and monthly sales, GST, payments and modes, outstanding, advances, old gold, inventory, purchases, karigar, stock movement)
+## Wave 2: during testing (December and January)
+| Spec | Name |
+|------|------|
+| 019b | Cheque tracking (Received, Deposited, Cleared, Bounced) with automatic reversal |
+| 019c | Credit sales with the rate fixed later (pending rate fixation) |
+| 019d | Returns, exchanges and credit notes |
+| 020 | Inventory items, individual U No., pairs |
+| 020b | Bulk quantity items such as Tilli |
+| 021 | Stock movements, automatic reduction on invoice |
+| 021b | Stock locations and transfers |
+| 022 | Purchases: three types |
+| 030 | Dashboard (today's sales, payments today, outstanding, advances, advances today, monthly summaries) |
+| 031 | Reports in Excel and PDF, by date and financial year |
+| 032 | Daily cash closing |
+| 051 | Audit history viewer |
 
-## Phase 4: Cross-device
-- 040 Android responsive layout and PWA install
-- 041 Offline queue and sync (needs O6)
+## Wave 3: before launch (February and March)
+| Spec | Name |
+|------|------|
+| 041 | Offline-first showroom PC, local data, Sync Now, no duplicates. The design is written early in Wave 1 because it affects every module (see risk below). |
+| 040 | Android install and phone screens with create and edit by role |
+| 023 | Karigar job work (issue, receive, wastage, labour, balance) |
+| 025 | Monthly stock reconciliation |
+| 052 | Data integrity checks |
+| 053 | Print verification on the Brother DCP-T830DW |
+| 011b | Live IBJA reference rates (needs a provider and key, O10), can move earlier if decided |
+| 024 | Refining and testing, later phase, design must leave room (D23) |
 
-## Phase 5: Reliability
-- 050 Backups and restore
-- 051 Audit history viewer
-- 052 Data integrity checks
-- 053 Print verification on the real printer
+## Risks to watch
+- **Offline-first is the biggest risk.** Today the server recalculates and numbers every invoice, so a PC without internet cannot save one. The calculation code is already shared, so the PC can compute locally. What still has to be designed is local storage, issuing numbers while offline (default in Q82: the PC is the numbering authority), conflict-free sync and "Sync Now". A short design spec (041) should be written in Wave 1, and the first proof built early, so later modules are made offline-ready.
+- **Users and roles touch every screen**, so spec 004 comes before the payments modules, not after.
+- **Local PC backup** cannot be done by a browser alone (Q81).
+- **Four months of testing needs a stable build.** Changes during testing are fixes only, and each fix is tested against the reference documents.
 
 ## Notes
-
-- **Invoice items and stock:** in 013, invoice lines get a nullable `inventory_item_id`. Spec 021 turns on the automatic stock reduction without changing invoice calculations or layout.
-- **Android is view-only (D5):** sync in phase 4 is mostly reads, so conflict handling is only needed for PC offline writes.
-- **Settlement (017)** is a new design, so it gets the most test cases: advances partly used, old gold plus payments, later payments, partial settlement.
-- Order inside a phase can change if a dependency or an open question (O1 to O8) demands it.
+- **Invoice items and stock:** invoice lines carry a nullable `inventory_item_id` (spec 013). Spec 021 turns on automatic stock reduction without changing invoice calculations or layout.
+- **Settlement (017)** is a new design built from the reference page, so it gets the most test cases: advances partly used, old gold plus payments, later payments, partial settlement, never counting a payment twice.
+- Order inside a wave can change if an open question (`docs/open-questions.md`) demands it.

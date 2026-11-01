@@ -2,11 +2,40 @@
 
 One place for everything that is not answered yet. Claude adds to this file instead of asking in chat. When the owner brings the receipts and answers, we go through it top to bottom, move each answered item into `docs/decisions.md` (or the spec it affects), and tick it here.
 
-Last updated: 2026-11-01 (spec 013 questions added). Status: `OPEN` waiting for an answer, `DEFAULT` Claude chose a default so work is not blocked (change it if wrong), `DONE` answered.
+Last updated: 2026-11-01 (owner's questionnaire answers and four reference PDFs added; see section M and `docs/owner-answers-2026-11-01.md`). Status: `OPEN` waiting for an answer, `DEFAULT` Claude chose a default so work is not blocked (change it if wrong), `DONE` answered.
 
 How to answer: a photo of the paper document is the best answer. Write the answer next to the question or just say the number (for example "Q7: percentage, e.g. 2%"). Remove customer names, GSTIN, PAN and phone numbers from anything that goes into git. They are entered in the app's Settings, not in the repo.
 
 ---
+
+## Answered on 2026-11-01 (owner's questionnaire)
+
+These are closed. The details are in `docs/owner-answers-2026-11-01.md` and the locked decisions D13 to D28.
+
+| Question | Answer |
+|----------|--------|
+| P1, P2, P3 (receipt, old gold, advance papers) | Four reference PDFs received (`docs/reference-formats.md`). Advance booklet itself not needed: advances follow answer 19. Customer papers are not to be shared. |
+| P4, Q2 | Polish is a percentage of net weight, shown as a weight in the Wastage column. |
+| P5, Q1 | HSN 9988 formula given (D13). |
+| P6 | Labour is typed per gram on each row. |
+| P7, Q3 | The gold rate is typed on every line. Only 24K995, 22K916 and silver have daily rates. |
+| P9, Q33 | Intra-state CGST + SGST, inter-state IGST. |
+| P10, P11, Q27 | The business details and bank details will be provided separately, bank details do print on the invoice. BIS logo is optional. |
+| P13 | Fresh customer list, no import. |
+| Q4, Q17 | Separate sequences for invoices, payment receipts and old gold, each reset on 1 April. The printed format follows the samples: see Q61. |
+| Q5, Q35 | Round-off on the final total only. |
+| Q7 | HUID not required. Purity must be visible. BIS logo optional. |
+| Q9, Q34 | Not answered directly: the sample shows no reverse-charge line. Still for the CA. |
+| Q19, Q20 | Cheque statuses, advances and cancellation are answered (D18). Details of cheque fields still open. |
+| Q22 | Old gold: formula given, purity percentage and rate typed per receipt (D21). The old-gold payment-mode rule (Q24) is not answered. |
+| Q28 | Printer is the Brother DCP-T830DW with automatic duplex. |
+| Q29 | Plain paper, the whole design is printed. |
+| Q32 | Regular scheme, not composition. |
+| Q37 to Q44 | Item types, U No., stock counting, locations, purchases, karigar, refining are answered at the level of D23. Open details are in Q65 to Q69. |
+| Q45, Q46, Q53 | Separate logins and roles, user activity history, Android can create and edit where allowed (D24). Detail is in Q67. |
+| Q49, Q50 | Dashboard top five and the report list are answered (D27). |
+| Q51 | Backups in the cloud and on the local PC, daily, with versions (D26). |
+| Q52 | The PC works mostly offline (D25). |
 
 ## A. Please bring these papers
 
@@ -115,6 +144,38 @@ Each item says what to look for. One real example of each is enough, two if they
 - **Q58. Back-dated bills.** `DEFAULT`. A bill dated 1 March made today gets a number from the March financial year even if newer bills already have higher numbers. On the paper book numbers run in date order. Should back-dating be allowed at all, and by how many days?
 - **Q59. Bill remarks.** `DEFAULT`. The remarks box on a bill is internal and is never printed. Does the shop ever write a note that must print on the customer's bill?
 - **Q60. Who may edit or void a bill.** `DEFAULT`. Only the owner (the only login, D6). Say if anyone else should be able to.
+
+## M. New questions from the owner's answers and the reference PDFs
+
+**Documents and numbers**
+- **Q61. Printed numbers.** `DEFAULT`. The samples show `INV-0001`, `PAY-0001`, `OGP-0001`, `ORD-0001`, and the owner says every sequence restarts on 1 April. So `INV-0001` appears again in each financial year. Default: print exactly that format, store the financial year with every number, and show the year in lists and searches when two documents share a number. Is it all right that the numbers repeat each year? The alternative is `INV-2026-27-0001`.
+- **Q62. Customer reference.** `DEFAULT`. The old gold sample shows `C0001` (no hyphen), the customers already built show `C-0001`. Default: change to `C0001` everywhere. OK?
+- **Q63. Invoice paper orientation.** `OPEN`. The owner's answer says A4 landscape, but the sample invoice and settlement page are A4 portrait. Which one is right? Default: portrait, because that is the real sample.
+- **Q64. HUID line.** `DEFAULT`. The sample invoice has a `HUID` label under the item name, but HUID printing is not required. Default: leave the label out.
+- **Q65. U No. format.** `OPEN`. The rule says four-character item code plus a two-digit serial, but the examples are `RING01` (4 + 2), `CHAIN01` (5 + 2) and `T00001` (4 + 2 only if the code is `T000`). Please state the rule exactly: how long is the item code, is it letters only, and what happens after serial 99 for one code?
+- **Q66. v84 and the HTML file.** `OPEN`. Can the existing HTML billing file be shared (test data only)? It would show the settlement behaviour and every calculation exactly. Without it, the settlement page is built from the PDF sample and requirements section 7.
+
+**Rules still to be given**
+- **Q67. Roles and permissions.** `OPEN`. List the people types (owner, family, staff, accountant, others) and for each module whether they can view, create, edit, void or see reports, and whether they may see rates, customer balances and cost prices. Default until then: owner full access, everyone else view-only on invoices and customers.
+- **Q68. Discounts.** `OPEN`. When a discount is on gold only, on labour only, or on the total: does GST apply after the discount (default: yes, tax on the discounted amount)? Is a total discount shared across lines in proportion to their amounts? Can the discount be negative (a surcharge)? Is there a limit above which it needs the owner?
+- **Q69. Stones and diamonds.** `OPEN`. For the "separate" method: how are stone weight and stone amount entered (weight, rate per carat or a fixed amount), is the stone weight part of gross and not net, and what GST applies to the stone line? For the "combined" method: is it just one total amount against the combined weight?
+- **Q70. Pending rate fixation (udhaar).** `OPEN`. When the customer takes jewellery with the rate not fixed: what is recorded on the invoice (weight and purity only)? Is the labour fixed at the sale or also at payment? On the payment day, which rate is used (the day's saved rate or one typed)? Is GST calculated and shown at payment time? Is an invoice number allocated at the sale or when the rate is fixed?
+- **Q71. Returns and credit notes.** `OPEN`. Does a credit note have its own series (`CN-0001`, reset each year)? Is a return always at the original rate or at the day's rate? Is there a deduction for making charges on a return?
+- **Q72. Old gold fields.** `DEFAULT`. The sample receipt has Gross, Less, Net, Purity %, Rate, Amount, round-off. Default: build exactly that, with net = gross - less, purity typed as a percentage with 2 decimals, and the amount rounded to the rupee as the final amount (original amount shown with paise, round-off shown). Can one receipt hold several rows (the sample has one)?
+- **Q73. Payment modes.** `OPEN`. The samples show UPI and Old Gold. The requirements list UPI, Cash, Card, Cheque, Bank transfer. Is "Old Gold" and "Advance adjustment" a mode on receipts and the settlement page, and are there others (credit note, gift voucher)? Is there a rule for a UPI reference such as "Txn: DKJSDF" being compulsory?
+- **Q74. Cash limit.** `OPEN`. What amount triggers the warning, and is it per receipt, per customer per day, or per invoice? (The law's limits differ.)
+- **Q75. Cheque details.** `OPEN`. Fields to record on a cheque (number, bank, date, drawer name)? Who can mark Deposited, Cleared, Bounced? Is a bounce charge added to the customer's balance?
+- **Q76. Order references.** `DEFAULT`. `ORD-0001` ties advances to an order. Default: an order is created when the first advance is taken (with an optional description and expected date), and a later invoice can be linked to it. Can an order exist without any advance? Do orders restart each financial year?
+- **Q77. Copies.** `OPEN`. The sample says `SHOP COPY`. Is a customer copy printed as well (duplex means one sheet each)? Are copies labelled Original, Duplicate, and so on?
+- **Q78. Stock reconciliation.** `OPEN`. When the monthly count differs: who approves the adjustment, is a negative difference treated as a loss, and does it need a reason code?
+- **Q79. Daily cash closing.** `OPEN`. Is closing once a day by one person, and can a closed day be reopened? Which payments count as cash (cash receipts and cash paid out only)?
+- **Q80. Karigar.** `OPEN`. Wastage allowed per job (a percentage of issued metal)? Is labour per gram or fixed per piece? Does the karigar account run in weight (fine gold) or in money or both?
+- **Q81. Backups to the PC.** `OPEN`. A browser cannot save a file to the PC by itself every day. Options: (a) a small helper program on the PC (best, needs installing), (b) the app downloads a backup file to a folder when it is open each day, (c) a daily cloud backup you download weekly. Which do you want? (O14)
+- **Q82. Offline numbering.** `DEFAULT`. When the PC is offline it keeps issuing numbers in order from its last known number, and phones create numbered documents only when online. Is that acceptable, or must phones also create documents offline? (O6)
+- **Q83. Outside access.** `OPEN`. Access from outside the showroom over the internet: should it be limited (for example only the owner, only view, a second password or code)? The PC itself is expected to stay at the showroom.
+
+**Timeline**
+- **Q84. 1 December start of testing.** `OPEN`. Parallel testing is meant to start in about a month. Please see the proposed plan in `docs/roadmap.md`: the core billing, printing, payments, advances, old gold, customers, staff logins and backups can be ready for it, and inventory, karigar, reports and offline-first follow during the testing months. Is that the order you want, or is something else needed on the first day of testing?
 
 ## J. Defaults I chose without asking (tell me if any is wrong)
 

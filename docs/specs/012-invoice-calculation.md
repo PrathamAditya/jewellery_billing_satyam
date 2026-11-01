@@ -34,7 +34,7 @@ The owner can check it right away against paper bills on a small **Invoice calcu
 - R12. Round-off is the difference to the nearest whole rupee: a remainder below 50 paise rounds down, 50 paise or more rounds up. It is shown as its own figure and can be negative. Payable = total before round-off + round-off, always whole rupees. It goes through the single `roundOffPaise` function in `packages/calc`, and the new half-up division sits in the same file (CLAUDE.md rule 2).
 
 **Job-work and traceability**
-- R13. A line with HSN `9988` is rejected with `job_work_not_supported` until O1 is answered. No guessing.
+- R13. A line with HSN `9988` is rejected with `job_work_not_supported` until O1 is answered. No guessing. **Superseded 2026-11-01 by spec 012b**: the owner gave the formula (decision D13), so 9988 lines are now calculated.
 - R14. The result holds every intermediate number: per line (chargeable weight, gold part, labour part, amount, display rate, rate group), per rate group (taxable, CGST, SGST or IGST), the totals, round-off and payable. It is plain JSON, so spec 013 can store it with the invoice and old invoices are never recalculated.
 - R15. A line with `gstRateBps` 0 is allowed (no tax). Mixed rates in one invoice are allowed.
 
