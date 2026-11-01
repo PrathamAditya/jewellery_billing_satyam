@@ -2,7 +2,7 @@
 
 Billing, inventory and business management for a gold and silver jewellery showroom. Runs in the browser on a Windows PC (full billing and printing) and on Android (view-only dashboard), backed by one shared database.
 
-Status: planning. No application code yet.
+Status: spec 000 done (scaffold, CI, deploy). Live: https://jewlray-billing-satyam.prathamadityasalhotra.workers.dev
 
 ## Docs
 
@@ -15,3 +15,13 @@ Status: planning. No application code yet.
 ## How it is built
 
 One feature at a time: spec, approval, build, test, commit.
+
+## Develop
+
+```
+npm install
+npm run dev        # API on :8787 and web on :5173 (web proxies /api)
+npm run typecheck
+npm test
+npm run deploy     # build web, deploy Worker to Cloudflare
+```

@@ -1,6 +1,6 @@
 # 000: Project scaffold, CI, deploy
 
-Status: Approved (owner said "let's build v1" on 2026-11-01, after the stack and roadmap were shared)
+Status: Done (live 2026-11-01)
 Depends on: none
 Open questions: none
 
@@ -47,7 +47,7 @@ Throws: `-1`, `49.5`, `NaN`.
 Database, login, PWA install, offline, any billing screen.
 
 ## 8. Acceptance checklist
-- [ ] R1 to R7 implemented
-- [ ] Tests above pass locally and in CI
-- [ ] App live on workers.dev and the status line shows ok
-- [ ] Nothing committed that should not be
+- [x] R1 to R7 implemented
+- [x] Tests above pass locally and in CI
+- [x] App live on workers.dev and the status line shows ok
+- [x] Nothing committed that should not be
