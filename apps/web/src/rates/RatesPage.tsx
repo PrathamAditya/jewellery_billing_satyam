@@ -14,6 +14,7 @@ import {
 } from "@jewellery/shared";
 import { ApiError } from "../api";
 import { Alert, btnPrimary, btnSecondary, pcOnly } from "../customers/ui";
+import { useAuth } from "../auth";
 import { getApplicable, listRates, niceDate, saveRate } from "./api";
 import RateDialog from "./RateDialog";
 import RateInput from "./RateInput";
@@ -40,6 +41,7 @@ function Status({ rate }: { rate: ApplicableRatesResponse["rates"][RateKind] }) 
 }
 
 export default function RatesPage() {
+  const { can } = useAuth();
   const [applicable, setApplicable] = useState<ApplicableRatesResponse | null>(null);
   const [rows, setRows] = useState<Record<RateKind, Row>>(blankRows);
   const [history, setHistory] = useState<RatesByDate[]>([]);
@@ -152,9 +154,9 @@ export default function RatesPage() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-semibold">Rates</h1>
-        <button className={`${btnSecondary} ${pcOnly}`} onClick={() => setDialog({})}>
+        {can("rates.edit") && <button className={`${btnSecondary} ${pcOnly}`} onClick={() => setDialog({})}>
           Add a rate for an earlier date
-        </button>
+        </button>}
       </div>
 
       {error && <Alert>{error}</Alert>}
@@ -208,11 +210,11 @@ export default function RatesPage() {
             </div>
           ))}
           {notice && <Alert kind="ok">{notice}</Alert>}
-          <div>
+          {can("rates.edit") && <div>
             <button className={btnPrimary} disabled={busy || !today} onClick={() => void saveAll()}>
               {busy ? "Saving..." : "Save today's rates"}
             </button>
-          </div>
+          </div>}
         </div>
       </section>
 

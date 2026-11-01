@@ -55,6 +55,21 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("owner"),
   disabledAt: text("disabled_at"),
+  displayName: text("display_name").notNull().default(""),
+  lastLoginAt: text("last_login_at"),
+  mustChangePassword: integer("must_change_password").notNull().default(0),
+});
+
+/** Roles and their permissions (spec 004). Changed, never deleted. */
+export const roles = sqliteTable("roles", {
+  name: text("name").primaryKey().notNull(),
+  label: text("label").notNull(),
+  permissionsJson: text("permissions_json").notNull(),
+  system: integer("system").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  updatedBy: text("updated_by").notNull(),
 });
 
 /** Login sessions. Only the SHA-256 of the cookie token is stored (spec 002, R4). */

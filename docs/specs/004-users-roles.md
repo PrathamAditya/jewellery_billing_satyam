@@ -1,6 +1,6 @@
 # 004: Users, roles and permissions
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (roles, permissions on every route, users, activity, forced password change). Owner review pending.
 Depends on: 002 and every route written so far
 Open questions used with defaults: Q67 (roles and what each may do), Q83 (outside access)
 

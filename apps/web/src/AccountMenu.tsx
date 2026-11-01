@@ -88,7 +88,7 @@ export default function AccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="font-medium">{user?.username}</span>
+        <span className="font-medium">{user?.displayName ?? user?.username}</span>
         <span aria-hidden>▾</span>
       </button>
       {open && (

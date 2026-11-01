@@ -94,7 +94,7 @@ describe("login (R4, R5, R11)", () => {
     const u = await makeUser();
     const res = await login(u.username, PASSWORD);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ id: u.id, username: u.username, role: "owner" });
+    expect(await res.json()).toMatchObject({ id: u.id, username: u.username, role: "owner", mustChangePassword: false });
     const setCookie = res.headers.get("set-cookie")!;
     expect(setCookie).toMatch(/^__Host-session=[A-Za-z0-9_-]{43};/);
     expect(setCookie).toContain("HttpOnly");

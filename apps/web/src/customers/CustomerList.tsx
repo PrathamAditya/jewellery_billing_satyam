@@ -3,9 +3,11 @@ import type { CustomerResponse } from "@jewellery/shared";
 import { navigate } from "../router";
 import { searchCustomers } from "./api";
 import { useDebounced } from "./useDebounced";
+import { useAuth } from "../auth";
 import { Alert, btnPrimary, inputClass, pcOnly } from "./ui";
 
 export default function CustomerList() {
+  const { can } = useAuth();
   const [q, setQ] = useState("");
   const [includeVoided, setIncludeVoided] = useState(false);
   const [items, setItems] = useState<CustomerResponse[]>([]);
@@ -49,9 +51,9 @@ export default function CustomerList() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Customers</h1>
-        <button className={`${btnPrimary} ${pcOnly}`} onClick={() => navigate("/customers/new")}>
+        {can("customers.create") && <button className={`${btnPrimary} ${pcOnly}`} onClick={() => navigate("/customers/new")}>
           New customer
-        </button>
+        </button>}
       </div>
 
       <input

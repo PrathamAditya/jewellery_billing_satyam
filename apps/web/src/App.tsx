@@ -14,6 +14,8 @@ import { EditInvoicePage, NewInvoicePage } from "./invoice/pages";
 import RatesPage from "./rates/RatesPage";
 import TodayRates from "./rates/TodayRates";
 import SettingsPage from "./settings/SettingsPage";
+import UsersPage from "./users/UsersPage";
+import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 
 type ApiStatus = "checking" | "ok" | "unreachable";
@@ -50,7 +52,7 @@ function Home() {
   );
 }
 
-function Page({ path }: { path: string }) {
+function Page({ path, meId }: { path: string; meId: string }) {
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "customers") {
     if (parts.length === 1) return <CustomerList />;
@@ -66,6 +68,7 @@ function Page({ path }: { path: string }) {
   }
   if (parts[0] === "rates") return <RatesPage />;
   if (parts[0] === "settings") return <SettingsPage />;
+  if (parts[0] === "users") return <UsersPage me={meId} />;
   if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
   return <Home />;
@@ -73,6 +76,7 @@ function Page({ path }: { path: string }) {
 
 function Shell() {
   const path = usePath();
+  const { can, user } = useAuth();
   const inCustomers = path.startsWith("/customers");
   const inRates = path.startsWith("/rates");
   const inInvoices = path.startsWith("/invoices");
@@ -89,16 +93,17 @@ function Shell() {
         <nav className="flex items-center gap-1 sm:gap-2 min-w-0 overflow-x-auto">
           <span className="font-semibold mr-2 max-sm:hidden">Jewellery Billing</span>
           {link("#/", "Home", path === "/")}
-          {link("#/invoices", "Invoices", inInvoices)}
-          {link("#/customers", "Customers", inCustomers)}
-          {link("#/rates", "Rates", inRates)}
-          {link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
-          {link("#/settings", "Settings", inSettings)}
+          {can("invoices.view") && link("#/invoices", "Invoices", inInvoices)}
+          {can("customers.view") && link("#/customers", "Customers", inCustomers)}
+          {can("rates.view") && link("#/rates", "Rates", inRates)}
+          {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
+          {can("settings.view") && link("#/settings", "Settings", inSettings)}
+          {can("users.manage") && link("#/users", "People", path.startsWith("/users"))}
         </nav>
         <AccountMenu />
       </header>
       <main className="flex-1 w-full max-w-5xl mx-auto p-4">
-        <Page path={path} />
+        <Page path={path} meId={user?.id ?? ""} />
       </main>
     </div>
   );
@@ -109,6 +114,7 @@ function Gate() {
   if (user === undefined) {
     return <main className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-500">Loading...</main>;
   }
+  if (user && user.mustChangePassword) return <ForcePasswordChange />;
   return user ? <Shell /> : <Login />;
 }
 
