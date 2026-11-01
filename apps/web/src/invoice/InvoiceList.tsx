@@ -5,8 +5,10 @@ import { niceDate } from "../rates/api";
 import { useDebounced } from "../customers/useDebounced";
 import { Alert, btnPrimary, inputClass, pcOnly } from "../customers/ui";
 import { searchInvoices } from "./api";
+import { useAuth } from "../auth";
 
 export default function InvoiceList() {
+  const { can } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
@@ -47,9 +49,9 @@ export default function InvoiceList() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Invoices</h1>
-        <button className={`${btnPrimary} ${pcOnly}`} onClick={() => navigate("/invoices/new")}>
+        {can("invoices.create") && <button className={`${btnPrimary} ${pcOnly}`} onClick={() => navigate("/invoices/new")}>
           New invoice
-        </button>
+        </button>}
       </div>
 
       <input className={inputClass} type="search" placeholder="Search by invoice number, customer name or mobile" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search invoices" autoFocus />

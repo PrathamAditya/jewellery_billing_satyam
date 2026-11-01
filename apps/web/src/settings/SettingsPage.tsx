@@ -9,6 +9,7 @@ import {
 import { ApiError } from "../api";
 import { Alert, Field, btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { getNumbering, getSettings, putSetting, setNextNumber } from "./api";
+import { useAuth } from "../auth";
 
 type Tab = "business" | "bank" | "texts" | "limits" | "numbering" | "logo";
 const TABS: { key: Tab; label: string }[] = [
@@ -391,6 +392,8 @@ function LogoPrintForm({ s, onSaved }: { s: SettingsSnapshot; onSaved: (s: Setti
 }
 
 export default function SettingsPage() {
+  const { can } = useAuth();
+  const canManage = can("settings.manage");
   const [tab, setTab] = useState<Tab>("business");
   const [s, setS] = useState<SettingsSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -427,7 +430,8 @@ export default function SettingsPage() {
           </button>
         ))}
       </nav>
-      <div className="bg-white border border-stone-200 rounded-xl p-4 max-md:hidden">{body[tab]}</div>
+      {!canManage && <Alert kind="info">You can read these settings. Only the owner can change them.</Alert>}
+      <fieldset disabled={!canManage} className="bg-white border border-stone-200 rounded-xl p-4 max-md:hidden min-w-0">{body[tab]}</fieldset>
       <div className="md:hidden">
         <Alert kind="info">Settings are changed on the PC. This phone view is read-only.</Alert>
       </div>

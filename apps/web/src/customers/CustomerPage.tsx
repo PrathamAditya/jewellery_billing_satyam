@@ -4,6 +4,7 @@ import { navigate } from "../router";
 import { ApiError } from "../api";
 import { getCustomer, getHistory, restoreCustomer, revealAadhaar, voidCustomer } from "./api";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass, pcOnly } from "./ui";
+import { useAuth } from "../auth";
 
 type Tab = "details" | "history" | "ledger";
 
@@ -152,6 +153,7 @@ function VoidDialog({ c, onClose, onDone }: { c: CustomerResponse; onClose: () =
 }
 
 export default function CustomerPage({ id }: { id: string }) {
+  const { can } = useAuth();
   const [c, setC] = useState<CustomerResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("details");
@@ -202,17 +204,23 @@ export default function CustomerPage({ id }: { id: string }) {
         </div>
         <div className={`flex gap-2 ${pcOnly}`}>
           {c.voidedAt ? (
-            <button className={btnPrimary} onClick={() => void restore()}>
-              Restore
-            </button>
+            can("customers.void") && (
+              <button className={btnPrimary} onClick={() => void restore()}>
+                Restore
+              </button>
+            )
           ) : (
             <>
-              <button className={btnPrimary} onClick={() => navigate(`/customers/${c.id}/edit`)}>
-                Edit
-              </button>
-              <button className={btnSecondary} onClick={() => setVoiding(true)}>
-                Void
-              </button>
+              {can("customers.edit") && (
+                <button className={btnPrimary} onClick={() => navigate(`/customers/${c.id}/edit`)}>
+                  Edit
+                </button>
+              )}
+              {can("customers.void") && (
+                <button className={btnSecondary} onClick={() => setVoiding(true)}>
+                  Void
+                </button>
+              )}
             </>
           )}
         </div>

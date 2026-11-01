@@ -22,7 +22,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 013 | Invoices (create, search, edit, void, history) | Built, merged, awaiting deploy and owner check |
 | 012b | Job work 9988, polish percent, HSN categories | Built on `wave-1`, verification and owner review pending |
 | 003 | Settings, number formats, document headers | API and numbering built; settings screen and print-header snapshot tests still to do |
-| 004 | Users, roles and permissions | Wave 1, approved, not built |
+| 004 | Users, roles and permissions | Built, owner review pending |
 | 012c | Discounts, stones and diamonds | Wave 1, approved, not built |
 | 015 | Payments and receipts (the money model) | Wave 1, approved, not built |
 | 016 | Orders and advances | Wave 1, approved, not built |

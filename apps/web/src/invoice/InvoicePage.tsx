@@ -7,6 +7,7 @@ import { navigate } from "../router";
 import { niceDate } from "../rates/api";
 import Breakdown from "./Breakdown";
 import { getInvoice, getInvoiceHistory, voidInvoice } from "./api";
+import { useAuth } from "../auth";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
 const PART_LABEL: Record<string, string> = { date: "Date", customer: "Customer", taxMode: "Tax mode", reverseCharge: "Reverse charge", remarks: "Remarks", lines: "Lines" };
@@ -79,6 +80,7 @@ function VoidDialog({ inv, onClose, onDone }: { inv: InvoiceResponse; onClose: (
 }
 
 export default function InvoicePage({ id }: { id: string }) {
+  const { can } = useAuth();
   const [inv, setInv] = useState<InvoiceResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<"details" | "history">("details");
@@ -141,12 +143,16 @@ export default function InvoicePage({ id }: { id: string }) {
           </button>
           {!inv.voidedAt && !inv.isEarlierVersion && (
             <>
+              {can("invoices.edit") && (
               <button className={btnPrimary} onClick={() => navigate(`/invoices/${inv.id}/edit`)}>
                 Edit
               </button>
+              )}
+              {can("invoices.void") && (
               <button className={btnSecondary} onClick={() => setVoiding(true)}>
                 Void
               </button>
+              )}
             </>
           )}
         </div>

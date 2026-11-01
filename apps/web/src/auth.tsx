@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { userResponseSchema, type UserResponse } from "@jewellery/shared";
+import { userResponseSchema, type Permission, type UserResponse } from "@jewellery/shared";
 import { ApiError, api, setUnauthorizedHandler } from "./api";
 
 type AuthState = {
@@ -7,6 +7,10 @@ type AuthState = {
   user: UserResponse | null | undefined;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Reloads "who am I" (after a password change, for example). */
+  refresh: () => Promise<void>;
+  /** Spec 004 R4: hides buttons and links. The server still checks every request. */
+  can: (permission: Permission) => boolean;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -43,6 +47,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo(() => ({ user, login, logout }), [user, login, logout]);
+  const refresh = useCallback(async () => {
+    const body = await api<unknown>("/api/auth/me");
+    setUser(userResponseSchema.parse(body));
+  }, []);
+
+  const can = useCallback((permission: Permission) => !!user && user.permissions.includes(permission), [user]);
+
+  const value = useMemo(() => ({ user, login, logout, refresh, can }), [user, login, logout, refresh, can]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
