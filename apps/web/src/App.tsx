@@ -7,6 +7,8 @@ import { usePath } from "./router";
 import CustomerList from "./customers/CustomerList";
 import CustomerPage from "./customers/CustomerPage";
 import { EditCustomerPage, NewCustomerPage, PickerDemoPage } from "./customers/pages";
+import RatesPage from "./rates/RatesPage";
+import TodayRates from "./rates/TodayRates";
 
 type ApiStatus = "checking" | "ok" | "unreachable";
 
@@ -26,7 +28,10 @@ function Home() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16">
+    <div className="flex flex-col items-center gap-2 py-8">
+      <div className="w-full max-w-xl mb-8">
+        <TodayRates />
+      </div>
       <h1 className="text-3xl font-semibold">Jewellery Billing</h1>
       <p className="text-stone-600">
         API status:{" "}
@@ -46,6 +51,7 @@ function Page({ path }: { path: string }) {
     if (parts[2] === "edit") return <EditCustomerPage id={parts[1]!} />;
     return <CustomerPage id={parts[1]!} />;
   }
+  if (parts[0] === "rates") return <RatesPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
   return <Home />;
 }
@@ -53,6 +59,7 @@ function Page({ path }: { path: string }) {
 function Shell() {
   const path = usePath();
   const inCustomers = path.startsWith("/customers");
+  const inRates = path.startsWith("/rates");
   const link = (href: string, label: string, active: boolean) => (
     <a href={href} className={`px-3 py-1.5 rounded-lg text-sm ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
       {label}
@@ -65,6 +72,7 @@ function Shell() {
           <span className="font-semibold mr-2 max-sm:hidden">Jewellery Billing</span>
           {link("#/", "Home", path === "/")}
           {link("#/customers", "Customers", inCustomers)}
+          {link("#/rates", "Rates", inRates)}
         </nav>
         <AccountMenu />
       </header>

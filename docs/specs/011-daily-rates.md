@@ -1,6 +1,6 @@
 # 011: Daily gold and silver rates
 
-Status: Building (owner approved 2026-11-01, with the two proposed defaults in section 8)
+Status: Built 2026-11-01, awaiting deploy and owner check
 Depends on: 000, 001, 002
 Open questions: none block this spec. Section 8 has the owner's answers and two points to confirm. Adds O9 (blocks 012 and 018) and O10 (blocks 011b) to `docs/decisions.md`.
 
@@ -80,12 +80,13 @@ Entry conversion (R3, R4):
 | gold_22k916 | `₹ 11,000.5` | gram | 1,100,050,000 |
 | silver | `150` | gram | 15,000,000 |
 | silver | `150.123` | gram | 15,012,300 |
+| silver (client's real invoice, `docs/client-invoice-reference.md`) | `285.72` | gram | 28,572,000 |
 | silver | `1,50,123` | kg | 15,012,300 |
 | silver | `1,50,123.45` | kg | 15,012,345 |
 | silver | `150.1234` | gram | rejected (more than 3 decimals) |
 | silver | `1,50,000.555` | kg | rejected (more than 2 decimals) |
 | gold_22k916 | `0` or `-5` or `abc` | either | rejected |
-| gold_22k916 | `1,00,00,001` | kg | rejected (above the limit) |
+| gold_22k916 | `10,00,00,001` | kg | rejected (above the limit) |
 | gold_22k916 | `1,00,001` | gram | rejected (above the limit) |
 
 Applicable rate (R8, R9), with gold_24k995 saved as ₹12,000 per gram on 2026-11-01 and ₹12,200 per gram on 2026-11-04:
@@ -121,8 +122,9 @@ Rates for other purities (18K750, 14K, 24K999, others) and how old gold uses a r
 - To confirm (2). **Changes during the day.** "Live rates daily" is read as one typed rate per kind per day. A change in the afternoon is an edit, the old value stays in the history, and earlier invoices keep what they used (R10). Say if you want a separate timed entry for every change.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R13 implemented and tested
-- [ ] Migration applied locally, in CI and on the remote database
-- [ ] Save, edit, history, typo guard and carried-forward warning work on the live site (PC), and view-only works on Android
-- [ ] Nothing in specs 000, 001, 002 and 010 broke
+- [x] R1 to R13 implemented and tested (205 tests in total, 69 of them new, including the client's real invoice rate)
+- [ ] Migrations 0006 and 0007 applied on the remote database (applied locally and in tests; CI applies them to an empty database)
+- [x] Typing per gram and per kg, exact unit switch, typo guard, earlier-date entry, edit with reason and history, home card, and the read-only phone view work in a real browser against a local Worker
+- [ ] The same checked on the live site, after deploy
+- [x] Nothing in specs 000, 001, 002 and 010 broke (their tests still pass)
 - [ ] Owner approved the result

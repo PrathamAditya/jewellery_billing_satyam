@@ -4,6 +4,7 @@ import type { AppEnv } from "./env";
 import { originCheck, requireSession } from "./auth/middleware";
 import { authRoutes } from "./auth/routes";
 import { customerRoutes } from "./customers/routes";
+import { rateRoutes } from "./rates/routes";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -35,6 +36,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
 
   app.route("/api/auth", authRoutes);
   app.route("/api/customers", customerRoutes);
+  app.route("/api/rates", rateRoutes);
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
   return app;
