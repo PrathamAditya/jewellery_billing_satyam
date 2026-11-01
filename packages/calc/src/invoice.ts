@@ -17,6 +17,11 @@ export type InvoiceLineInput = {
   gstRateBps: number;
 };
 
+/** Spec 012b R2. Percentage is basis points (2% is 200). */
+export function polishWeightMg(netWeightMg: number, polishBps: number): number {
+  return Number(divRoundHalfUp(BigInt(netWeightMg) * BigInt(polishBps), 10_000n));
+}
+
 export type InvoiceInput = { lines: InvoiceLineInput[]; taxMode: TaxMode };
 
 export type LineResult = {
@@ -81,9 +86,7 @@ function validate(input: InvoiceInput): InvoiceError[] {
 
   input.lines.forEach((l, i) => {
     const n = i + 1;
-    if (typeof l.hsn === "string" && l.hsn.trim() === "9988") {
-      bad(n, "hsn", "job_work_not_supported", `Line ${n}: HSN 9988 (job work) is not supported yet`);
-    }
+    if (typeof l.hsn !== "string" || !["7113", "9988"].includes(l.hsn.trim())) bad(n, "hsn", "invalid_hsn", `Line ${n}: Choose 7113 or 9988`);
     if (!isInt(l.netWeightMg) || l.netWeightMg <= 0) bad(n, "netWeightMg", "invalid_net_weight", `Line ${n}: net weight must be more than 0`);
     else if (l.netWeightMg > LIMITS.maxNetWeightMg) bad(n, "netWeightMg", "net_weight_too_large", `Line ${n}: net weight is above 100 kg`);
     if (!isInt(l.grossWeightMg) || l.grossWeightMg < 0) bad(n, "grossWeightMg", "invalid_gross_weight", `Line ${n}: gross weight is not valid`);
@@ -93,7 +96,8 @@ function validate(input: InvoiceInput): InvoiceError[] {
     else if (l.goldRatePaisePerKg > MAX_PRICE_PAISE_PER_KG) bad(n, "goldRatePaisePerKg", "gold_rate_too_large", `Line ${n}: gold rate is too large`);
     if (!isInt(l.labourRatePaisePerKg) || l.labourRatePaisePerKg < 0) bad(n, "labourRatePaisePerKg", "invalid_labour_rate", `Line ${n}: labour rate cannot be negative`);
     else if (l.labourRatePaisePerKg > MAX_PRICE_PAISE_PER_KG) bad(n, "labourRatePaisePerKg", "labour_rate_too_large", `Line ${n}: labour rate is too large`);
-    if (!isInt(l.gstRateBps) || l.gstRateBps < 0 || l.gstRateBps > LIMITS.maxGstRateBps) bad(n, "gstRateBps", "invalid_gst_rate", `Line ${n}: GST rate must be from 0% to 28%`);
+    const expectedGst = l.hsn.trim() === "9988" ? 500 : 300;
+    if (!isInt(l.gstRateBps) || l.gstRateBps !== expectedGst) bad(n, "gstRateBps", "invalid_gst_rate", `Line ${n}: GST rate must match the HSN`);
   });
   return errors;
 }
@@ -110,8 +114,14 @@ export function calculateInvoice(input: InvoiceInput): CalculateOutcome {
   const lines: LineResult[] = input.lines.map((l) => {
     const chargeableWeightMg = l.netWeightMg + l.polishMg; // R5
     const internalRatePaisePerKg = l.goldRatePaisePerKg + l.labourRatePaisePerKg; // R4
-    const amountPaise = amountFor(chargeableWeightMg, internalRatePaisePerKg); // R6
-    const goldAmountPaise = amountFor(chargeableWeightMg, l.goldRatePaisePerKg); // R7
+    const jobWork = l.hsn.trim() === "9988";
+    // Job work is the single expression from D13; do not round its parts first.
+    const amountPaise = jobWork
+      ? Number(divRoundHalfUp(BigInt(chargeableWeightMg) * BigInt(internalRatePaisePerKg) - BigInt(l.netWeightMg) * BigInt(l.goldRatePaisePerKg), BigInt(RATE_UNIT_MG)))
+      : amountFor(chargeableWeightMg, internalRatePaisePerKg);
+    const goldAmountPaise = jobWork
+      ? amountFor(chargeableWeightMg, l.goldRatePaisePerKg) - amountFor(l.netWeightMg, l.goldRatePaisePerKg)
+      : amountFor(chargeableWeightMg, l.goldRatePaisePerKg);
     return {
       chargeableWeightMg,
       internalRatePaisePerKg,

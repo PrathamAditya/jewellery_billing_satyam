@@ -178,6 +178,7 @@ export const invoiceLines = sqliteTable(
     grossWeightMg: integer("gross_weight_mg").notNull(),
     netWeightMg: integer("net_weight_mg").notNull(),
     polishMg: integer("polish_mg").notNull(),
+    polishBps: integer("polish_bps").notNull().default(0),
     goldRatePaisePerKg: integer("gold_rate_paise_per_kg").notNull(),
     labourRatePaisePerKg: integer("labour_rate_paise_per_kg").notNull(),
     gstRateBps: integer("gst_rate_bps").notNull(),

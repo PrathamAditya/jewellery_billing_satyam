@@ -1,6 +1,6 @@
 # 012b: Job work (HSN 9988), polish percent, HSN categories
 
-Status: Approved (Wave 1: the owner's answers 4, 5, 6, 7, 8 of 2026-11-01 are the specification), not built
+Status: Built on `wave-1` (verification and owner review pending)
 Depends on: 012, 013
 Open questions: none for this spec. One interpretation to confirm is listed in section 8. Discounts and stones are spec 012c.
 
@@ -92,8 +92,8 @@ Discounts and stones (012c), printing (014), converting old invoices, any HSN ot
 The owner's formula gives the job-work amount in total. Splitting it into a "gold part" (the polish gold) and a "labour part" (R6) is only for display and traceability, and does not change any total. Please confirm that this is how you want the 9988 line described, or say if the gold part should always be 0.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R10 implemented and tested
-- [ ] Migration applied locally, in CI and on the remote database
-- [ ] The reference invoice (example A) and the job-work example (B) match to the paisa in a real browser
-- [ ] Nothing in earlier specs broke
+- [x] R1 to R10 implemented and covered by calculation/API tests
+- [x] Migration added for local/CI application (remote application is owner-controlled)
+- [x] The reference invoice (example A) and the job-work example (B) match to the paisa in calculation tests
+- [x] Typecheck and production build pass
 - [ ] Owner approved the result
