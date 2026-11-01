@@ -9,7 +9,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "owner:set": "tsx scripts/owner-set.ts"
+    "owner:set": "tsx scripts/owner-set.ts",
+    "dev:e2e": "wrangler dev --port 8799"
   },
   "dependencies": {
     "@jewellery/shared": "*",

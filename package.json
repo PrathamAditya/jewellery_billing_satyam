@@ -12,10 +12,13 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "deploy": "npm run build && npm run deploy -w apps/api",
-    "owner:set": "npm run owner:set -w @jewellery/api --"
+    "owner:set": "npm run owner:set -w @jewellery/api --",
+    "e2e": "node e2e/run-all.mjs",
+    "dev:e2e": "npm run dev:e2e -w @jewellery/api"
   },
   "devDependencies": {
     "concurrently": "^10.0.6",
+    "playwright-core": "^1.49.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }
