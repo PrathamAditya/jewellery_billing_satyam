@@ -75,24 +75,24 @@ describe("access (R16)", () => {
 });
 
 describe("saving and numbering (R1 to R4)", () => {
-  it("the client's real bill saves as INV/2025-26/0001 with the paper figures", async () => {
+  it("the client's real bill saves as INV-0001 (fy 2025-26) with the paper figures", async () => {
     const res = await post(bill());
     expect(res.status).toBe(201);
     const i = await inv(res);
-    expect(i).toMatchObject({ invoiceNo: "INV/2025-26/0001", invoiceDate: "2026-02-03", payablePaise: 288_400, revisionNo: 1, customerName: "Asha Verma" });
+    expect(i).toMatchObject({ invoiceNo: "INV-0001", invoiceDate: "2026-02-03", payablePaise: 288_400, revisionNo: 1, customerName: "Asha Verma" });
     expect(i.calc).toMatchObject({ taxablePaise: 280_006, taxPaise: 8_400, totalBeforeRoundOffPaise: 288_406, roundOffPaise: -6, payablePaise: 288_400 });
     expect(i.lines[0]).toMatchObject({ lineNo: 1, chargeableWeightMg: 9_800, amountPaise: 280_006, displayRatePaisePerGram: 28_572 });
     expect((await one<{ created_by: string }>("SELECT created_by FROM invoices WHERE id = ?1", i.id))!.created_by).toBe(userId);
   });
 
   it("numbers follow the date's financial year: 0002, then a new year restarts, then 0002 again", async () => {
-    expect((await inv(await post(bill({ invoiceDate: "2026-02-04" })))).invoiceNo).toBe("INV/2025-26/0002");
-    expect((await inv(await post(bill({ invoiceDate: "2026-04-01" })))).invoiceNo).toBe("INV/2026-27/0001");
+    expect((await inv(await post(bill({ invoiceDate: "2026-02-04" })))).invoiceNo).toBe("INV-0002");
+    expect((await inv(await post(bill({ invoiceDate: "2026-04-01" })))).invoiceNo).toBe("INV-0001");
     const saveNow = nowMs;
     nowMs = Date.parse("2027-04-02T10:00:00.000Z");
     await login();
     try {
-      expect((await inv(await post(bill({ invoiceDate: "2027-03-31" })))).invoiceNo).toBe("INV/2026-27/0002");
+      expect((await inv(await post(bill({ invoiceDate: "2027-03-31" })))).invoiceNo).toBe("INV-0002");
     } finally {
       nowMs = saveNow;
     }
@@ -140,7 +140,7 @@ describe("saving and numbering (R1 to R4)", () => {
   it("20 saves at once give 20 unique numbers with no gap", async () => {
     const results = await Promise.all(Array.from({ length: 20 }, () => post(bill({ invoiceDate: "2020-04-01" }))));
     expect(results.every((r) => r.status === 201)).toBe(true);
-    const nums = (await Promise.all(results.map(inv))).map((i) => Number(i.invoiceNo.split("/")[2])).sort((a, b) => a - b);
+    const nums = (await Promise.all(results.map(inv))).map((i) => Number(i.invoiceNo.split("-")[1])).sort((a, b) => a - b);
     expect(nums).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
   });
 });
@@ -310,8 +310,8 @@ describe("voiding (R13)", () => {
     expect((await call(`/api/invoices/${i.id}/void`, { method: "POST", body: { reason: "again" } })).status).toBe(409);
     expect((await put(i.id, { ...bill({ invoiceDate: "2017-08-01" }), expectedRevision: 1 })).status).toBe(409);
     const next = await inv(await post(bill({ invoiceDate: "2017-08-01" })));
-    expect(next.invoiceNo).toBe("INV/2017-18/0002");
-    const found = (await (await call("/api/invoices?q=2017-18/0001")).json()) as InvoiceListResponse;
+    expect(next.invoiceNo).toBe("INV-0002");
+    const found = (await (await call("/api/invoices?q=INV-0001&from=2017-08-01&to=2017-08-31")).json()) as InvoiceListResponse;
     expect(found.items).toHaveLength(1);
     expect(found.items[0]!.voidedAt).not.toBeNull();
     expect((await audits(i.id)).map((a) => a.action)).toEqual(["invoice_create", "invoice_void"]);
@@ -331,7 +331,7 @@ describe("search (R15)", () => {
   };
 
   it("finds by number (any part), by name in any case, and by 3+ digits of the mobile", async () => {
-    expect((await find("q=2024-25/0001")).items.map((i) => i.customerName)).toEqual(["Kumar Jewels"]);
+    expect((await find("q=INV-0001&from=2024-01-01&to=2024-12-31")).items.some((i) => i.customerName === "Kumar Jewels")).toBe(true);
     expect((await find("q=0002")).items.some((i) => i.customerName === "Sunita Kumari")).toBe(true);
     expect((await find("q=KUMAR&from=2024-01-01&to=2024-12-31")).items.map((i) => i.customerName).sort()).toEqual(["Kumar Jewels", "Sunita Kumari"]);
     expect((await find("q=5678&from=2024-01-01&to=2024-12-31")).items.map((i) => i.customerName)).toEqual(["Kumar Jewels"]);

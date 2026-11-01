@@ -6,6 +6,7 @@ import { authRoutes } from "./auth/routes";
 import { customerRoutes } from "./customers/routes";
 import { invoiceRoutes } from "./invoices/routes";
 import { rateRoutes } from "./rates/routes";
+import { settingsRoutes } from "./settings/routes";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -38,6 +39,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/auth", authRoutes);
   app.route("/api/customers", customerRoutes);
   app.route("/api/rates", rateRoutes);
+  app.route("/api/settings", settingsRoutes);
   app.route("/api/invoices", invoiceRoutes);
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));

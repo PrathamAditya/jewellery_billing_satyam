@@ -20,21 +20,22 @@ describe("numbering (R12)", () => {
   });
 
   it("follows the financial-year table in the spec", async () => {
-    expect(await allocateNumber(t.db, "INV", "2026-03-31")).toBe("INV/2025-26/0001");
-    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV/2026-27/0001");
-    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV/2026-27/0002");
-    expect(await allocateNumber(t.db, "PR", "2026-04-01")).toBe("PR/2026-27/0001");
-    expect(await allocateNumber(t.db, "INV", "2027-03-31")).toBe("INV/2026-27/0003");
+    expect(await allocateNumber(t.db, "INV", "2026-03-31")).toBe("INV-0001");
+    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV-0001");
+    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV-0002");
+    expect(await allocateNumber(t.db, "PAY", "2026-04-01")).toBe("PAY-0001");
+    expect(await allocateNumber(t.db, "INV", "2027-03-31")).toBe("INV-0003");
+    expect(await count("SELECT last_no AS n FROM number_series WHERE series = 'INV' AND fy = '2025-26'")).toBe(1);
   });
 
   it("grows past 4 digits", async () => {
     await t.db.prepare("INSERT INTO number_series (series, fy, last_no) VALUES ('INV', '2026-27', 9999)").run();
-    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV/2026-27/10000");
+    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV-10000");
   });
 
   it("20 parallel allocations give unique numbers 1..20 with no gaps", async () => {
-    const results = await Promise.all(Array.from({ length: 20 }, () => allocateNumber(t.db, "OG", "2026-05-01")));
-    const nums = results.map((r) => Number(r.split("/")[2])).sort((a, b) => a - b);
+    const results = await Promise.all(Array.from({ length: 20 }, () => allocateNumber(t.db, "OGP", "2026-05-01")));
+    const nums = results.map((r) => Number(r.split("-")[1])).sort((a, b) => a - b);
     expect(nums).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
   });
 
@@ -47,7 +48,7 @@ describe("numbering (R12)", () => {
       ]),
     ).rejects.toThrow();
     expect(await count("SELECT last_no AS n FROM number_series WHERE series = 'INV' AND fy = '2026-27'")).toBe(1);
-    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV/2026-27/0002");
+    expect(await allocateNumber(t.db, "INV", "2026-04-01")).toBe("INV-0002");
   });
 
   it("rejects an unknown series and an invalid date", async () => {

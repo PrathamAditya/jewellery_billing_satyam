@@ -51,7 +51,7 @@ export function allocateCustomerNumberStatement(db: D1Database): D1PreparedState
 }
 
 /** SQL expression for the number just allocated by the statement above, e.g. 'C-0001'. Use inside the insert. */
-export const CURRENT_CUSTOMER_NO_SQL = `('C-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'C' AND fy = 'all')))`;
+export const CURRENT_CUSTOMER_NO_SQL = `('C' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'C' AND fy = 'all')))`;
 
 /** Allocates one customer number on its own, e.g. "C-0001". */
 export async function allocateCustomerNumber(db: D1Database): Promise<string> {
