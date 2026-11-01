@@ -66,6 +66,13 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "PUT", path: "/api/invoices/:id/settlement", permission: "invoices.edit" },
   { method: "POST", path: "/api/invoices/:id/advance-allocations", permission: "payments.create" },
 
+  { method: "GET", path: "/api/opening-balances", permission: "ledger.view" },
+  { method: "POST", path: "/api/opening-balances", permission: "ledger.opening" },
+  { method: "POST", path: "/api/opening-balances/:id/void", permission: "ledger.opening" },
+  { method: "GET", path: "/api/customers/:id/ledger", permission: "ledger.view" },
+  { method: "GET", path: "/api/ledger/summary", permission: "ledger.view" },
+  { method: "GET", path: "/api/ledger/outstanding", permission: "ledger.view" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

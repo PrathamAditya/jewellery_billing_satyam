@@ -71,7 +71,8 @@ await page.waitForSelector("text=added city");
 ok(await page.locator("text=(empty)").count() >= 1 && await page.locator("text=Amritsar").count() >= 1, "history shows the change");
 await page.screenshot({ path: `${S}/shot-history.png` });
 await page.click('button:has-text("Ledger")');
-ok(await page.locator("text=Coming with the ledger feature").count() === 1, "ledger placeholder");
+await page.waitForSelector("text=Owes");
+ok(await page.locator("text=Advance held >> visible=true").count() >= 1, "ledger tab shows the customer's advance held");
 
 // list + search
 await page.goto(B + "/#/customers");
