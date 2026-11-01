@@ -3,6 +3,7 @@ import type { HealthResponse } from "@jewellery/shared";
 import type { AppEnv } from "./env";
 import { originCheck, requireSession } from "./auth/middleware";
 import { authRoutes } from "./auth/routes";
+import { customerRoutes } from "./customers/routes";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -33,6 +34,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
   });
 
   app.route("/api/auth", authRoutes);
+  app.route("/api/customers", customerRoutes);
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
   return app;

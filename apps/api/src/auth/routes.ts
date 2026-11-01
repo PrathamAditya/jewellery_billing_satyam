@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getCookie, deleteCookie } from "hono/cookie";
 import { changePasswordRequestSchema, loginRequestSchema, type UserResponse } from "@jewellery/shared";
 import type { AppEnv } from "../env";
+import { readJson } from "../http";
 import { auditStatement } from "../db/audit";
 import { setSessionCookie } from "./middleware";
 import { dummyPasswordHash, hashPassword, verifyPassword } from "./password";
@@ -20,14 +21,6 @@ const GLOBAL_LIMIT = 30;
 const ATTEMPT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export const authRoutes = new Hono<AppEnv>();
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<unknown> {
-  try {
-    return await c.req.json();
-  } catch {
-    return undefined;
-  }
-}
 
 authRoutes.post("/login", async (c) => {
   const parsed = loginRequestSchema.safeParse(await readJson(c));

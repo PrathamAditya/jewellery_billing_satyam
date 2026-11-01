@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { standardColumns } from "./columns";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { standardColumns, voidColumns } from "./columns";
 
 export { standardColumns, voidColumns } from "./columns";
 
@@ -81,4 +81,31 @@ export const loginAttempts = sqliteTable(
     username: text("username"),
   },
   (t) => [index("login_attempts_ip_at_idx").on(t.ip, t.at), index("login_attempts_at_idx").on(t.at)],
+);
+
+/** Customers (spec 010). Voided, never deleted. `aadhaar` is shown masked everywhere (R14). */
+export const customers = sqliteTable(
+  "customers",
+  {
+    ...standardColumns(),
+    customerNo: text("customer_no").notNull().unique(),
+    name: text("name").notNull(),
+    nameSearch: text("name_search").notNull(),
+    mobile: text("mobile"),
+    altMobile: text("alt_mobile"),
+    address: text("address"),
+    city: text("city"),
+    pincode: text("pincode"),
+    pan: text("pan"),
+    aadhaar: text("aadhaar"),
+    notes: text("notes"),
+    ...voidColumns(),
+  },
+  (t) => [
+    index("customers_name_search_idx").on(t.nameSearch),
+    index("customers_mobile_idx").on(t.mobile),
+    index("customers_pan_idx").on(t.pan),
+    // R6: a PAN is unique among customers that are not voided.
+    uniqueIndex("customers_pan_active_unique").on(t.pan).where(sql`${t.pan} IS NOT NULL AND ${t.voidedAt} IS NULL`),
+  ],
 );

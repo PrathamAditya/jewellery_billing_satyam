@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export { newId } from "./id";
 export { indiaDate } from "./dates";
+export * from "./customer";
 
 export const healthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
