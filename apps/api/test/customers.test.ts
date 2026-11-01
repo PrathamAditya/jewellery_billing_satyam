@@ -62,11 +62,11 @@ describe("access (R15)", () => {
 });
 
 describe("create (R1 to R4, R15)", () => {
-  it("first customer gets C-0001; created_by is the logged-in user", async () => {
+  it("first customer gets C0001; created_by is the logged-in user", async () => {
     const res = await create({ name: "  ramesh   kumar ", mobile: "+91 98765-43210", pan: "abcde1234f", aadhaar: "1234 5678 9012", address: "12 Mall Road" });
     expect(res.status).toBe(201);
     const body = (await res.json()) as Saved;
-    expect(body.customer).toMatchObject({ customerNo: "C-0001", name: "ramesh kumar", mobile: "9876543210", pan: "ABCDE1234F", aadhaarMasked: "XXXX XXXX 9012" });
+    expect(body.customer).toMatchObject({ customerNo: "C0001", name: "ramesh kumar", mobile: "9876543210", pan: "ABCDE1234F", aadhaarMasked: "XXXX XXXX 9012" });
     expect(JSON.stringify(body)).not.toContain("123456789012");
     const row = (await one<{ created_by: string; updated_by: string; name_search: string; aadhaar: string }>("SELECT * FROM customers WHERE id = ?1", body.customer.id))!;
     expect(row).toMatchObject({ created_by: userId, updated_by: userId, name_search: "ramesh kumar", aadhaar: "123456789012" });
@@ -96,11 +96,11 @@ describe("create (R1 to R4, R15)", () => {
 
   it("customer numbers count up and ignore the financial year (R2)", async () => {
     const second = ((await (await create({ name: "Second Person" })).json()) as Saved).customer.customerNo;
-    expect(second).toBe("C-0003"); // Ramesh C-0001, Walk In C-0002
+    expect(second).toBe("C0003"); // Ramesh C0001, Walk In C0002
     nowMs = Date.parse("2027-04-02T10:00:00.000Z"); // new financial year (the old session has expired by now)
     await login();
     const next = ((await (await create({ name: "After April" })).json()) as Saved).customer.customerNo;
-    expect(next).toBe("C-0004");
+    expect(next).toBe("C0004");
     nowMs = Date.parse("2026-11-01T10:00:00.000Z");
   });
 
@@ -160,7 +160,7 @@ describe("search (R8)", () => {
   });
 
   it("finds by customer number, in any common spelling", async () => {
-    expect(await names("C-0002")).toEqual(["Walk In"]);
+    expect(await names("C0002")).toEqual(["Walk In"]);
     expect(await names("c0002")).toEqual(["Walk In"]);
     expect(await names("c-2")).toEqual(["Walk In"]);
   });
