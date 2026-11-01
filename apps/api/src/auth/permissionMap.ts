@@ -62,6 +62,10 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/old-gold/:id", permission: "oldgold.view" },
   { method: "POST", path: "/api/old-gold/:id/void", permission: "oldgold.void" },
 
+  { method: "GET", path: "/api/invoices/:id/settlement", permission: "invoices.view" },
+  { method: "PUT", path: "/api/invoices/:id/settlement", permission: "invoices.edit" },
+  { method: "POST", path: "/api/invoices/:id/advance-allocations", permission: "payments.create" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },
