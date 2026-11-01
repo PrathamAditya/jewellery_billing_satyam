@@ -19,6 +19,6 @@ No code is written for a feature before its spec is Approved.
 | 010 | Customers | Done (owner approved 2026-11-01) |
 | 011 | Daily gold and silver rates | Built, merged, awaiting owner check |
 | 012 | Invoice calculation engine | Built, merged, awaiting owner check |
-| 013 | Invoices (create, search, edit, void, history) | Draft, needs approval |
+| 013 | Invoices (create, search, edit, void, history) | Built, awaiting deploy and owner check |
 
 The full list is in `docs/roadmap.md`.

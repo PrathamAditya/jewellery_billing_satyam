@@ -81,7 +81,7 @@ export default function AccountMenu() {
   const [changing, setChanging] = useState(false);
 
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-300 bg-white text-sm"
