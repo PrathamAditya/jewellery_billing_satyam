@@ -5,14 +5,21 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
   },
   "dependencies": {
     "@jewellery/shared": "*",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.13.16"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261101.1",
+    "@types/node": "^26.6.6",
+    "drizzle-kit": "^0.31.11",
+    "miniflare": "^4.20260730.0",
     "wrangler": "^4.156.0"
   }
 }

@@ -1,6 +1,6 @@
 # 001: Database foundation
 
-Status: Draft (needs owner approval)
+Status: Built 2026-11-01, awaiting owner check
 Depends on: 000
 Open questions: none
 
@@ -62,8 +62,8 @@ Other:
 Login (002), customer or invoice tables, backups (050, D1 Time Travel is on by default meanwhile), idempotent create helper (arrives with its first use in 010), offline sync (041).
 
 ## 8. Acceptance checklist
-- [ ] R1 to R12 implemented and tested
-- [ ] Migrations applied locally, in CI and on the remote database
-- [ ] Remote `/api/health` shows `db: "ok"`
-- [ ] Nothing in spec 000 broke
+- [x] R1 to R12 implemented and tested
+- [x] Migrations applied locally, in CI and on the remote database
+- [x] Remote `/api/health` shows `db: "ok"`
+- [x] Nothing in spec 000 broke
 - [ ] Owner approved the result

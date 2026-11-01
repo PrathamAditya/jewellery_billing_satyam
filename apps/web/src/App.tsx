@@ -3,13 +3,18 @@ import { healthResponseSchema } from "@jewellery/shared";
 
 type ApiStatus = "checking" | "ok" | "unreachable";
 
+function isHealthy(body: unknown): boolean {
+  const parsed = healthResponseSchema.safeParse(body);
+  return parsed.success && parsed.data.status === "ok" && parsed.data.db === "ok";
+}
+
 export default function App() {
   const [status, setStatus] = useState<ApiStatus>("checking");
 
   useEffect(() => {
     fetch("/api/health")
       .then((res) => res.json())
-      .then((body) => setStatus(healthResponseSchema.safeParse(body).success ? "ok" : "unreachable"))
+      .then((body) => setStatus(isHealthy(body) ? "ok" : "unreachable"))
       .catch(() => setStatus("unreachable"));
   }, []);
 

@@ -2,7 +2,7 @@
 
 Billing, inventory and business management for a gold and silver jewellery showroom. Runs in the browser on a Windows PC (full billing and printing) and on Android (view-only dashboard), backed by one shared database.
 
-Status: spec 000 done (scaffold, CI, deploy). Live: https://jewellery-billing-satyam.prathamadityasalhotra.workers.dev
+Status: specs 000 (scaffold) and 001 (database foundation) built. Live: https://jewellery-billing-satyam.prathamadityasalhotra.workers.dev
 
 ## Docs
 
@@ -25,3 +25,5 @@ npm run typecheck
 npm test
 npm run deploy     # build web, deploy Worker to Cloudflare
 ```
+
+Database: `npm run db:migrate` (local D1), `npm run db:migrate:remote` (Cloudflare), `npm run db:generate` (new migration from `apps/api/src/db/schema.ts`).
