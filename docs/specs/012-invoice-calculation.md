@@ -1,8 +1,8 @@
 # 012: Invoice calculation engine
 
-Status: Draft (needs owner approval)
+Status: Built 2026-11-01, awaiting owner check
 Depends on: 000, 011 (rates are paise per kg)
-Open questions: O1 (HSN 9988 job-work) keeps those lines out of this spec, and O2 (how polish is typed) only affects the entry screen, not the engine. Q1 in section 8 needs an owner answer. O8 is mostly answered by `docs/client-invoice-reference.md`.
+Open questions: O1 (HSN 9988 job-work) keeps those lines out of this spec, and O2 (how polish is typed) only affects the entry screen, not the engine. Q1 is answered in section 8. O8 is mostly answered by `docs/client-invoice-reference.md`.
 
 ## 1. Goal
 One tested function turns invoice lines into every amount on the bill: line amounts, the gold and labour parts, display rate, taxable amount, CGST and SGST (or IGST), round-off, and the final payable amount. It is pure (no database, no clock), so the same inputs always give the same numbers, and a saved invoice can keep its numbers forever (CLAUDE.md rule 5).
@@ -139,12 +139,12 @@ All amounts are paise unless shown in rupees. Every row is a test.
 Saving an invoice (013), picking a customer or an inventory item, copying the day's rate onto a line (013, and O9 decides which rate a purity uses), the "same rate for the first row and the next rows" shortcut (a screen convenience in 013, never printed), HSN 9988 job-work (O1), converting a polish percentage into weight (O2), payments, advances and old gold (015 to 018), printing (014).
 
 ## 8. Questions for the owner
-- Q1. **GST on several lines.** Should GST be worked out once per rate on the total of all lines (proposed, as the totals block on the paper invoice does), or line by line and then added up? Example C shows the difference: 1 paisa of tax. Per rate group is what most billing software does and what the paper totals show.
+- Q1 (answered 2026-11-01: **per rate group, as proposed**). **GST on several lines.** Should GST be worked out once per rate on the total of all lines (proposed, as the totals block on the paper invoice does), or line by line and then added up? Example C shows the difference: 1 paisa of tax. Per rate group is what most billing software does and what the paper totals show.
 - Open and not blocking: O1 (job-work) lines are refused until you give the calculation with a worked example. O2 (polish as grams or percent) changes only how it is typed, so I will ask when we build the invoice screen.
 
 ## 9. Acceptance checklist
-- [ ] R1 to R15 implemented and tested
-- [ ] Every worked example above passes as a test
-- [ ] Calculator screen reproduces the client's paper invoice
-- [ ] Nothing in specs 000, 001, 002, 010 and 011 broke
-- [ ] Owner approved the result
+- [x] R1 to R15 implemented and tested (272 tests in total, 67 of them new)
+- [x] Every worked example above (A to J) passes as a test
+- [x] Calculator screen reproduces the client's paper invoice in a real browser (2,800.06 / 42.00 / 42.00 / 2,884.06, round-off -0.06, payable 2,884.00), and also examples B, D, E and F, the validation messages, and the hidden phone view
+- [x] Nothing in specs 000, 001, 002, 010 and 011 broke (their tests still pass)
+- [ ] Owner approved the result (check the Calculator against two or three more paper bills)

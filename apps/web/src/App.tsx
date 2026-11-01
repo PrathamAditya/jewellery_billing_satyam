@@ -7,6 +7,7 @@ import { usePath } from "./router";
 import CustomerList from "./customers/CustomerList";
 import CustomerPage from "./customers/CustomerPage";
 import { EditCustomerPage, NewCustomerPage, PickerDemoPage } from "./customers/pages";
+import CalculatorPage from "./calculator/CalculatorPage";
 import RatesPage from "./rates/RatesPage";
 import TodayRates from "./rates/TodayRates";
 
@@ -52,6 +53,7 @@ function Page({ path }: { path: string }) {
     return <CustomerPage id={parts[1]!} />;
   }
   if (parts[0] === "rates") return <RatesPage />;
+  if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
   return <Home />;
 }
@@ -60,8 +62,9 @@ function Shell() {
   const path = usePath();
   const inCustomers = path.startsWith("/customers");
   const inRates = path.startsWith("/rates");
-  const link = (href: string, label: string, active: boolean) => (
-    <a href={href} className={`px-3 py-1.5 rounded-lg text-sm ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
+  const inCalculator = path.startsWith("/calculator");
+  const link = (href: string, label: string, active: boolean, extra = "") => (
+    <a href={href} className={`px-3 py-1.5 rounded-lg text-sm ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
       {label}
     </a>
   );
@@ -73,6 +76,7 @@ function Shell() {
           {link("#/", "Home", path === "/")}
           {link("#/customers", "Customers", inCustomers)}
           {link("#/rates", "Rates", inRates)}
+          {link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
         </nav>
         <AccountMenu />
       </header>
