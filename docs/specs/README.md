@@ -16,5 +16,6 @@ No code is written for a feature before its spec is Approved.
 | 000 | Project scaffold, CI, deploy | Done |
 | 001 | Database foundation | Built, awaiting owner check |
 | 002 | Owner login | Draft, needs approval |
+| 010 | Customers | Draft, needs approval (depends on 002) |
 
 The full list is in `docs/roadmap.md`.
