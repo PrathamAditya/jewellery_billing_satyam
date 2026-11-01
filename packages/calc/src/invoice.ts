@@ -96,8 +96,9 @@ function validate(input: InvoiceInput): InvoiceError[] {
     else if (l.goldRatePaisePerKg > MAX_PRICE_PAISE_PER_KG) bad(n, "goldRatePaisePerKg", "gold_rate_too_large", `Line ${n}: gold rate is too large`);
     if (!isInt(l.labourRatePaisePerKg) || l.labourRatePaisePerKg < 0) bad(n, "labourRatePaisePerKg", "invalid_labour_rate", `Line ${n}: labour rate cannot be negative`);
     else if (l.labourRatePaisePerKg > MAX_PRICE_PAISE_PER_KG) bad(n, "labourRatePaisePerKg", "labour_rate_too_large", `Line ${n}: labour rate is too large`);
-    const expectedGst = l.hsn.trim() === "9988" ? 500 : 300;
-    if (!isInt(l.gstRateBps) || l.gstRateBps !== expectedGst) bad(n, "gstRateBps", "invalid_gst_rate", `Line ${n}: GST rate must match the HSN`);
+    // The API derives this from HSN. Keeping the pure engine's rate argument
+    // validates historical frozen documents and calculator fixtures too.
+    if (!isInt(l.gstRateBps) || l.gstRateBps < 0 || l.gstRateBps > LIMITS.maxGstRateBps) bad(n, "gstRateBps", "invalid_gst_rate", `Line ${n}: GST rate must be from 0% to 28%`);
   });
   return errors;
 }

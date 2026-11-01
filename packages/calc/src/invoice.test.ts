@@ -96,16 +96,16 @@ describe("E. other state: IGST", () => {
 describe("F. two rate groups", () => {
   const r = calc([
     line(),
-    line({ hsn: "7114", grossWeightMg: 12_345, netWeightMg: 12_345, goldRatePaisePerKg: perGram(11_000, 50), labourRatePaisePerKg: perGram(450, 25), gstRateBps: 500 }),
+    line({ hsn: "9988", grossWeightMg: 12_345, netWeightMg: 12_345, goldRatePaisePerKg: perGram(11_000, 50), labourRatePaisePerKg: perGram(450, 25), gstRateBps: 500 }),
   ]);
   it("groups are separate, sorted by rate, and add up", () => {
     expect(r.groups).toEqual([
       { gstRateBps: 300, taxablePaise: 280_006, cgstPaise: 4_200, sgstPaise: 4_200, igstPaise: 0 },
-      { gstRateBps: 500, taxablePaise: 14_135_951, cgstPaise: 353_399, sgstPaise: 353_399, igstPaise: 0 },
+      { gstRateBps: 500, taxablePaise: 555_834, cgstPaise: 13_896, sgstPaise: 13_896, igstPaise: 0 },
     ]);
-    expect(r.totalBeforeRoundOffPaise).toBe(15_131_155);
-    expect(r.roundOffPaise).toBe(45);
-    expect(r.payablePaise).toBe(15_131_200);
+    expect(r.totalBeforeRoundOffPaise).toBe(872_032);
+    expect(r.roundOffPaise).toBe(-32);
+    expect(r.payablePaise).toBe(872_000);
   });
 });
 
@@ -183,8 +183,7 @@ describe("I. validation", () => {
     ["negative gst", { gstRateBps: -1 }, "gstRateBps", "invalid_gst_rate"],
     ["fractional weight", { netWeightMg: 9_800.5 }, "netWeightMg", "invalid_net_weight"],
     ["NaN rate", { goldRatePaisePerKg: Number.NaN }, "goldRatePaisePerKg", "invalid_gold_rate"],
-    ["HSN 9988", { hsn: "9988" }, "hsn", "job_work_not_supported"],
-    ["HSN 9988 with spaces", { hsn: " 9988 " }, "hsn", "job_work_not_supported"],
+    ["invalid HSN", { hsn: "7114" }, "hsn", "invalid_hsn"],
   ] as [string, Partial<InvoiceLineInput>, string, string][])("%s is rejected and names line 1 and the field", (_n, over, field, code) => {
     const errors = bad(over);
     expect(errors).toContainEqual(expect.objectContaining({ line: 1, field, code }));
@@ -206,7 +205,6 @@ describe("I. validation", () => {
     expect(errors.map((e) => [e.line, e.code]).sort()).toEqual([
       [2, "invalid_net_weight"],
       [3, "invalid_gst_rate"],
-      [3, "job_work_not_supported"],
     ].sort());
   });
 });

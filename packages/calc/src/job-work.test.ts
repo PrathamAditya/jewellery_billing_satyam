@@ -21,6 +21,7 @@ describe("spec 012b: HSN and polish", () => {
     if (out.ok) expect(out.result.lines[0]).toMatchObject({ goldAmountPaise: 220_010, labourAmountPaise: 459_255, displayRatePaisePerGram: 66_595 });
   });
   it("accepts exactly the two HSN categories", () => {
-    for (const hsn of ["7114", "9989", "", " 9988 "]) expect(calculateInvoice({ taxMode: "intra", lines: [line({ hsn })] }).ok).toBe(false);
+    for (const hsn of ["7114", "9989", ""]) expect(calculateInvoice({ taxMode: "intra", lines: [line({ hsn })] }).ok).toBe(false);
+    expect(calculateInvoice({ taxMode: "intra", lines: [line({ hsn: " 9988 " })] }).ok).toBe(true);
   });
 });
