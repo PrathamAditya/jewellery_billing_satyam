@@ -104,7 +104,7 @@ export async function receivedFor(db: D1Database, invoiceId: string): Promise<nu
 }
 
 /** Remaining money of a customer across live payments (their advance held, spec 015 M5). */
-async function advanceHeld(db: D1Database, customerId: string): Promise<number> {
+export async function advanceHeld(db: D1Database, customerId: string): Promise<number> {
   const row = await db
     .prepare(
       `SELECT COALESCE(SUM(p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0)), 0) AS n

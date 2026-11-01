@@ -1,6 +1,6 @@
 # 018: Old gold purchase (`OGP-0001`)
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (calculation, receipts, four settlements, void, screens, tests). Owner review pending.
 Depends on: 003, 004, 010, 013, 015, 016
 Open questions used with defaults: Q22/Q72 (fields and purity), Q24 (payout modes). The accounting, GST and stock treatment is the CA's decision (O3): nothing is posted to stock or GST (decisions D7, D21).
 

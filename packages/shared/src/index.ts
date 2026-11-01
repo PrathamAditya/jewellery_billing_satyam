@@ -10,6 +10,7 @@ export * from "./permissions";
 export * from "./words";
 export * from "./payments";
 export * from "./orders";
+export * from "./oldGold";
 export * from "./settings";
 
 export const healthResponseSchema = z.object({
