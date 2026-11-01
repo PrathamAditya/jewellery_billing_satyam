@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 
 // The order matters: later files reuse data the earlier ones create (a customer, today's rates).
-const files = ["customers", "rates", "calculator", "invoices"];
+const files = ["customers", "rates", "calculator", "invoices", "settings"];
 let failed = 0;
 for (const f of files) {
   console.log(`\n=== e2e/${f}.mjs ===`);
