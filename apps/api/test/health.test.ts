@@ -28,9 +28,5 @@ describe("api", () => {
     expect(healthResponseSchema.parse(await res.json())).toMatchObject({ status: "degraded", db: "error" });
   });
 
-  it("unknown /api path returns JSON 404", async () => {
-    const res = await app.request("/api/nope", {}, { DB: t.db });
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "not_found" });
-  });
+  // Unknown /api paths: 401 without a session, 404 with one. Covered in auth.test.ts (spec 002 R8).
 });

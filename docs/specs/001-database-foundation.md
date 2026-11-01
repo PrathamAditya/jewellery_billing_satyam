@@ -1,6 +1,6 @@
 # 001: Database foundation
 
-Status: Built 2026-11-01, awaiting owner check
+Status: Done (built 2026-11-01, owner approved 2026-11-01)
 Depends on: 000
 Open questions: none
 
@@ -66,4 +66,4 @@ Login (002), customer or invoice tables, backups (050, D1 Time Travel is on by d
 - [x] Migrations applied locally, in CI and on the remote database
 - [x] Remote `/api/health` shows `db: "ok"`
 - [x] Nothing in spec 000 broke
-- [ ] Owner approved the result
+- [x] Owner approved the result

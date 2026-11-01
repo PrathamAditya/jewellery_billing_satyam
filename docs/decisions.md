@@ -29,5 +29,5 @@ Locked decisions are changed only by editing this file in a commit that says why
 | O4 | Showroom details for the invoice header: legal name, address, GSTIN, phone, bank details, terms text, BIS logo file, logo/branding. | Invoice print layout | Owner |
 | O5 | Brother printer model, and whether it does automatic duplex. | Print layouts | Owner |
 | O6 | Offline invoice numbering: reserve number blocks while online, or use an offline-only series? | Offline queue and sync | Decide in that spec |
-| O7 | Login method for the single owner: password plus session cookie, or Cloudflare Access? | Auth | Proposed in spec 002 (own login), awaiting approval |
+| O7 | Login method for the single owner: password plus session cookie, or Cloudflare Access? | Auth | Closed 2026-11-01: own login, username + password + session cookie (spec 002) |
 | O8 | GST registration facts: composition vs regular scheme, state code for CGST/SGST vs IGST. | Invoice calculation engine | Owner / CA |

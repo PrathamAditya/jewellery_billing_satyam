@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "owner:set": "tsx scripts/owner-set.ts"
   },
   "dependencies": {
     "@jewellery/shared": "*",
@@ -20,6 +21,7 @@
     "@types/node": "^26.6.6",
     "drizzle-kit": "^0.31.11",
     "miniflare": "^4.20260730.0",
+    "tsx": "^4.23.15",
     "wrangler": "^4.156.0"
   }
 }

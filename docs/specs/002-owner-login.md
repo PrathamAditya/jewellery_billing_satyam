@@ -1,6 +1,6 @@
 # 002: Owner login
 
-Status: Draft (needs owner approval)
+Status: Building (owner approved 2026-11-01)
 Depends on: 000, 001
 Open questions: closes O7 (login method)
 
