@@ -17,6 +17,8 @@ import SettingsPage from "./settings/SettingsPage";
 import UsersPage from "./users/UsersPage";
 import PaymentsPage from "./payments/PaymentsPage";
 import PaymentPage from "./payments/PaymentPage";
+import OrdersPage from "./orders/OrdersPage";
+import OrderPage from "./orders/OrderPage";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 
@@ -69,6 +71,7 @@ function Page({ path, meId }: { path: string; meId: string }) {
     return <InvoicePage id={parts[1]!} />;
   }
   if (parts[0] === "rates") return <RatesPage />;
+  if (parts[0] === "orders") return parts[1] ? <OrderPage id={parts[1]} /> : <OrdersPage />;
   if (parts[0] === "payments") return parts[1] ? <PaymentPage id={parts[1]} /> : <PaymentsPage />;
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
@@ -85,6 +88,7 @@ function Shell() {
   const inInvoices = path.startsWith("/invoices");
   const inSettings = path.startsWith("/settings");
   const inPayments = path.startsWith("/payments");
+  const inOrders = path.startsWith("/orders");
   const inCalculator = path.startsWith("/calculator");
   const link = (href: string, label: string, active: boolean, extra = "") => (
     <a href={href} className={`px-2 sm:px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
@@ -100,6 +104,7 @@ function Shell() {
           {can("invoices.view") && link("#/invoices", "Invoices", inInvoices)}
           {can("customers.view") && link("#/customers", "Customers", inCustomers)}
           {can("payments.view") && link("#/payments", "Payments", inPayments)}
+          {can("advances.view") && link("#/orders", "Orders", inOrders)}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
           {can("settings.view") && link("#/settings", "Settings", inSettings)}

@@ -25,7 +25,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 004 | Users, roles and permissions | Built, owner review pending |
 | 012c | Discounts, stones and diamonds | Wave 1, approved, not built |
 | 015 | Payments and receipts (the money model) | Built, owner review pending |
-| 016 | Orders and advances | Wave 1, approved, not built |
+| 016 | Orders and advances | Built, owner review pending |
 | 018 | Old gold purchase | Wave 1, approved, not built |
 | 017 | Settlement | Wave 1, approved, not built |
 | 019 | Customer ledger and opening balances | Wave 1, approved, not built |

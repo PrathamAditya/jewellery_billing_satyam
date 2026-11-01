@@ -5,6 +5,7 @@ import {
   newId,
   nameSearchKey,
   paymentRemarksSchema,
+  refundRequestSchema,
   paymentRequestSchema,
   reverseAllocationSchema,
   voidPaymentSchema,
@@ -61,6 +62,8 @@ type DbAllocation = {
 };
 
 const isUniqueError = (e: unknown) => e instanceof Error && /UNIQUE constraint failed/i.test(e.message);
+const guardCodeRefund = (e: unknown) => (e instanceof Error && /exceeds_payment/.test(e.message) ? "exceeds_payment" : null);
+void guardCodeRefund;
 /** A guard in the database (migration 0013) refused the allocation. */
 const guardCode = (e: unknown): "exceeds_due" | "exceeds_payment" | null => {
   const m = e instanceof Error ? e.message : "";
@@ -85,6 +88,12 @@ async function allocationsOf(db: D1Database, paymentId: string): Promise<DbAlloc
 const allocatedNow = (allocs: { amount_paise: number; reversed_at: string | null }[]) =>
   allocs.filter((a) => !a.reversed_at).reduce((s, a) => s + a.amount_paise, 0);
 
+/** Money handed back on refunds that are still live (spec 016 R8). */
+export async function refundedOf(db: D1Database, paymentId: string): Promise<number> {
+  const row = await db.prepare("SELECT COALESCE(SUM(amount_paise), 0) AS n FROM payment_refunds WHERE payment_id = ?1 AND reversed_at IS NULL").bind(paymentId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 /** Money received for an invoice: its live allocations (spec 015 M4). */
 export async function receivedFor(db: D1Database, invoiceId: string): Promise<number> {
   const row = await db
@@ -98,7 +107,7 @@ export async function receivedFor(db: D1Database, invoiceId: string): Promise<nu
 async function advanceHeld(db: D1Database, customerId: string): Promise<number> {
   const row = await db
     .prepare(
-      `SELECT COALESCE(SUM(p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0)), 0) AS n
+      `SELECT COALESCE(SUM(p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0)), 0) AS n
        FROM payments p WHERE p.customer_id = ?1 AND p.voided_at IS NULL`,
     )
     .bind(customerId)
@@ -121,8 +130,8 @@ async function openInvoices(db: D1Database, customerId: string) {
   ).results.filter((r) => r.due > 0);
 }
 
-function toResponse(p: DbPayment, allocs: DbAllocation[]): PaymentResponse {
-  const allocated = allocatedNow(allocs);
+function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0): PaymentResponse {
+  const allocated = allocatedNow(allocs) + refunded;
   return {
     id: p.id,
     kind: p.kind,
@@ -155,7 +164,7 @@ function toResponse(p: DbPayment, allocs: DbAllocation[]): PaymentResponse {
 async function loadPayment(db: D1Database, id: string) {
   const row = await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>();
   if (!row) return null;
-  return { row, allocs: await allocationsOf(db, id) };
+  return { row, allocs: await allocationsOf(db, id), refunded: await refundedOf(db, id) };
 }
 
 /** The payment as it was asked for. A safe retry with the same id and content returns the first result (R4). */
@@ -167,12 +176,14 @@ const canonical = (b: PaymentRequest) =>
     reference: b.reference ?? null,
     amountPaise: b.amountPaise,
     purpose: b.purpose,
+    oldReference: b.oldReference ?? null,
+    orderId: b.orderId ?? null,
     invoiceId: b.invoiceId ?? null,
     allocation: b.allocation,
     remarks: b.remarks ?? null,
   });
 
-type Plan = { kind: PaymentKind; allocations: { invoiceId: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null } };
+type Plan = { kind: PaymentKind; allocations: { invoiceId: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null };
 
 /** Works out who is paid and which invoices are paid, or says why not (R2 to R4). */
 async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan: Plan } | { ok: false; status: 400 | 409; body: unknown }> {
@@ -191,6 +202,7 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
       ok: true,
       plan: {
         kind: "at_sale",
+        orderId: null,
         customerId: inv.customer_id,
         payer: { name: inv.customer_name, mobile: inv.customer_mobile, pan: inv.customer_pan, address: inv.customer_address },
         allocations: [{ invoiceId: inv.id, amountPaise: b.amountPaise }],
@@ -204,7 +216,17 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
   if (cust.voided_at) return { ok: false, status: 409, body: { error: "customer_voided", message: "That customer is voided" } };
   const payer = { name: cust.name, mobile: cust.mobile, pan: cust.pan, address: cust.address };
 
-  if (b.purpose === "advance") return { ok: true, plan: { kind: "advance", customerId: cust.id, payer, allocations: [] } };
+  // Spec 016 R5: an advance may belong to an order. The order must be open and belong to this customer.
+  let orderId: string | null = null;
+  if (b.orderId) {
+    const order = await db.prepare("SELECT customer_id, status FROM orders WHERE id = ?1").bind(b.orderId).first<{ customer_id: string; status: string }>();
+    if (!order) return { ok: false, status: 400, body: { error: "order_not_found", message: "That order does not exist" } };
+    if (order.customer_id !== cust.id) return { ok: false, status: 400, body: { error: "order_customer_mismatch", message: "That order belongs to another customer" } };
+    if (order.status !== "open") return { ok: false, status: 409, body: { error: "order_not_open", message: "That order is closed or cancelled. Take the advance on a new order." } };
+    orderId = b.orderId;
+  }
+  if (b.purpose === "opening_advance") return { ok: true, plan: { kind: "opening_advance", customerId: cust.id, payer, allocations: [], orderId } };
+  if (b.purpose === "advance") return { ok: true, plan: { kind: "advance", customerId: cust.id, payer, allocations: [], orderId } };
 
   // against_invoices
   const open = await openInvoices(db, cust.id);
@@ -217,7 +239,7 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
       allocations.push({ invoiceId: inv.id, amountPaise: take });
       left -= take;
     }
-    return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations } };
+    return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations, orderId: null } };
   }
 
   const seen = new Set<string>();
@@ -238,7 +260,7 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
       return { ok: false, status: 409, body: { error: "exceeds_due", message: `${match.invoice_no} only owes ₹${(match.due / 100).toFixed(2)}`, dueAmountPaise: match.due } };
     }
   }
-  return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations: b.allocation } };
+  return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations: b.allocation, orderId: null } };
 }
 
 // ---- create (R2, R5, R6) ----
@@ -248,7 +270,7 @@ paymentRoutes.post("/", async (c) => {
   const parsed = paymentRequestSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json(validationBody(parsed.error), 400);
   const b = parsed.data;
-  if (b.purpose === "advance" && !user.permissions.includes("advances.create")) {
+  if ((b.purpose === "advance" || b.purpose === "opening_advance") && !user.permissions.includes("advances.create")) {
     return c.json({ error: "forbidden", message: "You do not have permission to take advances", permission: "advances.create" }, 403);
   }
   const today = indiaDate(c.get("now"));
@@ -257,14 +279,16 @@ paymentRoutes.post("/", async (c) => {
   const id = b.id ?? newId();
   const replay = classifyReplay(await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>(), (row) => row.input_json === canonical(b));
   if (replay.kind === "conflict") return c.json({ error: "id_conflict", message: "This id is already used by a different payment" }, 409);
-  if (replay.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(replay.row, await allocationsOf(db, id)), warnings: [] });
+  if (replay.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(replay.row, await allocationsOf(db, id), await refundedOf(db, id)), warnings: [] });
 
   const planned = await plan(db, b);
   if (!planned.ok) return c.json(planned.body, planned.status);
   const pl = planned.plan;
 
   const allocated = pl.allocations.reduce((s, a) => s + a.amountPaise, 0);
-  const numbered = pl.kind !== "at_sale";
+  // Spec 016 R3: opening advances from old booklets are not new receipts, so they get no PAY- number.
+  const numbered = pl.kind !== "at_sale" && pl.kind !== "opening_advance";
+  const reference = b.purpose === "opening_advance" ? (b.oldReference ?? b.reference ?? null) : b.reference;
   const fy = numbered ? financialYearOf(b.date) : "";
   const previous = pl.customerId && pl.kind !== "at_sale" ? await advanceHeld(db, pl.customerId) : 0;
   const thisRemaining = b.amountPaise - allocated;
@@ -288,16 +312,17 @@ paymentRoutes.post("/", async (c) => {
     db
       .prepare(
         `INSERT INTO payments (id, created_at, created_by, updated_at, updated_by, kind, receipt_no, fy, serial, receipt_date, customer_id,
-           payer_name, payer_mobile, payer_pan, payer_address, mode, reference, amount_paise, remarks, input_json, advance_summary_json, header_json)
+           payer_name, payer_mobile, payer_pan, payer_address, mode, reference, amount_paise, remarks, input_json, advance_summary_json, header_json, order_id)
          VALUES (?1, ?2, ?3, ?2, ?3, ?4,
            ${numbered ? `'PAY-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5))` : "NULL"},
            ?5, ${numbered ? `(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)` : "NULL"},
-           ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`,
+           ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
       )
       .bind(
         id, now, user.id, pl.kind, fy, b.date, pl.customerId, pl.payer.name, pl.payer.mobile, pl.payer.pan, pl.payer.address,
-        b.mode, b.reference, b.amountPaise, b.remarks, canonical(b), advanceSummary ? JSON.stringify(advanceSummary) : null,
+        b.mode, reference, b.amountPaise, b.remarks, canonical(b), advanceSummary ? JSON.stringify(advanceSummary) : null,
         JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo }),
+        pl.orderId,
       ),
   );
   for (const a of pl.allocations) {
@@ -322,7 +347,7 @@ paymentRoutes.post("/", async (c) => {
   } catch (e) {
     if (isUniqueError(e)) {
       const again = classifyReplay(await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>(), (row) => row.input_json === canonical(b));
-      if (again.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(again.row, await allocationsOf(db, id)), warnings: [] });
+      if (again.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(again.row, await allocationsOf(db, id), await refundedOf(db, id)), warnings: [] });
       return c.json({ error: "id_conflict", message: "This id is already used by a different payment" }, 409);
     }
     const g = guardCode(e);
@@ -330,7 +355,7 @@ paymentRoutes.post("/", async (c) => {
     throw e;
   }
   const saved = await loadPayment(db, id);
-  return c.json<PaymentSaveResponse>({ payment: toResponse(saved!.row, saved!.allocs), warnings }, 201);
+  return c.json<PaymentSaveResponse>({ payment: toResponse(saved!.row, saved!.allocs, saved!.refunded), warnings }, 201);
 });
 
 // ---- search (R9) ----
@@ -364,7 +389,7 @@ paymentRoutes.get("/", async (c) => {
 
   const rows = (
     await c.env.DB.prepare(
-      `SELECT p.*, CASE WHEN p.voided_at IS NULL THEN p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) ELSE 0 END AS remaining_paise
+      `SELECT p.*, CASE WHEN p.voided_at IS NULL THEN p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0) ELSE 0 END AS remaining_paise
        FROM payments p ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
        ORDER BY p.receipt_date DESC, p.created_at DESC, p.id DESC LIMIT ${PAGE_SIZE + 1} OFFSET ${offset}`,
     )
@@ -391,7 +416,7 @@ paymentRoutes.get("/", async (c) => {
 paymentRoutes.get("/:id", async (c) => {
   const found = await loadPayment(c.env.DB, c.req.param("id"));
   if (!found) return c.json({ error: "not_found" }, 404);
-  return c.json(toResponse(found.row, found.allocs));
+  return c.json(toResponse(found.row, found.allocs, found.refunded));
 });
 
 /** Remarks are the only thing that can change on a payment (R11). */
@@ -403,14 +428,14 @@ paymentRoutes.patch("/:id", async (c) => {
   const found = await loadPayment(db, c.req.param("id"));
   if (!found) return c.json({ error: "not_found" }, 404);
   const next = parsed.data.remarks || null;
-  if (next === found.row.remarks) return c.json(toResponse(found.row, found.allocs));
+  if (next === found.row.remarks) return c.json(toResponse(found.row, found.allocs, found.refunded));
   await db.batch([
     revisionStatement(db, { entity: "payment", entityId: found.row.id, snapshot: found.row, reason: "remarks changed", actor: user.id }),
     db.prepare("UPDATE payments SET remarks = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?1").bind(found.row.id, next, new Date().toISOString(), user.id),
     auditStatement(db, { actor: user.id, action: "payment_remarks", entity: "payment", entityId: found.row.id }),
   ]);
   const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs));
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded));
 });
 
 /** Spec 015 R8, M7: voiding reverses the allocations in the same batch. Old gold receipts are voided with their receipt. */
@@ -422,6 +447,9 @@ paymentRoutes.post("/:id/void", async (c) => {
   const found = await loadPayment(db, c.req.param("id"));
   if (!found) return c.json({ error: "not_found" }, 404);
   if (found.row.voided_at) return c.json({ error: "already_voided", message: "This payment is already voided" }, 409);
+  if ((await refundedOf(db, found.row.id)) > 0) {
+    return c.json({ error: "has_refunds", message: "This payment has refunds. Reverse the refunds first." }, 409);
+  }
   if (found.row.kind === "old_gold") {
     return c.json({ error: "old_gold_payment", message: "This payment came from an old gold receipt. Void the old gold receipt instead." }, 409);
   }
@@ -434,7 +462,41 @@ paymentRoutes.post("/:id/void", async (c) => {
   ];
   await db.batch(statements);
   const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs));
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded));
+});
+
+/** Spec 016 R8: pay money back from an advance. Refunds are never deleted; they are reversed. */
+paymentRoutes.post("/:id/refunds", async (c) => {
+  const db = c.env.DB;
+  const user = c.get("user");
+  const parsed = refundRequestSchema.safeParse(await readJson(c));
+  if (!parsed.success) return c.json(validationBody(parsed.error), 400);
+  const b = parsed.data;
+  const found = await loadPayment(db, c.req.param("id"));
+  if (!found) return c.json({ error: "not_found" }, 404);
+  if (found.row.voided_at) return c.json({ error: "payment_voided", message: "This payment is voided" }, 409);
+  const remaining = found.row.amount_paise - allocatedNow(found.allocs) - found.refunded;
+  if (b.amountPaise > remaining) return c.json({ error: "exceeds_remaining", message: `Only ₹${(remaining / 100).toFixed(2)} is left on this payment`, remainingPaise: remaining }, 400);
+  if (b.date > indiaDate(c.get("now"))) return c.json({ error: "future_date", message: "A refund cannot be dated in the future" }, 400);
+  const id = b.id ?? newId();
+  const existing = await db.prepare("SELECT payment_id, amount_paise FROM payment_refunds WHERE id = ?1").bind(id).first<{ payment_id: string; amount_paise: number }>();
+  if (existing) {
+    if (existing.payment_id === found.row.id && existing.amount_paise === b.amountPaise) return c.json(toResponse(found.row, found.allocs, found.refunded));
+    return c.json({ error: "id_conflict", message: "This id is already used by a different refund" }, 409);
+  }
+  try {
+    await db.batch([
+      db
+        .prepare(`INSERT INTO payment_refunds (id, payment_id, amount_paise, mode, reference, refund_date, remarks, created_at, created_by, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?8, ?9)`)
+        .bind(id, found.row.id, b.amountPaise, b.mode, b.reference ?? null, b.date, b.remarks ?? null, new Date().toISOString(), user.id),
+      auditStatement(db, { actor: user.id, action: "payment_refund", entity: "payment", entityId: found.row.id, detail: { amountPaise: b.amountPaise, mode: b.mode } }),
+    ]);
+  } catch (e) {
+    if (guardCode(e) || guardCodeRefund(e)) return c.json({ error: "exceeds_remaining", message: "A refund is more than this payment still holds." }, 409);
+    throw e;
+  }
+  const saved = await loadPayment(db, found.row.id);
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded), 201);
 });
 
 /** Spec 015 R7: one allocation is undone; the money goes back to the payment's remaining. */
@@ -453,5 +515,5 @@ allocationRoutes.post("/:id/reverse", async (c) => {
     auditStatement(db, { actor: user.id, action: "allocation_reverse", entity: "payment", entityId: alloc.payment_id, detail: { allocation: alloc.id, reason: parsed.data.reason } }),
   ]);
   const saved = await loadPayment(db, alloc.payment_id);
-  return c.json(toResponse(saved!.row, saved!.allocs));
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded));
 });

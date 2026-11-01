@@ -48,6 +48,15 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "POST", path: "/api/payments/:id/void", permission: "payments.void" },
   { method: "POST", path: "/api/allocations/:id/reverse", permission: "payments.void" },
 
+  { method: "GET", path: "/api/orders", permission: "advances.view" },
+  { method: "POST", path: "/api/orders", permission: "advances.create" },
+  { method: "GET", path: "/api/orders/:id", permission: "advances.view" },
+  { method: "POST", path: "/api/orders/:id/close", permission: "advances.create" },
+  { method: "POST", path: "/api/orders/:id/cancel", permission: "advances.cancel" },
+  { method: "POST", path: "/api/payments/:id/refunds", permission: "payments.refund" },
+  { method: "POST", path: "/api/refunds/:id/reverse", permission: "payments.refund" },
+  { method: "GET", path: "/api/customers/:id/advances", permission: "advances.view" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

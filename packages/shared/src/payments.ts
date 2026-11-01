@@ -36,7 +36,9 @@ export const paymentRequestSchema = z.object({
   reference: z.string().trim().max(60, "Reference is too long (60 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
   amountPaise: z.number({ error: "Enter the amount" }).int("Amount must be whole paise").min(1, "Amount must be more than 0").max(MAX_PAYMENT_PAISE, "Amount is too large"),
   /** `advance` = no invoice yet. `against_invoices` = pay one or more invoices. `at_sale` = recorded on one invoice at the time of sale. */
-  purpose: z.enum(["advance", "against_invoices", "at_sale"], { error: "Choose what this payment is for" }),
+  purpose: z.enum(["advance", "against_invoices", "at_sale", "opening_advance"], { error: "Choose what this payment is for" }),
+  /** Old booklet receipt number, for opening advances (spec 016 R3). */
+  oldReference: z.string().trim().max(60).optional().nullable().transform((v) => (v ? v : null)),
   invoiceId: z.string().uuid().optional(),
   /** Manual allocation for `against_invoices`. `auto` (default) fills the oldest invoice first (FIFO). */
   allocation: z
