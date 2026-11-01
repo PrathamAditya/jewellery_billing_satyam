@@ -34,6 +34,7 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "PUT", path: "/api/invoices/:id", permission: "invoices.edit" },
   { method: "GET", path: "/api/invoices/:id/history", permission: "invoices.view" },
   { method: "POST", path: "/api/invoices/:id/void", permission: "invoices.void" },
+  { method: "POST", path: "/api/invoices/:id/print-event", permission: "invoices.print" },
 
   { method: "GET", path: "/api/settings", permission: "settings.view" },
   { method: "GET", path: "/api/settings/snapshot", permission: "settings.view" },

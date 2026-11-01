@@ -8,6 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
     "@jewellery/calc": "*",
     "@jewellery/shared": "*",
     "react": "^19.3.1",

@@ -298,7 +298,10 @@ export function OldGoldPage({ id }: { id: string }) {
           <p className="text-stone-500 text-sm">{niceDate(r.receiptDate)} · {r.payer.name} · {r.status}</p>
           {r.voided && <p className="text-red-700 text-sm">Voided: {r.voidReason}</p>}
         </div>
-        {!r.voided && can("oldgold.void") && <button className={`${btnSecondary} ${pcOnly}`} onClick={() => setVoiding(true)}>Void receipt</button>}
+        <div className={`flex gap-2 ${pcOnly}`}>
+          <button className={btnSecondary} onClick={() => navigate(`/print/old-gold/${r.id}`)}>Print receipt</button>
+          {!r.voided && can("oldgold.void") && <button className={btnSecondary} onClick={() => setVoiding(true)}>Void receipt</button>}
+        </div>
       </div>
       <p className="text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-900">Stock and GST for old gold are not posted until the CA decides.</p>
       <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">

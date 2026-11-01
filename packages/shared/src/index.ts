@@ -13,6 +13,7 @@ export * from "./orders";
 export * from "./oldGold";
 export * from "./settlement";
 export * from "./ledger";
+export * from "./print";
 export * from "./settings";
 
 export const healthResponseSchema = z.object({

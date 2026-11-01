@@ -89,6 +89,7 @@ export type PaymentResponse = {
   voidReason: string | null;
   allocations: PaymentAllocationResponse[];
   advanceSummary: { previousRemainingPaise: number; thisRemainingPaise: number; totalAvailablePaise: number } | null;
+  header: Record<string, unknown> | null;
   createdAt: string;
   createdBy: string;
 };

@@ -193,8 +193,10 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 | D-d | Calculation: tax once per rate group, rounded half up to the paisa, final payable rounded to the rupee | spec 012 |
 | D-e | Phone screens are read-only | decision D5 |
 | D-f | Nothing is ever deleted, only voided or edited with the old version kept | decision D12 / rule 4 |
+| D-g | Print: the invoice does not print an Aadhaar reference line (invoices do not store Aadhaar). The payment receipt has no order column yet (the receipt does not carry the order number). Discount rows wait for 012c. | spec 014 |
 
 ## K. Things for the owner to check on what is already built
 
 - **C1.** Spec 011 on the live site: open Rates, type three rates, edit one, look at the Home card. Then tell me it works so I can mark it Done.
 - **C2.** Spec 012 (after it is deployed): on the Calculator screen, press "Fill with the Baba Jewellers example" and check it shows 2,800.06, 42.00, 42.00 and 2,884.06. Then type two or three more paper bills and compare every figure.
+- **C3.** Spec 014 (printing), on the Brother DCP-T830DW, after it is deployed: open an invoice, press Print, choose "Shop copy", set A4, two-sided, flip on the long edge, scale 100%, margins none. Check the settlement page lands on the back of the same sheet, the figures line up with the paper form, and the page does not shift. Then print one payment receipt and one old gold receipt with "Both" to check the cut line. Tell me what is off.

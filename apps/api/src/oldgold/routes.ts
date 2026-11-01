@@ -26,6 +26,7 @@ export const oldGoldRoutes = new Hono<AppEnv>();
 const PAGE_SIZE = 20;
 
 type DbReceipt = {
+  header_json: string | null;
   id: string;
   created_at: string;
   created_by: string;
@@ -117,6 +118,7 @@ async function viewOf(db: D1Database, r: DbReceipt): Promise<OldGoldResponse> {
     voidReason: r.void_reason,
     createdAt: r.created_at,
     createdBy: r.created_by,
+    header: r.header_json ? (JSON.parse(r.header_json) as Record<string, unknown>) : null,
   };
 }
 

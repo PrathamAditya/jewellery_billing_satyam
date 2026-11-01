@@ -32,6 +32,7 @@ export const allocationRoutes = new Hono<AppEnv>();
 const PAGE_SIZE = 20;
 
 type DbPayment = {
+  header_json: string | null;
   id: string;
   created_at: string;
   created_by: string;
@@ -160,6 +161,7 @@ function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0): Payment
       reversedAt: a.reversed_at,
     })),
     advanceSummary: p.advance_summary_json ? (JSON.parse(p.advance_summary_json) as PaymentResponse["advanceSummary"]) : null,
+    header: p.header_json ? (JSON.parse(p.header_json) as Record<string, unknown>) : null,
     createdAt: p.created_at,
     createdBy: p.created_by,
   };

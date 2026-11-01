@@ -56,6 +56,11 @@ export default function PaymentPage({ id }: { id: string }) {
           <p className="text-stone-500 text-sm">{niceDate(p.receiptDate)} · {p.payer.name} · {KIND_LABEL[p.kind]}</p>
           {p.voided && <p className="text-red-700 text-sm">Voided: {p.voidReason}</p>}
         </div>
+        {p.kind !== "at_sale" && (
+          <div className={`flex gap-2 ${pcOnly}`}>
+            <button className={btnSecondary} onClick={() => navigate(`/print/payment/${p.id}`)}>Print receipt</button>
+          </div>
+        )}
         {!p.voided && can("payments.void") && (
           <div className={`flex gap-2 ${pcOnly}`}>
             <button className={btnSecondary} onClick={() => setVoiding(true)}>Void payment</button>
