@@ -10,6 +10,7 @@ import { allocationRoutes, paymentRoutes } from "./payments/routes";
 import { customerAdvances, orderRoutes, refundRoutes } from "./orders/routes";
 import { oldGoldRoutes } from "./oldgold/routes";
 import { settlementRoutes } from "./settlement/routes";
+import { ledgerRoutes, openingRoutes } from "./ledger/routes";
 import { rateRoutes } from "./rates/routes";
 import { settingsRoutes } from "./settings/routes";
 
@@ -55,6 +56,8 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/refunds", refundRoutes);
   app.route("/api/old-gold", oldGoldRoutes);
   app.route("/api/invoices", settlementRoutes);
+  app.route("/api/opening-balances", openingRoutes);
+  app.route("/api/", ledgerRoutes);
   app.get("/api/customers/:id/advances", async (c) => c.json({ items: await customerAdvances(c.env.DB, c.req.param("id")) }));
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));

@@ -115,19 +115,23 @@ export async function advanceHeld(db: D1Database, customerId: string): Promise<n
   return row?.n ?? 0;
 }
 
-/** Open invoices of a customer, oldest first (FIFO, spec 015 R3). */
-async function openInvoices(db: D1Database, customerId: string) {
-  return (
+/** Open items of a customer, oldest first (FIFO, spec 015 R3): invoices and opening receivables (spec 019). */
+export async function openItems(db: D1Database, customerId: string) {
+  const rows = (
     await db
       .prepare(
-        `SELECT i.id, i.invoice_no, i.invoice_date, i.payable_paise,
+        `SELECT 'invoice' AS src, i.id, i.invoice_no AS label, i.invoice_date AS d, i.created_at AS c,
                 i.payable_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.invoice_id = i.id AND a.reversed_at IS NULL), 0) AS due
          FROM invoices i WHERE i.customer_id = ?1 AND i.voided_at IS NULL
-         ORDER BY i.invoice_date, i.created_at, i.id`,
+         UNION ALL
+         SELECT 'opening' AS src, o.id, COALESCE(o.reference, 'Opening balance') AS label, o.as_of_date AS d, o.created_at AS c,
+                o.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.opening_balance_id = o.id AND a.reversed_at IS NULL), 0) AS due
+         FROM opening_balances o WHERE o.customer_id = ?1 AND o.voided_at IS NULL`,
       )
       .bind(customerId)
-      .all<{ id: string; invoice_no: string; invoice_date: string; payable_paise: number; due: number }>()
-  ).results.filter((r) => r.due > 0);
+      .all<{ src: "invoice" | "opening"; id: string; label: string; d: string; c: string; due: number }>()
+  ).results;
+  return rows.filter((r) => r.due > 0).sort((x, y) => x.d.localeCompare(y.d) || x.c.localeCompare(y.c) || x.id.localeCompare(y.id));
 }
 
 function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0): PaymentResponse {
@@ -183,7 +187,7 @@ const canonical = (b: PaymentRequest) =>
     remarks: b.remarks ?? null,
   });
 
-type Plan = { kind: PaymentKind; allocations: { invoiceId: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null };
+type Plan = { kind: PaymentKind; allocations: { invoiceId?: string; openingBalanceId?: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null };
 
 /** Works out who is paid and which invoices are paid, or says why not (R2 to R4). */
 async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan: Plan } | { ok: false; status: 400 | 409; body: unknown }> {
@@ -228,39 +232,46 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
   if (b.purpose === "opening_advance") return { ok: true, plan: { kind: "opening_advance", customerId: cust.id, payer, allocations: [], orderId } };
   if (b.purpose === "advance") return { ok: true, plan: { kind: "advance", customerId: cust.id, payer, allocations: [], orderId } };
 
-  // against_invoices
-  const open = await openInvoices(db, cust.id);
+  // against_invoices: oldest first, from invoices and opening balances alike
+  const open = await openItems(db, cust.id);
   if (b.allocation === "auto") {
     let left = b.amountPaise;
-    const allocations: { invoiceId: string; amountPaise: number }[] = [];
-    for (const inv of open) {
+    const allocations: Plan["allocations"] = [];
+    for (const item of open) {
       if (left <= 0) break;
-      const take = Math.min(left, inv.due);
-      allocations.push({ invoiceId: inv.id, amountPaise: take });
+      const take = Math.min(left, item.due);
+      allocations.push(item.src === "invoice" ? { invoiceId: item.id, amountPaise: take } : { openingBalanceId: item.id, amountPaise: take });
       left -= take;
     }
     return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations, orderId: null } };
   }
 
   const seen = new Set<string>();
-  const total = b.allocation.reduce((s, a) => s + a.amountPaise, 0);
+  const total = b.allocation.reduce((s, x) => s + x.amountPaise, 0);
   if (total > b.amountPaise) return { ok: false, status: 400, body: { error: "allocation_exceeds_amount", message: "The amounts allocated add up to more than the payment" } };
-  for (const a of b.allocation) {
-    if (seen.has(a.invoiceId)) return { ok: false, status: 400, body: { error: "validation", message: "Each invoice can be listed once" } };
-    seen.add(a.invoiceId);
-    const match = open.find((o) => o.id === a.invoiceId);
-    if (!match) {
-      const exists = await db.prepare("SELECT customer_id, voided_at FROM invoices WHERE id = ?1").bind(a.invoiceId).first<{ customer_id: string | null; voided_at: string | null }>();
-      if (!exists) return { ok: false, status: 400, body: { error: "invoice_not_found", message: "That invoice does not exist" } };
-      if (exists.voided_at) return { ok: false, status: 409, body: { error: "invoice_voided", message: "That invoice is voided" } };
-      if (exists.customer_id !== cust.id) return { ok: false, status: 400, body: { error: "customer_mismatch", message: "That invoice belongs to another customer" } };
-      return { ok: false, status: 409, body: { error: "exceeds_due", message: "That invoice is already paid" } };
+  for (const x of b.allocation) {
+    const key = x.invoiceId ?? x.openingBalanceId!;
+    if (seen.has(key)) return { ok: false, status: 400, body: { error: "validation", message: "Each invoice or balance can be listed once" } };
+    seen.add(key);
+    const match = open.find((o) => o.id === key);
+    if (match) {
+      if (x.amountPaise > match.due) return { ok: false, status: 409, body: { error: "exceeds_due", message: `${match.label} only owes ₹${(match.due / 100).toFixed(2)}`, dueAmountPaise: match.due } };
+      continue;
     }
-    if (a.amountPaise > match.due) {
-      return { ok: false, status: 409, body: { error: "exceeds_due", message: `${match.invoice_no} only owes ₹${(match.due / 100).toFixed(2)}`, dueAmountPaise: match.due } };
+    if (x.openingBalanceId) {
+      const ob = await db.prepare("SELECT customer_id, voided_at FROM opening_balances WHERE id = ?1").bind(x.openingBalanceId).first<{ customer_id: string; voided_at: string | null }>();
+      if (!ob) return { ok: false, status: 400, body: { error: "not_found", message: "That opening balance does not exist" } };
+      if (ob.customer_id !== cust.id) return { ok: false, status: 400, body: { error: "customer_mismatch", message: "That balance belongs to another customer" } };
+      if (ob.voided_at) return { ok: false, status: 409, body: { error: "voided", message: "That opening balance is voided" } };
+      return { ok: false, status: 409, body: { error: "exceeds_due", message: "That balance is already paid" } };
     }
+    const exists = await db.prepare("SELECT customer_id, voided_at FROM invoices WHERE id = ?1").bind(x.invoiceId!).first<{ customer_id: string | null; voided_at: string | null }>();
+    if (!exists) return { ok: false, status: 400, body: { error: "invoice_not_found", message: "That invoice does not exist" } };
+    if (exists.voided_at) return { ok: false, status: 409, body: { error: "invoice_voided", message: "That invoice is voided" } };
+    if (exists.customer_id !== cust.id) return { ok: false, status: 400, body: { error: "customer_mismatch", message: "That invoice belongs to another customer" } };
+    return { ok: false, status: 409, body: { error: "exceeds_due", message: "That invoice is already paid" } };
   }
-  return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations: b.allocation, orderId: null } };
+  return { ok: true, plan: { kind: "invoice_payment", customerId: cust.id, payer, allocations: b.allocation.map((x) => (x.invoiceId ? { invoiceId: x.invoiceId, amountPaise: x.amountPaise } : { openingBalanceId: x.openingBalanceId!, amountPaise: x.amountPaise })), orderId: null } };
 }
 
 // ---- create (R2, R5, R6) ----
@@ -328,8 +339,8 @@ paymentRoutes.post("/", async (c) => {
   for (const a of pl.allocations) {
     statements.push(
       db
-        .prepare(`INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)`)
-        .bind(newId(), id, a.invoiceId, a.amountPaise, now, user.id),
+        .prepare(`INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`)
+        .bind(newId(), id, a.invoiceId ?? null, a.openingBalanceId ?? null, a.amountPaise, now, user.id),
     );
   }
   statements.push(
