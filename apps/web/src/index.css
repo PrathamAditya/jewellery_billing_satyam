@@ -1,1 +1,66 @@
 @import "tailwindcss";
+
+/*
+ * Dark mode (the "dark" class is set on <html>, see theme.ts).
+ * The screens use Tailwind's stone, white, red, amber and green classes directly, so
+ * the dark theme remaps those classes here instead of editing every screen.
+ * Print views are always light: theme.ts removes the class on /print/ routes.
+ */
+.dark {
+  color-scheme: dark;
+}
+.dark body,
+.dark #root {
+  background-color: #0c0a09;
+  color: #f5f5f4;
+}
+
+/* Surfaces */
+.dark .bg-white { background-color: #1c1917; }
+.dark .bg-stone-50 { background-color: #0c0a09; }
+.dark .bg-stone-100 { background-color: #292524; }
+.dark .hover\:bg-stone-50:hover { background-color: #1c1917; }
+.dark .hover\:bg-stone-100:hover { background-color: #292524; }
+.dark .divide-stone-100 > :not(:last-child) { border-color: #292524; }
+
+/* Primary buttons and badges: inverted, so the white text rule below stays readable */
+.dark .bg-stone-900 { background-color: #e7e5e4; }
+.dark .text-white { color: #1c1917; }
+.dark .border-stone-900 { border-color: #e7e5e4; }
+
+/* Borders */
+.dark .border-stone-100 { border-color: #292524; }
+.dark .border-stone-200 { border-color: #3f3a37; }
+.dark .border-stone-300 { border-color: #57534e; }
+.dark .hover\:border-stone-400:hover { border-color: #78716c; }
+
+/* Text */
+.dark .text-stone-900 { color: #f5f5f4; }
+.dark .text-stone-700 { color: #d6d3d1; }
+.dark .text-stone-600 { color: #a8a29e; }
+.dark .text-stone-500 { color: #a8a29e; }
+.dark .text-stone-400 { color: #78716c; }
+.dark .text-stone-300 { color: #57534e; }
+
+/* Status colours: dark tints with light text */
+.dark .text-red-700 { color: #fca5a5; }
+.dark .hover\:text-red-700:hover { color: #fca5a5; }
+.dark .bg-red-50 { background-color: #450a0a; }
+.dark .border-red-200 { border-color: #7f1d1d; }
+.dark .border-red-400 { border-color: #b91c1c; }
+.dark .text-amber-800 { color: #fcd34d; }
+.dark .text-amber-900 { color: #fde68a; }
+.dark .bg-amber-50 { background-color: #451a03; }
+.dark .border-amber-200 { border-color: #78350f; }
+.dark .text-green-700 { color: #86efac; }
+.dark .text-green-800 { color: #bbf7d0; }
+.dark .bg-green-50 { background-color: #052e16; }
+.dark .border-green-200 { border-color: #14532d; }
+
+/* Form controls that take their colours from the browser */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #1c1917;
+  color: #f5f5f4;
+}

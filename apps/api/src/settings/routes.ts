@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { NUMBER_SERIES } from "@jewellery/calc";
 import { SETTINGS_KEYS, settingsSchemas, type SettingsKey, type SettingsSnapshot } from "@jewellery/shared";
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
@@ -45,10 +46,16 @@ settingsRoutes.put("/:key", async (c) => {
 settingsRoutes.get("/numbering", async (c) => c.json({ items: (await c.env.DB.prepare("SELECT series, fy, last_no FROM number_series ORDER BY series, fy").all()).results }));
 settingsRoutes.post("/next-number", async (c) => {
   const b = await readJson(c) as { series?: string; fy?: string; nextNumber?: number };
-  if (!b.series || !b.fy || !Number.isInteger(b.nextNumber) || b.nextNumber! < 1) return c.json({ error: "validation", issues: [{ field: "nextNumber", message: "Choose a positive next number" }] }, 400);
+  // Spec 003 R9: invoices, payments, old gold receipts and orders only (customer numbers never reset and are not set here).
+  if (!(NUMBER_SERIES as readonly string[]).includes(b.series ?? "")) return c.json({ error: "validation", issues: [{ field: "series", message: "Choose a number series" }] }, 400);
+  if (!b.fy || !/^\d{4}-\d{2}$/.test(b.fy)) return c.json({ error: "validation", issues: [{ field: "fy", message: "Financial year looks like 2026-27" }] }, 400);
+  if (!Number.isInteger(b.nextNumber) || b.nextNumber! < 1) return c.json({ error: "validation", issues: [{ field: "nextNumber", message: "Choose a positive next number" }] }, 400);
   const existing = await c.env.DB.prepare("SELECT last_no FROM number_series WHERE series = ?1 AND fy = ?2").bind(b.series, b.fy).first<{ last_no: number }>();
-  if (b.nextNumber! <= (existing?.last_no ?? 0)) return c.json({ error: "number_not_raised", message: "The next number must be higher than the current number" }, 409);
+  const current = existing?.last_no ?? 0;
+  // Already the next number: nothing changes and nothing is logged.
+  if (b.nextNumber === current + 1) return c.json({ series: b.series, fy: b.fy, nextNumber: b.nextNumber });
+  if (b.nextNumber! <= current) return c.json({ error: "number_not_raised", message: "The next number must be higher than the current number" }, 409);
   const user = c.get("user");
-  await c.env.DB.batch([c.env.DB.prepare("INSERT INTO number_series (series, fy, last_no) VALUES (?1, ?2, ?3) ON CONFLICT(series, fy) DO UPDATE SET last_no = excluded.last_no").bind(b.series, b.fy, b.nextNumber! - 1), auditStatement(c.env.DB, { actor: user.id, action: "number_set_next", entity: "number_series", entityId: `${b.series}:${b.fy}`, detail: { series: b.series, fy: b.fy, old: existing?.last_no ?? 0, next: b.nextNumber } })]);
+  await c.env.DB.batch([c.env.DB.prepare("INSERT INTO number_series (series, fy, last_no) VALUES (?1, ?2, ?3) ON CONFLICT(series, fy) DO UPDATE SET last_no = excluded.last_no").bind(b.series, b.fy, b.nextNumber! - 1), auditStatement(c.env.DB, { actor: user.id, action: "number_set_next", entity: "number_series", entityId: `${b.series}:${b.fy}`, detail: { series: b.series, fy: b.fy, old: current, next: b.nextNumber } })]);
   return c.json({ series: b.series, fy: b.fy, nextNumber: b.nextNumber });
 });

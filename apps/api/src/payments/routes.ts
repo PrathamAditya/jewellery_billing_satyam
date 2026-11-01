@@ -22,6 +22,7 @@ import {
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
 import { classifyReplay } from "../db/idempotency";
+import { printedNumberSql, printedNumberValues } from "../db/numbering";
 import { revisionStatement } from "../db/revisions";
 import { readJson, validationBody } from "../http";
 import { settingsSnapshot } from "../settings/routes";
@@ -327,7 +328,7 @@ paymentRoutes.post("/", async (c) => {
         `INSERT INTO payments (id, created_at, created_by, updated_at, updated_by, kind, receipt_no, fy, serial, receipt_date, customer_id,
            payer_name, payer_mobile, payer_pan, payer_address, mode, reference, amount_paise, remarks, input_json, advance_summary_json, header_json, order_id)
          VALUES (?1, ?2, ?3, ?2, ?3, ?4,
-           ${numbered ? `'PAY-' || printf('%04d', (SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5))` : "NULL"},
+           ${numbered ? printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)", ["?20", "?21", "?22"]) : "NULL"},
            ?5, ${numbered ? `(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)` : "NULL"},
            ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
       )
@@ -335,7 +336,7 @@ paymentRoutes.post("/", async (c) => {
         id, now, user.id, pl.kind, fy, b.date, pl.customerId, pl.payer.name, pl.payer.mobile, pl.payer.pan, pl.payer.address,
         b.mode, reference, b.amountPaise, b.remarks, canonical(b), advanceSummary ? JSON.stringify(advanceSummary) : null,
         JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo }),
-        pl.orderId,
+        pl.orderId, ...(numbered ? printedNumberValues(settings.numbering, "PAY", fy) : []),
       ),
   );
   for (const a of pl.allocations) {

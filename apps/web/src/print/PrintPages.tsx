@@ -3,6 +3,7 @@ import { copyOrder, type InvoiceResponse, type OldGoldResponse, type PaymentResp
 import { api, ApiError } from "../api";
 import { btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { navigate } from "../router";
+import BusinessBanner from "../settings/BusinessBanner";
 import { InvoiceSheets } from "./InvoicePrint";
 import { OldGoldReceipt, PaymentReceipt, ReceiptSheet } from "./ReceiptPrint";
 import type { Header } from "./common";
@@ -59,6 +60,8 @@ function InvoicePrintPage({ id }: { id: string }) {
   };
   return (
     <>
+      {/* Spec 003 section 4: the warning is for the screen only and never prints. */}
+      <div className="no-print px-3 pt-3"><BusinessBanner /></div>
       <Toolbar backTo={`/invoices/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={print} hint="A4 paper, two-sided, flip on the long edge, scale 100%, margins none." />
       <div className="print-stage">
         {copies.map((label, i) => (
