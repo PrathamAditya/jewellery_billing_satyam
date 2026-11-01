@@ -42,7 +42,17 @@ export const paymentRequestSchema = z.object({
   invoiceId: z.string().uuid().optional(),
   /** Manual allocation for `against_invoices`. `auto` (default) fills the oldest invoice first (FIFO). */
   allocation: z
-    .union([z.literal("auto"), z.array(z.object({ invoiceId: z.string().uuid(), amountPaise: z.number().int().min(1) })).min(1).max(50)])
+    .union([
+      z.literal("auto"),
+      z
+        .array(
+          z
+            .object({ invoiceId: z.string().uuid().optional(), openingBalanceId: z.string().uuid().optional(), amountPaise: z.number().int().min(1) })
+            .refine((a) => (a.invoiceId ? 1 : 0) + (a.openingBalanceId ? 1 : 0) === 1, "Each line must name one invoice or one opening balance"),
+        )
+        .min(1)
+        .max(50),
+    ])
     .optional()
     .default("auto"),
   orderId: z.string().uuid().nullable().optional(),

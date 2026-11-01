@@ -5,6 +5,7 @@ import { ApiError } from "../api";
 import { getCustomer, getHistory, restoreCustomer, revealAadhaar, voidCustomer } from "./api";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass, pcOnly } from "./ui";
 import { useAuth } from "../auth";
+import LedgerTab from "../ledger/LedgerTab";
 
 type Tab = "details" | "history" | "ledger";
 
@@ -236,7 +237,7 @@ export default function CustomerPage({ id }: { id: string }) {
 
       {tab === "details" && <Details c={c} />}
       {tab === "history" && <History id={c.id} />}
-      {tab === "ledger" && <p className="text-stone-500">Coming with the ledger feature.</p>}
+      {tab === "ledger" && <LedgerTab customerId={c.id} customerName={c.name} />}
 
       {voiding && (
         <VoidDialog

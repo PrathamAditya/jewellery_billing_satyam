@@ -28,7 +28,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 016 | Orders and advances | Built, owner review pending |
 | 018 | Old gold purchase | Built, owner review pending |
 | 017 | Settlement | Built, owner review pending |
-| 019 | Customer ledger and opening balances | Wave 1, approved, not built |
+| 019 | Customer ledger and opening balances | Built, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, approved, not built |
 | 050 | Backups and restore | Wave 1, approved, not built |
 

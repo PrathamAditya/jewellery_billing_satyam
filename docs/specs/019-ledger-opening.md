@@ -1,6 +1,6 @@
 # 019: Customer ledger and opening balances
 
-Status: Approved (Wave 1, owner approved in advance 2026-11-01), not built
+Status: Built 2026-11-02 (opening balances, ledger, outstanding, summary, tab, tests). Owner review pending.
 Depends on: 010, 013, 015, 016, 018
 Open questions used with defaults: Q47 (what the owner looks at daily)
 
