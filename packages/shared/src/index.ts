@@ -6,6 +6,7 @@ export * from "./customer";
 export * from "./rates";
 export * from "./weight";
 export * from "./invoice";
+export * from "./settings";
 
 export const healthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
