@@ -1,8 +1,9 @@
 import type { InvoiceHistoryEntry, InvoiceListResponse, InvoiceResponse } from "@jewellery/shared";
 import { api } from "../api";
 
-export const searchInvoices = (q: string, o: { status?: string; from?: string; to?: string; cursor?: string | null } = {}) => {
+export const searchInvoices = (q: string, o: { status?: string; from?: string; to?: string; cursor?: string | null; customerId?: string } = {}) => {
   const p = new URLSearchParams({ q });
+  if (o.customerId) p.set("customerId", o.customerId);
   if (o.status) p.set("status", o.status);
   if (o.from) p.set("from", o.from);
   if (o.to) p.set("to", o.to);

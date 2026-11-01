@@ -7,6 +7,8 @@ import { navigate } from "../router";
 import { niceDate } from "../rates/api";
 import Breakdown from "./Breakdown";
 import { getInvoice, getInvoiceHistory, voidInvoice } from "./api";
+import ReceiveDialog from "../payments/ReceiveDialog";
+import { formatMoney as fm } from "@jewellery/shared";
 import { useAuth } from "../auth";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
@@ -85,6 +87,7 @@ export default function InvoicePage({ id }: { id: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<"details" | "history">("details");
   const [voiding, setVoiding] = useState(false);
+  const [receiving, setReceiving] = useState(false);
 
   const load = useCallback(
     (revision?: number) => {
@@ -163,6 +166,19 @@ export default function InvoicePage({ id }: { id: string }) {
         {tabBtn("history", "History")}
       </div>
 
+      {!inv.voidedAt && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap text-sm">
+          <div className="flex gap-6 flex-wrap">
+            <span>Received <strong>{fm(inv.receivedPaise)}</strong></span>
+            <span>Balance due <strong>{fm(inv.balanceDuePaise)}</strong></span>
+            <span className="text-stone-600">{inv.paymentStatus === "paid" ? "Paid in full" : inv.paymentStatus === "part_paid" ? "Part paid" : "Not paid"}</span>
+          </div>
+          {!inv.isEarlierVersion && can("payments.create") && inv.balanceDuePaise > 0 && (
+            <button className={btnPrimary} onClick={() => setReceiving(true)}>Receive payment</button>
+          )}
+        </div>
+      )}
+
       {tab === "details" && (
         <div className="flex flex-col gap-4">
           <dl className="bg-white border border-stone-200 rounded-xl px-4 py-2 divide-y divide-stone-100">
@@ -214,6 +230,13 @@ export default function InvoicePage({ id }: { id: string }) {
       )}
       {tab === "history" && <History id={inv.id} current={inv.revisionNo} onOpen={(rev) => (setTab("details"), load(rev))} />}
 
+      {receiving && (
+        <ReceiveDialog
+          invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, balanceDuePaise: inv.balanceDuePaise, customerId: inv.customerId }}
+          onClose={() => setReceiving(false)}
+          onSaved={(pid) => navigate(`/payments/${pid}`)}
+        />
+      )}
       {voiding && (
         <VoidDialog
           inv={inv}

@@ -41,6 +41,13 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "PUT", path: "/api/settings/:key", permission: "settings.manage" },
   { method: "POST", path: "/api/settings/next-number", permission: "settings.manage" },
 
+  { method: "GET", path: "/api/payments", permission: "payments.view" },
+  { method: "POST", path: "/api/payments", permission: "payments.create" },
+  { method: "GET", path: "/api/payments/:id", permission: "payments.view" },
+  { method: "PATCH", path: "/api/payments/:id", permission: "payments.create" },
+  { method: "POST", path: "/api/payments/:id/void", permission: "payments.void" },
+  { method: "POST", path: "/api/allocations/:id/reverse", permission: "payments.void" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },
