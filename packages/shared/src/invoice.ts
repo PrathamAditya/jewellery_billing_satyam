@@ -114,6 +114,10 @@ export type InvoiceSummary = {
   payablePaise: number;
   revisionNo: number;
   voidedAt: string | null;
+  /** Spec 015 R12: computed from live allocations. */
+  receivedPaise: number;
+  balanceDuePaise: number;
+  paymentStatus: "unpaid" | "part_paid" | "paid" | "voided";
 };
 
 export type InvoiceResponse = InvoiceSummary & {

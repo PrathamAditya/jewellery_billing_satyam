@@ -7,6 +7,8 @@ export * from "./rates";
 export * from "./weight";
 export * from "./invoice";
 export * from "./permissions";
+export * from "./words";
+export * from "./payments";
 export * from "./settings";
 
 export const healthResponseSchema = z.object({

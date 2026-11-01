@@ -6,6 +6,7 @@ import { authRoutes } from "./auth/routes";
 import { customerRoutes } from "./customers/routes";
 import { invoiceRoutes } from "./invoices/routes";
 import { roleRoutes, userRoutes } from "./users/routes";
+import { allocationRoutes, paymentRoutes } from "./payments/routes";
 import { rateRoutes } from "./rates/routes";
 import { settingsRoutes } from "./settings/routes";
 
@@ -45,6 +46,8 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/invoices", invoiceRoutes);
   app.route("/api/users", userRoutes);
   app.route("/api/roles", roleRoutes);
+  app.route("/api/payments", paymentRoutes);
+  app.route("/api/allocations", allocationRoutes);
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
   return app;

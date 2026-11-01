@@ -24,6 +24,7 @@ import { classifyReplay } from "../db/idempotency";
 import { revisionStatement } from "../db/revisions";
 import { readJson, validationBody } from "../http";
 import { applicableRate } from "../rates/routes";
+import { paymentStatusOf } from "@jewellery/shared";
 
 export const invoiceRoutes = new Hono<AppEnv>();
 
@@ -85,7 +86,7 @@ type DbLine = {
 const isUniqueError = (e: unknown) =>
   e instanceof Error && /UNIQUE constraint failed/i.test(`${e.message} ${(e as { cause?: Error }).cause?.message ?? ""}`);
 
-const toSummary = (r: DbInvoice): InvoiceSummary => ({
+const toSummary = (r: DbInvoice, received = 0): InvoiceSummary => ({
   id: r.id,
   invoiceNo: r.invoice_no,
   invoiceDate: r.invoice_date,
@@ -94,6 +95,9 @@ const toSummary = (r: DbInvoice): InvoiceSummary => ({
   payablePaise: r.payable_paise,
   revisionNo: r.revision_no,
   voidedAt: r.voided_at,
+  receivedPaise: received,
+  balanceDuePaise: Math.max(0, r.payable_paise - received),
+  paymentStatus: paymentStatusOf(r.payable_paise, received, r.voided_at !== null),
 });
 
 const toLine = (l: DbLine): InvoiceLineResponse => ({
@@ -116,8 +120,8 @@ const toLine = (l: DbLine): InvoiceLineResponse => ({
 });
 
 /** Everything shown comes from the stored columns, never from a fresh calculation (spec 013 R6). */
-const toResponse = (r: DbInvoice, lines: DbLine[], isEarlierVersion: boolean): InvoiceResponse => ({
-  ...toSummary(r),
+const toResponse = (r: DbInvoice, lines: DbLine[], isEarlierVersion: boolean, received = 0): InvoiceResponse => ({
+  ...toSummary(r, received),
   customerId: r.customer_id,
   customerAddress: r.customer_address,
   customerPan: r.customer_pan,
@@ -172,6 +176,25 @@ function changedParts(a: Canon, b: Canon): string[] {
   if (a.remarks !== b.remarks) out.push("remarks");
   if (JSON.stringify(a.lines) !== JSON.stringify(b.lines)) out.push("lines");
   return out;
+}
+
+/** Money received per invoice (spec 015 R12), one query for a whole page. */
+async function receivedMap(db: D1Database, ids: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  const marks = ids.map((_, i) => `?${i + 1}`).join(", ");
+  const rows = (
+    await db
+      .prepare(`SELECT invoice_id, COALESCE(SUM(amount_paise), 0) AS n FROM payment_allocations WHERE invoice_id IN (${marks}) AND reversed_at IS NULL GROUP BY invoice_id`)
+      .bind(...ids)
+      .all<{ invoice_id: string; n: number }>()
+  ).results;
+  for (const r of rows) out.set(r.invoice_id, r.n);
+  return out;
+}
+
+async function receivedOf(db: D1Database, id: string): Promise<number> {
+  return (await receivedMap(db, [id])).get(id) ?? 0;
 }
 
 async function loadRow(db: D1Database, id: string) {
@@ -271,6 +294,8 @@ invoiceRoutes.get("/", async (c) => {
     }
     where.push(`(${ors.join(" OR ")})`);
   }
+  const customerId = c.req.query("customerId");
+  if (customerId) where.push(`customer_id = ${add(customerId)}`);
   if (status === "active") where.push("voided_at IS NULL");
   if (status === "voided") where.push("voided_at IS NOT NULL");
   if (from) where.push(`invoice_date >= ${add(from)}`);
@@ -279,8 +304,10 @@ invoiceRoutes.get("/", async (c) => {
   const sql = `SELECT * FROM invoices ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
      ORDER BY invoice_date DESC, created_at DESC, id DESC LIMIT ${PAGE_SIZE + 1} OFFSET ${offset}`;
   const rows = (await c.env.DB.prepare(sql).bind(...args).all<DbInvoice>()).results;
+  const page = rows.slice(0, PAGE_SIZE);
+  const received = await receivedMap(c.env.DB, page.map((r) => r.id));
   const body: InvoiceListResponse = {
-    items: rows.slice(0, PAGE_SIZE).map(toSummary),
+    items: page.map((r) => toSummary(r, received.get(r.id) ?? 0)),
     nextCursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
   };
   return c.json(body);
@@ -355,7 +382,7 @@ invoiceRoutes.get("/:id", async (c) => {
   const row = await loadRow(db, c.req.param("id"));
   if (!row) return c.json({ error: "not_found" }, 404);
   const wanted = c.req.query("revision");
-  if (wanted === undefined || Number(wanted) === row.revision_no) return c.json(toResponse(row, await loadLines(db, row.id, row.revision_no), false));
+  if (wanted === undefined || Number(wanted) === row.revision_no) return c.json(toResponse(row, await loadLines(db, row.id, row.revision_no), false, await receivedOf(db, row.id)));
 
   const n = Number(wanted);
   if (!Number.isInteger(n) || n < 1 || n > row.revision_no) return c.json({ error: "not_found" }, 404);
@@ -382,6 +409,11 @@ invoiceRoutes.put("/:id", async (c) => {
   const { body, canon, result, rates } = p;
   const stale = { error: "stale_revision", message: "This invoice was changed. Reload it and try again." };
   if (body.expectedRevision !== row.revision_no) return c.json(stale, 409);
+
+  // Spec 015 M8: an edit cannot make the bill smaller than what has already been received.
+  if (result.payablePaise < (await receivedOf(db, row.id))) {
+    return c.json({ error: "payable_below_received", message: "Payments are already recorded above the new total. Reverse them first.", receivedPaise: await receivedOf(db, row.id) }, 409);
+  }
 
   const old = JSON.parse(row.input_json) as Canon;
   const changed = changedParts(old, canon);
@@ -420,7 +452,7 @@ invoiceRoutes.put("/:id", async (c) => {
     throw e;
   }
   const saved = (await loadRow(db, row.id))!;
-  return c.json(toResponse(saved, await loadLines(db, row.id, next), false));
+  return c.json(toResponse(saved, await loadLines(db, row.id, next), false, await receivedOf(db, row.id)));
 });
 
 // ---- history (R12) ----
@@ -462,6 +494,9 @@ invoiceRoutes.post("/:id/void", async (c) => {
   const row = await loadRow(db, c.req.param("id"));
   if (!row) return c.json({ error: "not_found" }, 404);
   if (row.voided_at) return c.json({ error: "already_voided" }, 409);
+  if ((await receivedOf(db, row.id)) > 0) {
+    return c.json({ error: "has_payments", message: "This invoice has payments recorded against it. Reverse them first." }, 409);
+  }
   const now = new Date().toISOString();
   await db.batch([
     db
