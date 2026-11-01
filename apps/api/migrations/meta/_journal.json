@@ -43,6 +43,20 @@
       "when": 1793522219202,
       "tag": "0005_customers_no_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793523710136,
+      "tag": "0006_rates",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793523711251,
+      "tag": "0007_rates_no_delete",
+      "breakpoints": true
     }
   ]
 }

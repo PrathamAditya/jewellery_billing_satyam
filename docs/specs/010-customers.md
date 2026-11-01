@@ -1,6 +1,6 @@
 # 010: Customers
 
-Status: Built 2026-11-01, awaiting deploy and owner check
+Status: Done (live and owner approved 2026-11-01)
 Depends on: 000, 001, 002
 Open questions: none. The owner answered Q1 to Q3 on 2026-11-01 (section 8).
 
@@ -107,8 +107,8 @@ Customer ledger and balances (019), blocking void when documents exist (added in
 
 ## 9. Acceptance checklist
 - [x] R1 to R15 implemented and tested (136 tests in total, 55 of them new; search over 20,000 customers is under 200 ms)
-- [ ] Migrations 0004 and 0005 applied on the remote database (applied locally and in tests; CI applies them to an empty database)
+- [x] Migrations 0004 and 0005 applied on the remote database
 - [x] Create, search, edit, history, void, restore, Aadhaar reveal and the picker work in a real browser against a local Worker (PC), and the phone view is read-only with no sideways scroll
-- [ ] The same checked on the live site, after deploy
+- [x] The same checked on the live site, after deploy (owner confirmed 2026-11-01)
 - [x] Nothing in specs 000, 001 and 002 broke (their tests still pass)
-- [ ] Owner approved the result
+- [x] Owner approved the result

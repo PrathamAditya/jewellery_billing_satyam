@@ -11,7 +11,8 @@ Phases follow the requirements. Foundation work comes first, and rates come befo
 
 ## Phase 1: Core billing
 - 010 Customers (create, search, edit with history)
-- 011 Daily gold and silver rates (date-wise, historical rates preserved)
+- 011 Daily gold and silver rates (typed by the owner, per kg or per gram; invoices use only these)
+- 011b Live IBJA reference rates (paid service, shown on the site, can pre-fill the typing box; needs O10)
 - 012 Invoice calculation engine (pure and heavily tested; needs O1, O2, O8)
 - 013 Invoice create, save, search, edit (revision), void, history
 - 014 Invoice print layout: page 1, A4 landscape

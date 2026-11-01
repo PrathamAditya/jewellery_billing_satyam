@@ -16,6 +16,7 @@ No code is written for a feature before its spec is Approved.
 | 000 | Project scaffold, CI, deploy | Done |
 | 001 | Database foundation | Done (owner approved 2026-11-01) |
 | 002 | Owner login | Done (owner approved 2026-11-01) |
-| 010 | Customers | Built, awaiting deploy and owner check |
+| 010 | Customers | Done (owner approved 2026-11-01) |
+| 011 | Daily gold and silver rates | Built, awaiting deploy and owner check |
 
 The full list is in `docs/roadmap.md`.

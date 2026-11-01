@@ -109,3 +109,20 @@ export const customers = sqliteTable(
     uniqueIndex("customers_pan_active_unique").on(t.pan).where(sql`${t.pan} IS NOT NULL AND ${t.voidedAt} IS NULL`),
   ],
 );
+
+/** Daily gold and silver rates (spec 011). One row per kind per business date; edits keep revisions. */
+export const rates = sqliteTable(
+  "rates",
+  {
+    ...standardColumns(),
+    rateDate: text("rate_date").notNull(),
+    kind: text("kind").notNull(),
+    pricePaisePerKg: integer("price_paise_per_kg").notNull(),
+  },
+  (t) => [
+    uniqueIndex("rates_date_kind_unique").on(t.rateDate, t.kind),
+    index("rates_kind_date_idx").on(t.kind, t.rateDate),
+    check("rates_price_positive", sql`${t.pricePaisePerKg} > 0`),
+    check("rates_kind_valid", sql`${t.kind} IN ('gold_24k995', 'gold_22k916', 'silver')`),
+  ],
+);
