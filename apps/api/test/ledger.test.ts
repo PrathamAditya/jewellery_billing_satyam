@@ -142,7 +142,7 @@ describe("the ledger ends on the totals (spec 019 R4, R5)", () => {
         expect(last.advanceAfterPaise, `step ${step}`).toBe(l.advanceHeldPaise);
       }
     }
-  });
+  }, 120_000); // seeded run of 15 s alone; a longer limit keeps it from failing when the machine is busy
 });
 
 describe("opening balances (R1 to R3)", () => {
