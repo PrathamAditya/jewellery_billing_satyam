@@ -267,6 +267,24 @@ export default function InvoicePage({ id }: { id: string }) {
             </table>
           </div>
 
+          {inv.lines.some((l) => l.stockUNo || l.bulkItemId) && (
+            <section className="bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm" aria-label="Stock on this invoice">
+              <h2 className="font-semibold mb-2">Stock on this invoice</h2>
+              <ul className="flex flex-col gap-1">
+                {inv.lines.filter((l) => l.stockUNo).map((l) => (
+                  <li key={`u${l.lineNo}`}>
+                    Line {l.lineNo}: U No. <strong>{l.stockUNo}</strong>
+                  </li>
+                ))}
+                {inv.lines.filter((l) => l.bulkItemId).map((l) => (
+                  <li key={`b${l.lineNo}`}>
+                    Line {l.lineNo}: {l.bulkItemName} <strong>{l.bulkQuantity} {l.bulkUnit}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {inv.rateStatus === "pending" ? <PendingNote inv={inv} /> : <Breakdown r={calc} descriptions={inv.lines.map((l) => l.description)} />}
         </div>
       )}

@@ -33,6 +33,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 019d | Returns, exchanges and credit notes | Wave 2, built on branch `spec-019d-credit-notes`, owner review pending |
 | 020 | Inventory items with individual U No. | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
 | 020b | Bulk quantity items (Tilli and similar) | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
+| 021 | Stock movements and automatic stock reduction on invoices | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
 | 019c | Credit sales with the rate fixed later (pending rate fixation) | Wave 2, built 2026-11-02 on `spec-019c-rate-fixation`, PR open, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
 | 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |

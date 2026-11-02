@@ -19,6 +19,8 @@ import {
   PURITY_RATE_KIND,
   fixRateRequestSchema,
   pendingInvoiceRequestSchema,
+  stockLinkProblems,
+  type BulkUnit,
   type PendingInvoiceRequest,
   type Purity,
 } from "@jewellery/shared";
@@ -33,6 +35,7 @@ import { readJson, validationBody } from "../http";
 import { applicableRate } from "../rates/routes";
 import { paymentStatusOf } from "@jewellery/shared";
 import { liveCreditTotalOn } from "../creditNotes/money";
+import { createStockStatements, editStockStatements, releasableItems, resolveStockLinks, stockProblem, stockTriggerRefusal, voidStockStatements, type StockLink } from "./stock";
 
 export const invoiceRoutes = new Hono<AppEnv>();
 
@@ -101,6 +104,13 @@ type DbLine = {
   labour_amount_paise: number;
   amount_paise: number;
   display_rate_paise_per_gram: number;
+  /** Spec 021: the stock links, and the names joined from the item and bulk tables (loadLines). */
+  inventory_item_id?: string | null;
+  bulk_item_id?: string | null;
+  bulk_quantity?: number | null;
+  stock_u_no?: string | null;
+  bulk_name?: string | null;
+  bulk_unit?: string | null;
 };
 
 const isUniqueError = (e: unknown) =>
@@ -167,7 +177,16 @@ const toLine = (l: DbLine): InvoiceLineResponse => ({
   totalAmountPaise: l.total_amount_paise ?? 0,
   discountPaise: l.discount_paise ?? 0,
   taxablePaise: l.taxable_paise ?? l.amount_paise,
+  // Spec 021: the stock this line took, read from the stored links.
+  stockUNo: l.stock_u_no ?? null,
+  bulkItemId: l.bulk_item_id ?? null,
+  bulkItemName: l.bulk_name ?? null,
+  bulkUnit: (l.bulk_unit ?? null) as BulkUnit | null,
+  bulkQuantity: l.bulk_quantity ?? null,
 });
+
+/** Spec 021: a saved line's stock link, as the stock module compares it. */
+const linkOf = (l: DbLine): StockLink => ({ itemId: l.inventory_item_id ?? null, uNo: l.stock_u_no ?? null, bulkItemId: l.bulk_item_id ?? null, bulkQuantity: l.bulk_quantity ?? 0 });
 
 /** Spec 012c R9: the discounts as entered; null when there are none. */
 function parseDiscounts(json: string | undefined): DiscountsBody | null {
@@ -226,6 +245,10 @@ function canonicalInput(b: InvoiceRequest) {
       stoneWeightMg: l.stoneWeightMg ?? 0,
       stoneAmountPaise: l.stoneAmountPaise ?? 0,
       totalAmountPaise: l.totalAmountPaise ?? 0,
+      // Spec 021: the stock links are part of the saved content.
+      stockUNo: l.stockUNo ?? null,
+      bulkItemId: l.bulkItemId ?? null,
+      bulkQuantity: l.bulkQuantity ?? null,
     })),
   };
 }
@@ -233,7 +256,7 @@ function canonicalInput(b: InvoiceRequest) {
 type Canon = ReturnType<typeof canonicalInput>;
 
 /** Spec 012c: versions saved before the pricing and discount fields existed read as plain weight lines with no discounts. */
-const LINE_DEFAULTS = { pricingMode: "weight", stoneWeightMg: 0, stoneAmountPaise: 0, totalAmountPaise: 0 } as const;
+const LINE_DEFAULTS = { pricingMode: "weight", stoneWeightMg: 0, stoneAmountPaise: 0, totalAmountPaise: 0, stockUNo: null, bulkItemId: null, bulkQuantity: null } as const;
 function normalizedCanon(c: Canon): Canon {
   return { ...c, discounts: c.discounts ?? null, lines: c.lines.map((l) => ({ ...LINE_DEFAULTS, ...l })) } as Canon;
 }
@@ -288,12 +311,24 @@ async function loadRow(db: D1Database, id: string) {
   return db.prepare("SELECT * FROM invoices WHERE id = ?1").bind(id).first<DbInvoice>();
 }
 async function loadLines(db: D1Database, id: string, revisionNo: number) {
-  return (await db.prepare("SELECT * FROM invoice_lines WHERE invoice_id = ?1 AND revision_no = ?2 ORDER BY line_no").bind(id, revisionNo).all<DbLine>()).results;
+  // Spec 021: the item's U No. and the bulk item's name and unit are joined in for the screens.
+  return (
+    await db
+      .prepare(
+        `SELECT l.*, i.u_no AS stock_u_no, b.name AS bulk_name, b.unit AS bulk_unit
+           FROM invoice_lines l
+           LEFT JOIN inventory_items i ON i.id = l.inventory_item_id
+           LEFT JOIN bulk_items b ON b.id = l.bulk_item_id
+          WHERE l.invoice_id = ?1 AND l.revision_no = ?2 ORDER BY l.line_no`,
+      )
+      .bind(id, revisionNo)
+      .all<DbLine>()
+  ).results;
 }
 
 type Prepared =
   | { ok: false; status: 400 | 409; body: unknown }
-  | { ok: true; body: InvoiceRequest; canon: Canon; result: InvoiceResult; rates: ApplicableRatesResponse["rates"] };
+  | { ok: true; body: InvoiceRequest; canon: Canon; result: InvoiceResult; rates: ApplicableRatesResponse["rates"]; links: StockLink[] };
 
 /** Validation, date and customer checks, the server's own calculation, and the rate record (R2, R4, R5, R7). */
 async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, raw: unknown, forEdit: boolean): Promise<Prepared> {
@@ -318,6 +353,9 @@ async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, 
     return { ok: false, status: 400, body };
   }
   const body = parsed.data;
+  // Spec 021 S1: one stock link per line, and a quantity only with a bulk item.
+  const linkIssues = stockLinkProblems(body.lines);
+  if (linkIssues.length) return { ok: false, status: 400, body: { error: "validation", issues: linkIssues.map((i) => ({ field: i.field, message: i.message })) } };
   if (forEdit && body.expectedRevision === undefined) {
     return { ok: false, status: 400, body: { error: "validation", issues: [{ field: "expectedRevision", message: "expectedRevision is required to edit" }] } };
   }
@@ -337,19 +375,27 @@ async function prepare(c: { env: AppEnv["Bindings"]; get: (k: "now") => Date }, 
   });
   if (!outcome.ok) return { ok: false, status: 400, body: { error: "calculation", errors: outcome.errors } };
 
+  // Spec 021 S2, S3: the U Nos. and bulk items must exist, and an item goes on one line only.
+  const stock = await resolveStockLinks(c.env.DB, body.lines);
+  if (!stock.ok) return { ok: false, status: 400, body: { error: "validation", issues: stock.issues } };
+
   const entries = await Promise.all(RATE_KINDS.map(async (k) => [k, await applicableRate(c.env.DB, k, body.invoiceDate)] as const));
   const rates = Object.fromEntries(entries) as ApplicableRatesResponse["rates"];
-  return { ok: true, body, canon: canonicalInput(body), result: outcome.result, rates };
+  return { ok: true, body, canon: canonicalInput(body), result: outcome.result, rates, links: stock.links };
 }
 
 const INSERT_LINE = `INSERT INTO invoice_lines
   (id, invoice_id, revision_no, line_no, description, purity, hsn, gross_weight_mg, net_weight_mg, polish_mg, polish_bps,
    gold_rate_paise_per_kg, labour_rate_paise_per_kg, gst_rate_bps, chargeable_weight_mg, gold_amount_paise,
    labour_amount_paise, amount_paise, display_rate_paise_per_gram,
-   pricing_mode, stone_weight_mg, stone_amount_paise, total_amount_paise, discount_paise, taxable_paise)
-  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)`;
+   pricing_mode, stone_weight_mg, stone_amount_paise, total_amount_paise, discount_paise, taxable_paise,
+   inventory_item_id, bulk_item_id, bulk_quantity)
+  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28)`;
 
-function lineStatements(db: D1Database, invoiceId: string, revisionNo: number, body: InvoiceRequest, result: InvoiceResult) {
+/** Spec 021: the stock columns of one line. A bulk quantity is stored only with its bulk item. */
+const stockColumns = (k: StockLink) => [k.itemId, k.bulkItemId, k.bulkItemId ? k.bulkQuantity : null] as const;
+
+function lineStatements(db: D1Database, invoiceId: string, revisionNo: number, body: InvoiceRequest, result: InvoiceResult, links: StockLink[]) {
   return body.lines.map((l, i) => {
     const r = result.lines[i]!;
     // Spec 012c R1: the stone and total fields only mean something for their own pricing mode.
@@ -360,6 +406,7 @@ function lineStatements(db: D1Database, invoiceId: string, revisionNo: number, b
         newId(), invoiceId, revisionNo, i + 1, l.description, l.purity, l.hsn.trim(), l.grossWeightMg, l.netWeightMg, polishWeightMg(l.netWeightMg, l.polishBps), l.polishBps,
         l.goldRatePaisePerKg, l.labourRatePaisePerKg, l.hsn.trim() === "9988" ? 500 : 300, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram,
         mode, mode === "separate" ? (l.stoneWeightMg ?? 0) : 0, r.stoneAmountPaise, mode === "combined" ? (l.totalAmountPaise ?? 0) : 0, r.discountPaise, r.taxablePaise,
+        ...stockColumns(links[i]!),
       );
   });
 }
@@ -418,12 +465,16 @@ invoiceRoutes.post("/", async (c) => {
   const user = c.get("user");
   const p = await prepare(c, await readJson(c), false);
   if (!p.ok) return c.json(p.body, p.status);
-  const { body, canon, result, rates } = p;
+  const { body, canon, result, rates, links } = p;
   const id = body.id ?? newId();
 
   const replay = classifyReplay(await loadRow(db, id), (row) => row.input_json === JSON.stringify(canon));
   if (replay.kind === "conflict") return c.json({ error: "id_conflict", message: "This id is already used by a different invoice" }, 409);
   if (replay.kind === "replay") return c.json(toResponse(replay.row, await loadLines(db, id, replay.row.revision_no), false));
+
+  // Spec 021 S5, S7: the stock must be there. Refused before anything is written, so no number is used.
+  const short = await stockProblem(db, links, [], null);
+  if (short) return c.json({ error: short.error, message: short.message, lineNo: short.lineNo }, 409);
 
   const fy = financialYearOf(body.invoiceDate);
   const header = await settingsSnapshot(db);
@@ -456,16 +507,25 @@ invoiceRoutes.post("/", async (c) => {
           result.roundOffPaise, result.payablePaise, JSON.stringify(result), ...printedNumberValues(header.numbering, "INV", fy),
           JSON.stringify(body.discounts ?? {}), result.discountPaise,
         ),
-      ...lineStatements(db, id, 1, body, result),
+      ...lineStatements(db, id, 1, body, result, links),
+      // Spec 021 S6, S7: after the lines, so the line triggers see the items still in stock.
+      ...createStockStatements(db, id, links, user.id, now),
       auditStatement(db, {
         actor: user.id,
         action: "invoice_create",
         entity: "invoice",
         entityId: id,
-        detail: { payablePaise: result.payablePaise, lines: body.lines.length },
+        detail: {
+          payablePaise: result.payablePaise,
+          lines: body.lines.length,
+          stockItems: links.flatMap((l) => (l.uNo ? [l.uNo] : [])),
+          bulk: links.flatMap((l) => (l.bulkItemId ? [{ bulkItemId: l.bulkItemId, quantity: l.bulkQuantity }] : [])),
+        },
       }),
     ]);
   } catch (e) {
+    const refusal = stockTriggerRefusal(e);
+    if (refusal) return c.json(refusal.body, refusal.status);
     if (!isUniqueError(e)) throw e;
     const again = classifyReplay(await loadRow(db, id), (row) => row.input_json === JSON.stringify(canon));
     if (again.kind === "replay") return c.json(toResponse(again.row, await loadLines(db, id, again.row.revision_no), false));
@@ -522,7 +582,7 @@ invoiceRoutes.put("/:id", async (c) => {
 
   const p = await prepare(c, await readJson(c), true);
   if (!p.ok) return c.json(p.body, p.status);
-  const { body, canon, result, rates } = p;
+  const { body, canon, result, rates, links } = p;
   const stale = { error: "stale_revision", message: "This invoice was changed. Reload it and try again." };
   if (body.expectedRevision !== row.revision_no) return c.json(stale, 409);
 
@@ -541,6 +601,20 @@ invoiceRoutes.put("/:id", async (c) => {
 
   const next = row.revision_no + 1;
   const now = new Date().toISOString();
+  // Spec 021 S8 to S10: only the difference in stock moves. Checked first, so a refusal writes nothing.
+  const previousLinks = (await loadLines(db, row.id, row.revision_no)).map(linkOf);
+  const short = await stockProblem(db, links, previousLinks, row.invoice_no);
+  if (short) return c.json({ error: short.error, message: short.message, lineNo: short.lineNo }, 409);
+  const removed = previousLinks.flatMap((l) => (l.itemId && !links.some((n) => n.itemId === l.itemId) ? [l.itemId] : []));
+  const stockEdit = editStockStatements(db, {
+    invoiceNo: row.invoice_no,
+    revisionNo: next,
+    previous: previousLinks,
+    links,
+    releasable: await releasableItems(db, removed, row.invoice_no),
+    actor: user.id,
+    now,
+  });
   try {
     await db.batch([
       revisionStatement(db, { entity: "invoice", entityId: row.id, snapshot: row, reason: body.reason || undefined, actor: user.id }),
@@ -559,16 +633,27 @@ invoiceRoutes.put("/:id", async (c) => {
           JSON.stringify(rates), JSON.stringify(canon), result.taxablePaise, result.taxPaise, result.totalBeforeRoundOffPaise,
           result.roundOffPaise, result.payablePaise, JSON.stringify(result), next, row.revision_no, JSON.stringify(body.discounts ?? {}), result.discountPaise,
         ),
-      ...lineStatements(db, row.id, next, body, result),
+      ...lineStatements(db, row.id, next, body, result, links),
+      ...stockEdit.statements,
       auditStatement(db, {
         actor: user.id,
         action: "invoice_update",
         entity: "invoice",
         entityId: row.id,
-        detail: { fromRevision: row.revision_no, toRevision: next, changed, fromPayablePaise: row.payable_paise, toPayablePaise: result.payablePaise, reason: body.reason || undefined },
+        detail: {
+          fromRevision: row.revision_no,
+          toRevision: next,
+          changed,
+          fromPayablePaise: row.payable_paise,
+          toPayablePaise: result.payablePaise,
+          reason: body.reason || undefined,
+          stock: { taken: stockEdit.taken, released: stockEdit.released, bulk: stockEdit.bulk },
+        },
       }),
     ]);
   } catch (e) {
+    const refusal = stockTriggerRefusal(e);
+    if (refusal) return c.json(refusal.body, refusal.status);
     if (isUniqueError(e)) return c.json(stale, 409); // another device saved the same revision first
     throw e;
   }
@@ -627,11 +712,27 @@ invoiceRoutes.post("/:id/void", async (c) => {
     return c.json({ error: "has_payments", message: "Money has been paid against this sale. Fix the rate first, then correct the sale." }, 409);
   }
   const now = new Date().toISOString();
+  // Spec 021 S11, Q163: give back the stock this invoice still holds. Items moved on since are left alone.
+  const currentLinks = (await loadLines(db, row.id, row.revision_no)).map(linkOf);
+  const stockVoid = voidStockStatements(db, {
+    invoiceNo: row.invoice_no,
+    links: currentLinks,
+    releasable: await releasableItems(db, currentLinks.flatMap((l) => (l.itemId ? [l.itemId] : [])), row.invoice_no),
+    actor: user.id,
+    now,
+  });
   await db.batch([
     db
       .prepare("UPDATE invoices SET voided_at = ?2, voided_by = ?3, void_reason = ?4, updated_at = ?2, updated_by = ?3 WHERE id = ?1")
       .bind(row.id, now, user.id, parsed.data.reason),
-    auditStatement(db, { actor: user.id, action: "invoice_void", entity: "invoice", entityId: row.id, detail: { reason: parsed.data.reason, payablePaise: row.payable_paise } }),
+    ...stockVoid.statements,
+    auditStatement(db, {
+      actor: user.id,
+      action: "invoice_void",
+      entity: "invoice",
+      entityId: row.id,
+      detail: { reason: parsed.data.reason, payablePaise: row.payable_paise, stock: { released: stockVoid.released, bulk: stockVoid.bulk } },
+    }),
   ]);
   const saved = (await loadRow(db, row.id))!;
   return c.json(toResponse(saved, await loadLines(db, row.id, saved.revision_no), false));
@@ -855,6 +956,8 @@ invoiceRoutes.post("/:id/fix-rate", async (c) => {
             newId(), row.id, next, l.line_no, l.description, l.purity, l.hsn, l.gross_weight_mg, l.net_weight_mg, l.polish_mg, l.polish_bps,
             goldRates[i], l.labour_rate_paise_per_kg, 300, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram,
             "weight", 0, 0, 0, 0, r.taxablePaise,
+            // Spec 021 S18: the links of the line stay as they were.
+            l.inventory_item_id ?? null, l.bulk_item_id ?? null, l.bulk_item_id ? (l.bulk_quantity ?? null) : null,
           );
       }),
       ...applied.map((a) =>
