@@ -34,6 +34,7 @@ import InventoryTypesPage from "./inventory/InventoryTypesPage";
 import { BulkItemPage, BulkListPage } from "./inventory/BulkPages";
 import { LocationStockPage, LocationsPage } from "./inventory/LocationPages";
 import { NewPurchasePage, PurchasePage, PurchasesListPage } from "./inventory/PurchasePages";
+import { ReconciliationPage, ReconciliationsPage } from "./inventory/ReconciliationPages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 import ThemeToggle from "./ThemeToggle";
@@ -117,6 +118,7 @@ function Page({ path, meId }: { path: string; meId: string }) {
     }
     if (parts[1] === "locations") return parts[2] ? <LocationStockPage id={parts[2]} /> : <LocationsPage />;
     if (parts[1] === "bulk") return parts[2] ? <BulkItemPage id={parts[2]} /> : <BulkListPage />;
+    if (parts[1] === "reconciliations") return parts[2] ? <ReconciliationPage id={parts[2]} /> : <ReconciliationsPage />;
     return <InventoryListPage />;
   }
   if (parts[0] === "settings") return <SettingsPage />;

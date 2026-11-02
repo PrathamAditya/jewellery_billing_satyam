@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   "purchases.view", "purchases.edit",
   // Spec 052: the data integrity checks (owner only by default, Q180).
   "integrity.view",
+  "reconciliation.view", "reconciliation.edit",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -50,6 +51,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
       "dashboard.view",
       "inventory.view",
       "purchases.view",
+      "reconciliation.view",
     ],
   },
   {

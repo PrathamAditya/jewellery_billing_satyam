@@ -23,6 +23,7 @@ import { bulkRoutes } from "./inventory/bulk";
 import { locationRoutes } from "./inventory/locations";
 import { purchaseRoutes } from "./inventory/purchases";
 import { integrityRoutes } from "./integrity/routes";
+import { reconciliationRoutes } from "./inventory/reconciliation";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -70,6 +71,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/credit-notes", creditNoteRoutes);
   app.route("/api/credit-notes", creditReversalRoutes);
   app.route("/api/inventory/purchases", purchaseRoutes);
+  app.route("/api/inventory/reconciliations", reconciliationRoutes);
   app.route("/api/inventory/bulk", bulkRoutes);
   app.route("/api/inventory", inventoryRoutes);
   app.route("/api/inventory", locationRoutes);

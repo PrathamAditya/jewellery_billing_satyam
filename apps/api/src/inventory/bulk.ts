@@ -120,7 +120,7 @@ bulkRoutes.get("/:id", async (c) => {
     await db
       .prepare(
         `SELECT q.location_id, l.name AS location_name, q.quantity FROM bulk_item_location_quantities q
-         JOIN stock_locations l ON l.id = q.location_id WHERE q.bulk_item_id = ?1 ORDER BY l.name COLLATE NOCASE`,
+         JOIN stock_locations l ON l.id = q.location_id WHERE q.bulk_item_id = ?1 AND l.hidden = 0 ORDER BY l.name COLLATE NOCASE`,
       )
       .bind(id)
       .all<{ location_id: string; location_name: string; quantity: number }>()

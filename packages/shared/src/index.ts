@@ -20,6 +20,7 @@ export * from "./inventory";
 export * from "./bulkItems";
 export * from "./purchases";
 export * from "./integrity";
+export * from "./reconciliation";
 
 export const healthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),

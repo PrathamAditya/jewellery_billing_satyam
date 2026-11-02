@@ -11,7 +11,7 @@ export type StockLink = { itemId: string | null; uNo: string | null; bulkItemId:
 /** A refusal for one line of the request (lineNo is 1-based, as the screen numbers the lines). */
 export type StockProblem = { lineNo: number; error: "item_not_in_stock" | "insufficient_quantity"; message: string };
 
-type ItemState = { u_no: string; status: InventoryStatus; voided_at: string | null };
+type ItemState = { u_no: string; status: InventoryStatus; voided_at: string | null; location_id: string };
 type BulkState = { id: string; name: string; unit: BulkUnit; quantity: number };
 
 /** Spec 021 S2, S3: find the items and bulk items the lines name. Returns the field problems for the 400 response. */
@@ -81,7 +81,7 @@ export async function stockProblem(db: D1Database, links: StockLink[], previous:
   const before = new Set(previous.map((p) => p.itemId).filter((x): x is string => x !== null));
   for (const [i, l] of links.entries()) {
     if (!l.itemId) continue;
-    const item = await db.prepare("SELECT u_no, status, voided_at FROM inventory_items WHERE id = ?1").bind(l.itemId).first<ItemState>();
+    const item = await db.prepare("SELECT u_no, status, voided_at, location_id FROM inventory_items WHERE id = ?1").bind(l.itemId).first<ItemState>();
     if (!item) return { lineNo: i + 1, error: "item_not_in_stock", message: "That item no longer exists" };
     if (before.has(l.itemId)) {
       if (!invoiceNo || !(await soldOnInvoice(db, l.itemId, invoiceNo))) {
@@ -96,6 +96,10 @@ export async function stockProblem(db: D1Database, links: StockLink[], previous:
     if (item.voided_at) return { lineNo: i + 1, error: "item_not_in_stock", message: `${item.u_no} is voided, so it cannot go on this invoice` };
     if (item.status !== "in_stock") {
       return { lineNo: i + 1, error: "item_not_in_stock", message: `${item.u_no} is ${INVENTORY_STATUS_LABEL[item.status].toLowerCase()}, so it cannot go on this invoice` };
+    }
+    // Spec 025 R12: an item not found at a count is held at the hidden Missing place until it is found.
+    if (item.location_id === "loc-missing") {
+      return { lineNo: i + 1, error: "item_not_in_stock", message: `${item.u_no} was not found at the last stock count, so it cannot go on this invoice` };
     }
   }
 

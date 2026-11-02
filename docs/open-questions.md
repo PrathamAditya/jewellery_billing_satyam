@@ -332,3 +332,15 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q187. Keeping the results.** `DEFAULT: results are not stored; every run is fresh and writes no audit row. Is a history of runs needed (for example for the CA)?`
 - **Q188. Customer number format.** `DEFAULT: C followed by at least 4 digits, so C0001 and later C10000 are valid (I11)`. Is that the format you want for customer numbers after 9999?
 - **Q189. Ledger check on every customer.** `DEFAULT: every customer is checked on each run, with the full event ledger (I12). The showroom database is small enough for this. If it grows past a few thousand customers, the check may need sampling`. Is that acceptable?
+## Z. Wave 3 questions for spec 025 (monthly stock reconciliation), default used until you answer
+
+- **Q190. Opening moment.** `DEFAULT: the system figure is the stock at the moment the reconciliation is opened (not the 1st of the month, not a chosen date). A backdated opening is not built`. Should a count be able to start from the stock as at a past date?
+- **Q191. Scope.** `DEFAULT: one place, or all active places. The hidden Missing place is never counted`. Is that right?
+- **Q192. Pieces not found.** `DEFAULT: a piece not found is moved to the hidden place Missing by a transfer with the reason. Its status does not change. It cannot be sold while it is at Missing. A found piece is brought back by a reconciliation extra line`. Spec 020 has no missing status, and the status list cannot be changed without rebuilding the table. Do you want a visible Missing list, or a missing status in a later spec?
+- **Q193. Sales during the count.** `DEFAULT: the difference is counted against the opening figure plus the movements since the opening, so a sale during the count is not a shortage`. Is that right?
+- **Q194. Lines not counted.** `DEFAULT: the close is refused while any line is uncounted`. Should an uncounted line be treated as no change instead?
+- **Q195. Reserved, on memo and returned pieces.** `DEFAULT: they are not in the system stock for the count. If one is found on the counter it is added as an extra line, and the close moves it to in stock`. Should they be counted as stock at their place?
+- **Q196. Who closes.** `DEFAULT: anyone with reconciliation.edit (owner and manager), no second approval`. This answers Q78 for now. Should a negative difference need the owner's approval?
+- **Q197. Extra pieces.** `DEFAULT: a found piece that is not in stock is put back in stock with a status history row and the reason, and moved to the counted place. A written-off piece is refused`. Is that right?
+- **Q198. Reasons.** `DEFAULT: each adjustment gets an automatic reason naming the month and the count; the owner's note on a line is kept on the line`. Should the owner type a reason for each adjustment?
+- **Q199. Bulk lines.** `DEFAULT: every bulk item gets a line at every place in scope, including those at zero, so that a surplus can be counted`. Is that right, or only items with a balance?
