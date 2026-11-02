@@ -1,28 +1,34 @@
 import { useEffect, useState } from "react";
-import { KIND_LABEL, MODE_LABEL, formatMoney, type PaymentSummary } from "@jewellery/shared";
+import { CHEQUE_STATUS_LABEL, KIND_LABEL, MODE_LABEL, formatMoney, type ChequePendingResponse, type PaymentSummary } from "@jewellery/shared";
 import { navigate } from "../router";
 import { niceDate } from "../rates/api";
 import { useAuth } from "../auth";
 import { useDebounced } from "../customers/useDebounced";
 import { Alert, btnPrimary, inputClass, pcOnly } from "../customers/ui";
-import { listPayments } from "./api";
+import { listPayments, pendingCheques } from "./api";
 import ReceiveDialog from "./ReceiveDialog";
 
 export default function PaymentsPage() {
   const { can } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
+  const [chequeStatus, setChequeStatus] = useState("");
   const [items, setItems] = useState<PaymentSummary[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [receiving, setReceiving] = useState(false);
+  const [pending, setPending] = useState<ChequePendingResponse | null>(null);
   const query = useDebounced(q, 250);
 
   useEffect(() => {
-    listPayments(query, { status: status || undefined })
+    listPayments(query, { status: status || undefined, chequeStatus: chequeStatus || undefined })
       .then((r) => (setItems(r.items), setNext(r.nextCursor), setError(null)))
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load payments"));
-  }, [query, status]);
+  }, [query, status, chequeStatus]);
+  // Spec 019b C12: the cheques still out, shown above the list.
+  useEffect(() => {
+    pendingCheques().then(setPending).catch(() => setPending(null));
+  }, [items]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -30,12 +36,24 @@ export default function PaymentsPage() {
         <h1 className="text-2xl font-semibold">Payments</h1>
         {can("payments.create") && <button className={`${btnPrimary} ${pcOnly}`} onClick={() => setReceiving(true)}>Receive payment</button>}
       </div>
+      {pending && pending.count > 0 && (
+        <p className="text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-900">
+          Cheques not yet cleared or bounced: {pending.count}, total {formatMoney(pending.totalPaise)}.{" "}
+          <button className="underline" onClick={() => setChequeStatus("pending")}>Show them</button>
+        </p>
+      )}
       <div className="flex gap-2 flex-wrap">
         <input className={`${inputClass} flex-1 min-w-48`} type="search" placeholder="Search by receipt number, customer or reference" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search payments" />
         <select className={`${inputClass} w-40`} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
           <option value="">All</option>
           <option value="active">Active</option>
           <option value="voided">Voided</option>
+        </select>
+        <select className={`${inputClass} w-44`} value={chequeStatus} onChange={(e) => setChequeStatus(e.target.value)} aria-label="Cheque status">
+          <option value="">All cheques</option>
+          <option value="pending">Cheques not cleared</option>
+          <option value="cleared">Cleared cheques</option>
+          <option value="bounced">Bounced cheques</option>
         </select>
       </div>
       {error && <Alert>{error}</Alert>}
@@ -61,7 +79,10 @@ export default function PaymentsPage() {
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">{niceDate(p.receiptDate)}</td>
                 <td className="px-3 py-2">{p.payerName}</td>
-                <td className="px-3 py-2">{MODE_LABEL[p.mode]}</td>
+                <td className="px-3 py-2">
+                  {MODE_LABEL[p.mode]}
+                  {p.chequeStatus && <span className="text-stone-500"> · {CHEQUE_STATUS_LABEL[p.chequeStatus]}</span>}
+                </td>
                 <td className="px-3 py-2">{KIND_LABEL[p.kind]}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">{formatMoney(p.amountPaise)}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">{formatMoney(p.remainingPaise)}</td>

@@ -47,6 +47,9 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/payments/:id", permission: "payments.view" },
   { method: "PATCH", path: "/api/payments/:id", permission: "payments.create" },
   { method: "POST", path: "/api/payments/:id/void", permission: "payments.void" },
+  { method: "GET", path: "/api/payments/cheques/pending", permission: "payments.view" },
+  // Spec 019b: the handler itself asks for payments.void when the move is 'bounced'.
+  { method: "POST", path: "/api/payments/:id/cheque", permission: "payments.create" },
   { method: "POST", path: "/api/allocations/:id/reverse", permission: "payments.void" },
 
   { method: "GET", path: "/api/orders", permission: "advances.view" },

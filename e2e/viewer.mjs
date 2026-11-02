@@ -25,11 +25,11 @@ await ownerPage.fill('input[type="password"]', PASSWORD);
 await ownerPage.click('button:has-text("Log in")');
 await ownerPage.waitForSelector("text=Today's rates");
 const made = await ownerPage.evaluate(async ({ username, TEMP }) => {
-  const post = async (path, body) => (await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).status;
-  const user = await post("/api/users", { username, displayName: "Viewer Check", role: "viewer", temporaryPassword: TEMP });
-  const cust = await post("/api/customers", { name: "Viewer Aadhaar " + username, aadhaar: "123412341234" });
-  const list = await (await fetch("/api/customers")).json();
-  return { user, cust, customerId: list.items.find((c) => c.name.startsWith("Viewer Aadhaar " + username))?.id ?? null };
+  const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const user = (await post("/api/users", { username, displayName: "Viewer Check", role: "viewer", temporaryPassword: TEMP })).status;
+  const res = await post("/api/customers", { name: "Viewer Aadhaar " + username, aadhaar: "123412341234" });
+  // The id comes from the create response: a list search can miss a customer when the list is long.
+  return { user, cust: res.status, customerId: (await res.json()).customer?.id ?? null };
 }, { username, TEMP });
 ok(made.user === 201 && made.cust === 201 && made.customerId, "the owner makes a viewer and a customer with an Aadhaar number");
 
