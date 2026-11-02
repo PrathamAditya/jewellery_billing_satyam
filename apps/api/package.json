@@ -13,7 +13,8 @@
     "dev:e2e": "wrangler dev --port 8799",
     "local": "tsx src/local/run.ts",
     "local:migrate": "tsx src/local/cli.ts migrate",
-    "local:owner": "tsx src/local/cli.ts owner"
+    "local:owner": "tsx src/local/cli.ts owner",
+    "integrity": "tsx src/integrity/cli.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
