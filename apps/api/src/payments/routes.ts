@@ -9,6 +9,11 @@ import {
   paymentRequestSchema,
   reverseAllocationSchema,
   voidPaymentSchema,
+  chequeMoveSchema,
+  type ChequeEventResponse,
+  type ChequePendingResponse,
+  type ChequeResponse,
+  type ChequeStatus,
   type PaymentAllocationResponse,
   type PaymentKind,
   type PaymentListResponse,
@@ -53,6 +58,10 @@ type DbPayment = {
   advance_summary_json: string | null;
   voided_at: string | null;
   void_reason: string | null;
+  /** Spec 019b C8: cheque details (null for other modes). */
+  cheque_bank: string | null;
+  cheque_date: string | null;
+  cheque_drawer: string | null;
 };
 
 type DbAllocation = {
@@ -62,6 +71,9 @@ type DbAllocation = {
   amount_paise: number;
   reversed_at: string | null;
 };
+
+/** Spec 019b: one row of a cheque's history. Append-only (the table has triggers). */
+type DbChequeEvent = { status: ChequeStatus; at: string; actor: string; reason: string | null };
 
 const isUniqueError = (e: unknown) => e instanceof Error && /UNIQUE constraint failed/i.test(e.message);
 const guardCodeRefund = (e: unknown) => (e instanceof Error && /exceeds_payment/.test(e.message) ? "exceeds_payment" : null);
@@ -85,6 +97,11 @@ async function allocationsOf(db: D1Database, paymentId: string): Promise<DbAlloc
       .bind(paymentId)
       .all<DbAllocation>()
   ).results;
+}
+
+/** Spec 019b: the cheque history in the order it happened (oldest first). The last row is the current status. */
+async function chequeEventsOf(db: D1Database, paymentId: string): Promise<DbChequeEvent[]> {
+  return (await db.prepare("SELECT status, at, actor, reason FROM cheque_events WHERE payment_id = ?1 ORDER BY at, rowid").bind(paymentId).all<DbChequeEvent>()).results;
 }
 
 const allocatedNow = (allocs: { amount_paise: number; reversed_at: string | null }[]) =>
@@ -136,8 +153,19 @@ export async function openItems(db: D1Database, customerId: string) {
   return rows.filter((r) => r.due > 0).sort((x, y) => x.d.localeCompare(y.d) || x.c.localeCompare(y.c) || x.id.localeCompare(y.id));
 }
 
-function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0): PaymentResponse {
+function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0, events: DbChequeEvent[] = []): PaymentResponse {
   const allocated = allocatedNow(allocs) + refunded;
+  // Spec 019b C1: the status is the last event. A cheque always has at least its 'received' event.
+  const cheque: ChequeResponse | null =
+    p.mode === "cheque"
+      ? {
+          bank: p.cheque_bank,
+          date: p.cheque_date,
+          drawer: p.cheque_drawer,
+          status: events.at(-1)?.status ?? "received",
+          events: events.map<ChequeEventResponse>((e) => ({ status: e.status, at: e.at, by: e.actor, reason: e.reason })),
+        }
+      : null;
   return {
     id: p.id,
     kind: p.kind,
@@ -162,6 +190,7 @@ function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0): Payment
       reversedAt: a.reversed_at,
     })),
     advanceSummary: p.advance_summary_json ? (JSON.parse(p.advance_summary_json) as PaymentResponse["advanceSummary"]) : null,
+    cheque,
     header: p.header_json ? (JSON.parse(p.header_json) as Record<string, unknown>) : null,
     createdAt: p.created_at,
     createdBy: p.created_by,
@@ -171,7 +200,7 @@ function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0): Payment
 async function loadPayment(db: D1Database, id: string) {
   const row = await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>();
   if (!row) return null;
-  return { row, allocs: await allocationsOf(db, id), refunded: await refundedOf(db, id) };
+  return { row, allocs: await allocationsOf(db, id), refunded: await refundedOf(db, id), events: await chequeEventsOf(db, id) };
 }
 
 /** The payment as it was asked for. A safe retry with the same id and content returns the first result (R4). */
@@ -188,6 +217,9 @@ const canonical = (b: PaymentRequest) =>
     invoiceId: b.invoiceId ?? null,
     allocation: b.allocation,
     remarks: b.remarks ?? null,
+    chequeBank: b.chequeBank ?? null,
+    chequeDate: b.chequeDate ?? null,
+    chequeDrawer: b.chequeDrawer ?? null,
   });
 
 type Plan = { kind: PaymentKind; allocations: { invoiceId?: string; openingBalanceId?: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null };
@@ -293,7 +325,7 @@ paymentRoutes.post("/", async (c) => {
   const id = b.id ?? newId();
   const replay = classifyReplay(await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>(), (row) => row.input_json === canonical(b));
   if (replay.kind === "conflict") return c.json({ error: "id_conflict", message: "This id is already used by a different payment" }, 409);
-  if (replay.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(replay.row, await allocationsOf(db, id), await refundedOf(db, id)), warnings: [] });
+  if (replay.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(replay.row, await allocationsOf(db, id), await refundedOf(db, id), await chequeEventsOf(db, id)), warnings: [] });
 
   const planned = await plan(db, b);
   if (!planned.ok) return c.json(planned.body, planned.status);
@@ -313,6 +345,14 @@ paymentRoutes.post("/", async (c) => {
   const warnings: PaymentWarning[] = [];
   if (b.mode === "cash" && b.amountPaise >= settings.limits.cashWarningPaise) {
     warnings.push({ code: "cash_limit", limitPaise: settings.limits.cashWarningPaise });
+  }
+  // Spec 019b C9: the same cheque number on another live cheque is a warning, never a block.
+  if (b.mode === "cheque" && b.reference) {
+    const same = await db
+      .prepare("SELECT COUNT(*) AS n FROM payments WHERE mode = 'cheque' AND reference = ?1 AND voided_at IS NULL AND id <> ?2")
+      .bind(b.reference, id)
+      .first<{ n: number }>();
+    if ((same?.n ?? 0) > 0) warnings.push({ code: "duplicate_cheque_number", reference: b.reference });
   }
 
   const now = new Date().toISOString();
@@ -339,6 +379,15 @@ paymentRoutes.post("/", async (c) => {
         pl.orderId, ...(numbered ? printedNumberValues(settings.numbering, "PAY", fy) : []),
       ),
   );
+  if (b.mode === "cheque") {
+    // Spec 019b C1, C8: the cheque details, and the first event: every cheque starts as 'received'.
+    statements.push(
+      db.prepare("UPDATE payments SET cheque_bank = ?2, cheque_date = ?3, cheque_drawer = ?4 WHERE id = ?1").bind(id, b.chequeBank, b.chequeDate, b.chequeDrawer),
+      db
+        .prepare("INSERT INTO cheque_events (id, payment_id, status, at, actor, reason, created_at, created_by) VALUES (?1, ?2, 'received', ?3, ?4, NULL, ?3, ?4)")
+        .bind(newId(), id, now, user.id),
+    );
+  }
   for (const a of pl.allocations) {
     statements.push(
       db
@@ -361,7 +410,7 @@ paymentRoutes.post("/", async (c) => {
   } catch (e) {
     if (isUniqueError(e)) {
       const again = classifyReplay(await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>(), (row) => row.input_json === canonical(b));
-      if (again.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(again.row, await allocationsOf(db, id), await refundedOf(db, id)), warnings: [] });
+      if (again.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(again.row, await allocationsOf(db, id), await refundedOf(db, id), await chequeEventsOf(db, id)), warnings: [] });
       return c.json({ error: "id_conflict", message: "This id is already used by a different payment" }, 409);
     }
     const g = guardCode(e);
@@ -369,11 +418,13 @@ paymentRoutes.post("/", async (c) => {
     throw e;
   }
   const saved = await loadPayment(db, id);
-  return c.json<PaymentSaveResponse>({ payment: toResponse(saved!.row, saved!.allocs, saved!.refunded), warnings }, 201);
+  return c.json<PaymentSaveResponse>({ payment: toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events), warnings }, 201);
 });
 
 // ---- search (R9) ----
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, "\\$&");
+/** Spec 019b: the current cheque status of payment p, read from its history (the last event). */
+const LATEST_CHEQUE = "(SELECT e.status FROM cheque_events e WHERE e.payment_id = p.id ORDER BY e.at DESC, e.rowid DESC LIMIT 1)";
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 paymentRoutes.get("/", async (c) => {
@@ -382,6 +433,7 @@ paymentRoutes.get("/", async (c) => {
   const mode = c.req.query("mode");
   const kind = c.req.query("kind");
   const status = c.req.query("status");
+  const chequeStatus = c.req.query("chequeStatus");
   const from = c.req.query("from");
   const to = c.req.query("to");
   const offset = Math.max(0, Number.parseInt(c.req.query("cursor") ?? "0", 10) || 0);
@@ -400,15 +452,22 @@ paymentRoutes.get("/", async (c) => {
   if (status === "voided") where.push("p.voided_at IS NOT NULL");
   if (from) where.push(`p.receipt_date >= ${add(from)}`);
   if (to) where.push(`p.receipt_date <= ${add(to)}`);
+  // Spec 019b C12: the cheque filter. "pending" is a cheque not yet cleared or bounced.
+  if (chequeStatus && chequeStatus !== "all") {
+    if (!["pending", "received", "deposited", "cleared", "bounced"].includes(chequeStatus)) return c.json({ error: "invalid_cheque_status" }, 400);
+    where.push("p.mode = 'cheque'");
+    where.push(chequeStatus === "pending" ? `${LATEST_CHEQUE} IN ('received', 'deposited')` : `${LATEST_CHEQUE} = ${add(chequeStatus)}`);
+  }
 
   const rows = (
     await c.env.DB.prepare(
-      `SELECT p.*, CASE WHEN p.voided_at IS NULL THEN p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0) ELSE 0 END AS remaining_paise
+      `SELECT p.*, CASE WHEN p.voided_at IS NULL THEN p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0) ELSE 0 END AS remaining_paise,
+         ${LATEST_CHEQUE} AS cheque_status
        FROM payments p ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
        ORDER BY p.receipt_date DESC, p.created_at DESC, p.id DESC LIMIT ${PAGE_SIZE + 1} OFFSET ${offset}`,
     )
       .bind(...args)
-      .all<DbPayment & { remaining_paise: number }>()
+      .all<DbPayment & { remaining_paise: number; cheque_status: ChequeStatus | null }>()
   ).results;
   const body: PaymentListResponse = {
     items: rows.slice(0, PAGE_SIZE).map<PaymentSummary>((r) => ({
@@ -421,6 +480,7 @@ paymentRoutes.get("/", async (c) => {
       amountPaise: r.amount_paise,
       remainingPaise: r.remaining_paise,
       voided: r.voided_at !== null,
+      chequeStatus: r.cheque_status ?? null,
     })),
     nextCursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
   };
@@ -430,7 +490,7 @@ paymentRoutes.get("/", async (c) => {
 paymentRoutes.get("/:id", async (c) => {
   const found = await loadPayment(c.env.DB, c.req.param("id"));
   if (!found) return c.json({ error: "not_found" }, 404);
-  return c.json(toResponse(found.row, found.allocs, found.refunded));
+  return c.json(toResponse(found.row, found.allocs, found.refunded, found.events));
 });
 
 /** Remarks are the only thing that can change on a payment (R11). */
@@ -442,14 +502,14 @@ paymentRoutes.patch("/:id", async (c) => {
   const found = await loadPayment(db, c.req.param("id"));
   if (!found) return c.json({ error: "not_found" }, 404);
   const next = parsed.data.remarks || null;
-  if (next === found.row.remarks) return c.json(toResponse(found.row, found.allocs, found.refunded));
+  if (next === found.row.remarks) return c.json(toResponse(found.row, found.allocs, found.refunded, found.events));
   await db.batch([
     revisionStatement(db, { entity: "payment", entityId: found.row.id, snapshot: found.row, reason: "remarks changed", actor: user.id }),
     db.prepare("UPDATE payments SET remarks = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?1").bind(found.row.id, next, new Date().toISOString(), user.id),
     auditStatement(db, { actor: user.id, action: "payment_remarks", entity: "payment", entityId: found.row.id }),
   ]);
   const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded));
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
 });
 
 /** Spec 015 R8, M7: voiding reverses the allocations in the same batch. Old gold receipts are voided with their receipt. */
@@ -476,7 +536,73 @@ paymentRoutes.post("/:id/void", async (c) => {
   ];
   await db.batch(statements);
   const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded));
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
+});
+
+/** Spec 019b C12: the cheques not yet cleared or bounced, for the Payments page. Declared before /:id routes. */
+paymentRoutes.get("/cheques/pending", async (c) => {
+  const row = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(p.amount_paise), 0) AS total FROM payments p
+     WHERE p.mode = 'cheque' AND p.voided_at IS NULL AND ${LATEST_CHEQUE} IN ('received', 'deposited')`,
+  ).first<{ n: number; total: number }>();
+  return c.json<ChequePendingResponse>({ count: row?.n ?? 0, totalPaise: row?.total ?? 0 });
+});
+
+/**
+ * Spec 019b C2 to C6: move a cheque along its statuses. Deposited and cleared change no money.
+ * A bounce is one batch: the event, the payment voided with the reason, and every live allocation reversed.
+ */
+paymentRoutes.post("/:id/cheque", async (c) => {
+  const db = c.env.DB;
+  const user = c.get("user");
+  const parsed = chequeMoveSchema.safeParse(await readJson(c));
+  if (!parsed.success) return c.json(validationBody(parsed.error), 400);
+  const found = await loadPayment(db, c.req.param("id"));
+  if (!found) return c.json({ error: "not_found" }, 404);
+  if (found.row.mode !== "cheque") return c.json({ error: "not_a_cheque", message: "Only a cheque payment has a cheque status" }, 400);
+  const { status, reason } = parsed.data;
+  const current = (found.events.at(-1)?.status ?? "received") as ChequeStatus;
+  const allowed: Record<ChequeStatus, ChequeStatus[]> = { received: ["deposited", "bounced"], deposited: ["cleared", "bounced"], cleared: ["bounced"], bounced: [] };
+  if (!allowed[current].includes(status)) {
+    return c.json({ error: "invalid_cheque_move", message: `A cheque that is ${current} cannot be marked ${status}` }, 409);
+  }
+  if (found.row.voided_at) return c.json({ error: "voided", message: "This payment is voided" }, 409);
+  if (status === "bounced" && !user.permissions.includes("payments.void")) {
+    return c.json({ error: "forbidden", message: "Only the owner can mark a cheque bounced", permission: "payments.void" }, 403);
+  }
+  const now = new Date().toISOString();
+  const event = db
+    .prepare("INSERT INTO cheque_events (id, payment_id, status, at, actor, reason, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?4, ?5)")
+    .bind(newId(), found.row.id, status, now, user.id, reason);
+
+  if (status !== "bounced") {
+    await db.batch([event, auditStatement(db, { actor: user.id, action: `cheque_${status}`, entity: "payment", entityId: found.row.id, detail: { status } })]);
+  } else {
+    if ((await refundedOf(db, found.row.id)) > 0) {
+      return c.json({ error: "has_refunds", message: "This payment has refunds. Reverse the refunds first." }, 409);
+    }
+    const live = found.allocs.filter((a) => !a.reversed_at);
+    await db.batch([
+      event,
+      db
+        .prepare("UPDATE payments SET voided_at = ?2, voided_by = ?3, void_reason = ?4, updated_at = ?2, updated_by = ?3 WHERE id = ?1")
+        .bind(found.row.id, now, user.id, `Cheque bounced: ${reason}`),
+      ...live.map((a) =>
+        db
+          .prepare("UPDATE payment_allocations SET reversed_at = ?2, reversed_by = ?3, reverse_reason = ?4 WHERE id = ?1")
+          .bind(a.id, now, user.id, `cheque ${found.row.reference ?? found.row.id} bounced`),
+      ),
+      auditStatement(db, {
+        actor: user.id,
+        action: "cheque_bounced",
+        entity: "payment",
+        entityId: found.row.id,
+        detail: { reason, reference: found.row.reference, reversedAllocations: live.length },
+      }),
+    ]);
+  }
+  const saved = await loadPayment(db, found.row.id);
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
 });
 
 /** Spec 016 R8: pay money back from an advance. Refunds are never deleted; they are reversed. */
@@ -495,7 +621,7 @@ paymentRoutes.post("/:id/refunds", async (c) => {
   const id = b.id ?? newId();
   const existing = await db.prepare("SELECT payment_id, amount_paise FROM payment_refunds WHERE id = ?1").bind(id).first<{ payment_id: string; amount_paise: number }>();
   if (existing) {
-    if (existing.payment_id === found.row.id && existing.amount_paise === b.amountPaise) return c.json(toResponse(found.row, found.allocs, found.refunded));
+    if (existing.payment_id === found.row.id && existing.amount_paise === b.amountPaise) return c.json(toResponse(found.row, found.allocs, found.refunded, found.events));
     return c.json({ error: "id_conflict", message: "This id is already used by a different refund" }, 409);
   }
   try {
@@ -510,7 +636,7 @@ paymentRoutes.post("/:id/refunds", async (c) => {
     throw e;
   }
   const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded), 201);
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events), 201);
 });
 
 /** Spec 015 R7: one allocation is undone; the money goes back to the payment's remaining. */
@@ -529,5 +655,5 @@ allocationRoutes.post("/:id/reverse", async (c) => {
     auditStatement(db, { actor: user.id, action: "allocation_reverse", entity: "payment", entityId: alloc.payment_id, detail: { allocation: alloc.id, reason: parsed.data.reason } }),
   ]);
   const saved = await loadPayment(db, alloc.payment_id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded));
+  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
 });

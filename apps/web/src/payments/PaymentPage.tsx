@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { KIND_LABEL, MODE_LABEL, amountInWords, formatMoney, type PaymentResponse } from "@jewellery/shared";
+import { CHEQUE_STATUS_LABEL, KIND_LABEL, MODE_LABEL, amountInWords, formatMoney, type PaymentResponse } from "@jewellery/shared";
 import { ApiError } from "../api";
 import { useAuth } from "../auth";
 import { navigate } from "../router";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass, pcOnly } from "../customers/ui";
 import { niceDate } from "../rates/api";
-import { getPayment, reverseAllocation, voidPayment } from "./api";
+import { getPayment, moveCheque, reverseAllocation, voidPayment } from "./api";
+
+const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
 
 export default function PaymentPage({ id }: { id: string }) {
   const { can } = useAuth();
@@ -13,6 +15,7 @@ export default function PaymentPage({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [voiding, setVoiding] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
   const [reverseId, setReverseId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -41,6 +44,24 @@ export default function PaymentPage({ id }: { id: string }) {
       setNotice("Allocation reversed. The money is back in the payment's advance.");
     } catch (e) {
       setReasonError(e instanceof ApiError ? e.message : "Could not reverse");
+    }
+  }
+
+  /** Spec 019b C2, C4: deposited, cleared, or bounced (a bounce reverses the payment; the server checks who may do it). */
+  async function doMove(status: "deposited" | "cleared" | "bounced", bounceReason?: string) {
+    setReasonError(null);
+    if (status === "bounced" && !bounceReason) return setReasonError("Please give the reason for the bounce");
+    try {
+      setP(await moveCheque(id, status, bounceReason));
+      setBouncing(false);
+      setReason("");
+      setNotice(
+        status === "bounced"
+          ? "Cheque bounced. The payment is voided, and the invoices owe the money again."
+          : `Cheque marked ${status}.`,
+      );
+    } catch (e) {
+      setReasonError(e instanceof ApiError ? e.message : "Could not change the cheque");
     }
   }
 
@@ -78,6 +99,40 @@ export default function PaymentPage({ id }: { id: string }) {
         <div className="py-1.5"><dt className="text-sm text-stone-500">Remarks</dt><dd>{p.remarks || "-"}</dd></div>
       </dl>
 
+      {p.cheque && (
+        <section className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-3" aria-label="Cheque">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <h2 className="font-semibold">Cheque: {CHEQUE_STATUS_LABEL[p.cheque.status]}</h2>
+              <p className="text-sm text-stone-600">
+                {[p.cheque.bank, p.cheque.drawer && `from ${p.cheque.drawer}`, p.cheque.date && `dated ${niceDate(p.cheque.date)}`].filter(Boolean).join(" · ") || "No cheque details recorded"}
+              </p>
+            </div>
+            {!p.voided && (
+              <div className={`flex gap-2 flex-wrap ${pcOnly}`}>
+                {p.cheque.status === "received" && can("payments.create") && (
+                  <button className={btnSecondary} onClick={() => void doMove("deposited")}>Mark deposited</button>
+                )}
+                {p.cheque.status === "deposited" && can("payments.create") && (
+                  <button className={btnSecondary} onClick={() => void doMove("cleared")}>Mark cleared</button>
+                )}
+                {can("payments.void") && (
+                  <button className={btnSecondary} onClick={() => { setBouncing(true); setReason(""); setReasonError(null); }}>Mark bounced</button>
+                )}
+              </div>
+            )}
+          </div>
+          <ol className="text-sm flex flex-col gap-1">
+            {p.cheque.events.map((e, i) => (
+              <li key={i}>
+                <span className="font-medium">{CHEQUE_STATUS_LABEL[e.status]}</span> · {when(e.at)}
+                {e.reason ? <span className="text-stone-600"> — {e.reason}</span> : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
       <section className="flex flex-col gap-2">
         <h2 className="font-semibold">Applied to</h2>
         {p.allocations.length === 0 ? (
@@ -107,6 +162,18 @@ export default function PaymentPage({ id }: { id: string }) {
         )}
       </section>
 
+      {bouncing && (
+        <Modal title="Mark this cheque bounced?" onClose={() => setBouncing(false)}>
+          <p className="text-sm text-stone-600">
+            The payment is voided and everything applied to invoices goes back to them, so the customer owes it again. The record and its history stay.
+          </p>
+          <Field label="Reason *" error={reasonError ?? undefined}><input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></Field>
+          <div className="flex gap-2 justify-end">
+            <button className={btnSecondary} onClick={() => setBouncing(false)}>Cancel</button>
+            <button className={btnPrimary} onClick={() => void doMove("bounced", reason.trim())}>Mark bounced</button>
+          </div>
+        </Modal>
+      )}
       {voiding && (
         <Modal title="Void this payment?" onClose={() => setVoiding(false)}>
           <p className="text-sm text-stone-600">Everything applied to invoices goes back to them. The receipt number is kept and never reused.</p>

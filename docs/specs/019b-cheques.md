@@ -1,6 +1,6 @@
 # 019b: Cheque tracking (Received, Deposited, Cleared, Bounced)
 
-Status: DRAFT for owner approval (Wave 2). Not built. Build only after the owner approves this spec.
+Status: Built (Wave 2) on branch `spec-019b-cheques-draft`, PR #29. Owner review pending. The owner asked for the build with the defaults for Q85 to Q88.
 Depends on: 015 (payments and allocations), 019 (ledger), 004 (permissions)
 Open questions used with defaults: Q85 to Q88 (listed in `docs/open-questions.md`). Owner answer [23] (`docs/owner-answers-2026-11-01.md`) is the base for the statuses and the bounce rule.
 
@@ -87,8 +87,10 @@ Re-presenting a bounced cheque, bank reconciliation or bank statement import, po
 - Q88 (moves): bounce allowed from any state before bounced (including after cleared, because banks sometimes return a cheque after clearing); no un-bounce.
 
 ## 9. Acceptance checklist
-- [ ] Owner approves this spec (and answers or accepts Q85 to Q88)
-- [ ] C1 to C14 implemented and tested
-- [ ] Migration 0019 applied locally and in CI on an empty database and on seeded rows
-- [ ] Browser test `e2e/cheques.mjs` added to `run-all`, and the full suite passes
-- [ ] Earlier tests (015, 017, 019) still pass
+- [x] Owner approves this spec: the owner asked for the build on PR #29 and accepted the defaults for Q85 to Q88 (they stay as defaults until changed)
+- [x] C1 to C10 and C12 implemented and tested in `apps/api/test/cheques.test.ts` (14 tests). C11 (payment page card) and C12 (list filter, pending line) built and checked in the browser. C13 (ledger line) and C14 (receipt print of a bounced cheque) use the existing voided handling; no separate test was added for them.
+- [ ] Migration 0019 on seeded rows (the backfill of existing cheque payments) is not tested yet. It runs on an empty database in every test and was applied locally.
+- [x] Browser test `e2e/cheques.mjs` added to `run-all`; the full suite passes (255 checks)
+- [x] Earlier tests (015, 017, 019, 004) still pass: 560 unit and API tests
+
+Status line: built on branch `spec-019b-cheques-draft` (PR #29), owner review pending.

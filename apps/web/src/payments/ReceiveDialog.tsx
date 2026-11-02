@@ -32,6 +32,12 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
   const [amountText, setAmountText] = useState("");
   const [purpose, setPurpose] = useState<"advance" | "against_invoices" | "at_sale" | "opening_advance">(invoice ? "at_sale" : "advance");
   const [oldRef, setOldRef] = useState("");
+  // Spec 019b C8: cheque details, shown when the mode is cheque.
+  const [chequeBank, setChequeBank] = useState("");
+  const [chequeDate, setChequeDate] = useState("");
+  const [chequeDrawer, setChequeDrawer] = useState("");
+  // Spec 019b C9: a duplicate cheque number is saved, but the owner is told before leaving the dialog.
+  const [notice, setNotice] = useState<{ id: string; text: string } | null>(null);
   const [open, setOpen] = useState<InvoiceSummary[]>([]);
   const [manual, setManual] = useState(false);
   const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
@@ -99,13 +105,23 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
       if (order) body.orderId = order.id;
     }
     if (purpose === "at_sale" && invoice) body.invoiceId = invoice.id;
+    if (mode === "cheque") {
+      body.chequeBank = chequeBank.trim() || undefined;
+      body.chequeDate = chequeDate || undefined;
+      body.chequeDrawer = chequeDrawer.trim() || undefined;
+    }
     if (purpose === "against_invoices" && manual && plan) {
       body.allocation = plan.rows.filter((r) => r.amountPaise > 0).map((r) => ({ invoiceId: r.invoice.id, amountPaise: r.amountPaise }));
     }
     setBusy(true);
     try {
       const res = await createPayment(body);
-      onSaved(res.payment.id);
+      const dup = res.warnings.find((w) => w.code === "duplicate_cheque_number");
+      if (dup && dup.code === "duplicate_cheque_number") {
+        setNotice({ id: res.payment.id, text: `Saved. Another live cheque already uses the number ${dup.reference}. Check that it is not the same cheque.` });
+      } else {
+        onSaved(res.payment.id);
+      }
     } catch (e) {
       if (e instanceof ApiError) setError(e.message);
       else setError("Something went wrong. Please try again.");
@@ -151,6 +167,20 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
             <input className={inputClass} value={reference} onChange={(e) => setReference(e.target.value)} maxLength={60} />
           </Field>
         </div>
+
+        {mode === "cheque" && (
+          <div className="grid gap-3 sm:grid-cols-3 border border-stone-200 rounded-lg p-3">
+            <Field label="Cheque bank">
+              <input className={inputClass} value={chequeBank} onChange={(e) => setChequeBank(e.target.value)} maxLength={100} />
+            </Field>
+            <Field label="Cheque date" hint="Can be a later date (post-dated)">
+              <input className={inputClass} type="date" value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} />
+            </Field>
+            <Field label="Name on the cheque">
+              <input className={inputClass} value={chequeDrawer} onChange={(e) => setChequeDrawer(e.target.value)} maxLength={100} />
+            </Field>
+          </div>
+        )}
 
         <fieldset className="flex flex-col gap-2 text-sm">
           <legend className="font-medium mb-1">What is this payment for?</legend>
@@ -207,11 +237,17 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
             <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={warnConfirmed} onChange={(e) => setWarnConfirmed(e.target.checked)} /> I have checked this cash amount</label>
           </Alert>
         )}
+        {notice && (
+          <Alert kind="info">
+            <p>{notice.text}</p>
+            <button className={`${btnPrimary} mt-2`} onClick={() => onSaved(notice.id)}>Open the payment</button>
+          </Alert>
+        )}
         {error && <Alert>{error}</Alert>}
 
         <div className="flex gap-2 justify-end">
           <button className={btnSecondary} onClick={onClose}>Cancel</button>
-          <button className={btnPrimary} disabled={busy} onClick={() => void submit()}>{busy ? "Saving..." : "Save payment"}</button>
+          <button className={btnPrimary} disabled={busy || notice !== null} onClick={() => void submit()}>{busy ? "Saving..." : "Save payment"}</button>
         </div>
       </div>
     </Modal>

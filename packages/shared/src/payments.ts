@@ -57,8 +57,28 @@ export const paymentRequestSchema = z.object({
     .default("auto"),
   orderId: z.string().uuid().nullable().optional(),
   remarks: z.string().trim().max(500, "Remarks are too long (500 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+  /** Spec 019b C8: cheque details, used when mode is `cheque` (all optional). */
+  chequeBank: z.string().trim().max(100, "Bank name is too long (100 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+  chequeDate: z.string().refine(isValidBusinessDate, "Cheque date must look like 2026-11-01").optional().nullable().transform((v) => (v ? v : null)),
+  chequeDrawer: z.string().trim().max(100, "Drawer name is too long (100 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
 });
 export type PaymentRequest = z.infer<typeof paymentRequestSchema>;
+
+/** Spec 019b C1, C2: a cheque's status, and the moves that can be asked for. */
+export const CHEQUE_STATUSES = ["received", "deposited", "cleared", "bounced"] as const;
+export type ChequeStatus = (typeof CHEQUE_STATUSES)[number];
+export const CHEQUE_STATUS_LABEL: Record<ChequeStatus, string> = { received: "Received", deposited: "Deposited", cleared: "Cleared", bounced: "Bounced" };
+export const chequeMoveSchema = z
+  .object({
+    status: z.enum(["deposited", "cleared", "bounced"], { error: "Choose deposited, cleared or bounced" }),
+    reason: z.string().trim().max(300, "Reason is too long (300 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+  })
+  .refine((b) => b.status !== "bounced" || b.reason !== null, { message: "Please give the reason for the bounce", path: ["reason"] });
+export type ChequeMove = z.infer<typeof chequeMoveSchema>;
+
+export type ChequeEventResponse = { status: ChequeStatus; at: string; by: string; reason: string | null };
+export type ChequeResponse = { bank: string | null; date: string | null; drawer: string | null; status: ChequeStatus; events: ChequeEventResponse[] };
+export type ChequePendingResponse = { count: number; totalPaise: number };
 
 export const paymentRemarksSchema = z.object({ remarks: z.string().trim().max(500).nullable() });
 export const voidPaymentSchema = z.object({ reason: z.string().trim().min(1, "Please give a reason").max(300) });
@@ -89,14 +109,16 @@ export type PaymentResponse = {
   voidReason: string | null;
   allocations: PaymentAllocationResponse[];
   advanceSummary: { previousRemainingPaise: number; thisRemainingPaise: number; totalAvailablePaise: number } | null;
+  /** Spec 019b: the cheque record for a cheque payment, null for other modes. */
+  cheque: ChequeResponse | null;
   header: Record<string, unknown> | null;
   createdAt: string;
   createdBy: string;
 };
 
-export type PaymentWarning = { code: "cash_limit"; limitPaise: number };
+export type PaymentWarning = { code: "cash_limit"; limitPaise: number } | { code: "duplicate_cheque_number"; reference: string };
 export type PaymentSaveResponse = { payment: PaymentResponse; warnings: PaymentWarning[] };
-export type PaymentSummary = { id: string; kind: PaymentKind; receiptNo: string | null; receiptDate: string; payerName: string; mode: PaymentMode; amountPaise: number; remainingPaise: number; voided: boolean };
+export type PaymentSummary = { id: string; kind: PaymentKind; receiptNo: string | null; receiptDate: string; payerName: string; mode: PaymentMode; amountPaise: number; remainingPaise: number; voided: boolean; chequeStatus: ChequeStatus | null };
 export type PaymentListResponse = { items: PaymentSummary[]; nextCursor: string | null };
 
 export type PaymentStatus = "unpaid" | "part_paid" | "paid" | "voided";
