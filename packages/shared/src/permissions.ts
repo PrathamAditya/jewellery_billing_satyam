@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "cash.close",
   "inventory.view", "inventory.edit",
   "purchases.view", "purchases.edit",
+  "reconciliation.view", "reconciliation.edit",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -48,6 +49,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
       "dashboard.view",
       "inventory.view",
       "purchases.view",
+      "reconciliation.view",
     ],
   },
   {
