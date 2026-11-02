@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PERMISSIONS, type Permission } from "@jewellery/shared";
 import { ApiError } from "../api";
+import { useAuth } from "../auth";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { activityOf, createPerson, createRole, endSessions, listPeople, listRoles, resetPassword, updatePerson, updateRole, type PersonRow, type RoleRow } from "./api";
 
@@ -253,11 +254,17 @@ function RolesTab({ roles, reload }: { roles: RoleRow[]; reload: () => void }) {
 }
 
 export default function UsersPage({ me }: { me: string }) {
+  const { can } = useAuth();
   const [tab, setTab] = useState<"people" | "roles">("people");
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const loadRoles = () => listRoles().then((r) => setRoles(r.items)).catch((e) => setError(errText(e)));
-  useEffect(() => void loadRoles(), []);
+  const allowed = can("users.manage");
+  useEffect(() => {
+    if (allowed) void loadRoles();
+  }, [allowed]);
+  // Only owners manage people. Anyone else who types the address sees this, not the screen (the API refuses the data anyway).
+  if (!allowed) return <Alert>You do not have access to People and roles.</Alert>;
   return (
     <div className="flex flex-col gap-5">
       <h1 className="text-2xl font-semibold">People and roles</h1>

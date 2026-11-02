@@ -25,6 +25,7 @@ const when = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
 
 function Details({ c }: { c: CustomerResponse }) {
+  const { can } = useAuth();
   const [aadhaar, setAadhaar] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -64,11 +65,12 @@ function Details({ c }: { c: CustomerResponse }) {
                 <button className="text-sm underline" onClick={() => setAadhaar(null)}>
                   Hide
                 </button>
-              ) : (
+              ) : can("customers.edit") ? (
+                // The reveal API needs customers.edit (spec 010 R14), so a viewer is not offered it.
                 <button className="text-sm underline" onClick={() => void show()}>
                   Show
                 </button>
-              )}
+              ) : null}
               {err && <span className="text-sm text-red-700">{err}</span>}
             </span>
           ) : (

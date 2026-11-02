@@ -174,7 +174,8 @@ export default function RatesPage() {
         </ul>
 
         {/* PC: type the rates */}
-        <div className={`flex flex-col gap-4 ${pcOnly}`}>
+        {/* A viewer sees the rates but cannot type them: the fieldset disables everything inside it. */}
+        <fieldset disabled={!can("rates.edit")} className={`flex flex-col gap-4 min-w-0 ${pcOnly}`}>
           {RATE_KINDS.map((k) => (
             <div key={k} className="flex flex-col gap-1">
               <RateInput
@@ -215,7 +216,7 @@ export default function RatesPage() {
               {busy ? "Saving..." : "Save today's rates"}
             </button>
           </div>}
-        </div>
+        </fieldset>
       </section>
 
       <section className="flex flex-col gap-2">
