@@ -10,13 +10,13 @@ The shop gives raw gold or silver to a karigar (craftsman) against a job number.
 ## 2. Rules
 
 **Karigars**
-- K1. A karigar is a party with a name (required, up to 100 characters) and an optional phone (up to 15 digits and spaces). Optional remarks (up to 300 characters). Created with `karigar.edit`. No delete; no edit screen in this spec (a wrong karigar is corrected by the owner in a later spec). Test data uses fake names and phone numbers only.
+- K1. A karigar is a party with a name (required, up to 100 characters) and an optional phone (up to 15 characters: digits, spaces, + and -). Optional remarks (up to 300 characters). Created with `karigar.edit`. No delete; no edit screen in this spec (a wrong karigar is corrected by the owner in a later spec). Test data uses fake names and phone numbers only.
 
 **Jobs**
 - K2. A job is a document with a number `JOB-0001`, allocated from the series `JOB` for the financial year of the job date, in the same database batch as the job (a failed save uses no number). Numbers restart on each 1 April, as the other document series do.
 - K3. Opening a job takes: karigar, job date (business date), source place (an active place, default Showroom), labour basis (`gram` or `piece`), labour rate in paise (per gram or per piece; 0 is allowed), wastage allowance in basis points (0 to 1000, default 200 = 2.00%, Q200), and at least one issue line: metal, purity, weight in whole milligrams (more than 0). Gold purities are 22K916, 24K995, 18K750, 14K and 24K999; silver is silver. A job's labour basis, rate, allowance and source place never change after it is opened.
 - K4. Each issue line moves raw metal: the source place goes down, the Karigar place goes up, by the same weight, with the same metal and purity (spec 022 raw stock table). If the source place has less than that, the save is refused (409 `raw_stock_short`) and nothing is written.
-- K5. While the job is open, more issue lines may be added later (several deliveries per job, owner answer [40]). Each delivery follows K4 and K3's rules for lines.
+- K5. While the job is open, more issue lines may be added later (several deliveries per job, owner answer [40]). Each delivery follows K4 and K3's rules for lines, and takes its own date (Q208).
 - K6. A return takes lines of two kinds: `finished` (purity, pieces at least 1, weight in mg, and the purity tested on the piece, which must equal the purity of the line) and `remainder` (purity and weight in mg: metal given back unused). Partial returns are allowed, any number of times. A return line may not be more than what the karigar still holds on the job for that purity (409 `return_exceeds_holding`, message naming the grams still held). Movement: finished weight goes down from the Karigar place (the metal is now jewellery), remainder goes down from the Karigar place and up at the source place.
 - K7. Labour is accrued at each finished line, once, at the rate of the job: `gram` basis = weight (mg) x rate per gram / 1000, rounded to the paisa half up (BigInt, `packages/calc`); `piece` basis = pieces x rate. Remainder lines carry no labour. Labour is not charged on the wastage.
 - K8. A tested purity that differs from the line's purity is refused (409 `purity_mismatch`). A purity change is not recorded in this spec (Q206).
@@ -58,7 +58,7 @@ The shop gives raw gold or silver to a karigar (craftsman) against a job number.
 - `GET /jobs?karigarId=&status=`, `POST /jobs` (open with issue lines, K3, K4), `GET /jobs/:id` (job, issues, returns, labour, wastage, totals per purity, statement).
 - `POST /jobs/:id/issues` (K5), `POST /jobs/:id/returns` (K6, K7, K8), `POST /jobs/:id/close` (K10).
 - Permission map: GET routes `karigar.view`, every POST `karigar.edit`. Each route is listed in `apps/api/src/auth/permissionMap.ts` (the permissions test fails otherwise).
-- Every POST accepts an optional client `id` and is idempotent (same id and content returns the first result; same id with other content is 409), as the other create endpoints.
+- Opening a karigar, opening a job, a delivery, a return and a payout take an optional client `id`. A retry with the same id returns the first result and writes nothing again: for a karigar, a job and a payout the content is compared (other content is 409 `id_conflict`); for a delivery and a return the lines are not compared, only the id is. Closing a job takes no id: a second close is refused (409 `job_closed`).
 
 ## 4. Screens
 - **Karigars list** (`#/karigar`): name, phone, metal still with the karigar (per purity, in grams), labour owed. "New karigar" (PC only).
@@ -105,9 +105,12 @@ Refining and purity testing (Q43, later; the job rows leave room for them). Puri
 
 ## 9. Acceptance checklist
 - [ ] Owner approves this draft and the defaults for Q200 to Q209.
-- [ ] K1 to K20 implemented and tested as in section 6.
-- [ ] Migration 0031 applied on an empty database in every test (SQLite and D1 backends).
-- [ ] `npm run typecheck`, `npx vitest run`, `npm run build` clean; browser suite `e2e/run-all.mjs` passes with `e2e/karigar.mjs` last.
-- [ ] `docs/specs/README.md` row for 023 updated; Q80 status in `docs/open-questions.md` set to DEFAULT.
+- [x] K1 to K20 implemented and tested in `apps/api/test/karigar.test.ts` (26 tests) and `packages/calc/src/karigar.test.ts`. The database also enforces K6 and K10 (holding never below zero), K11 (closed job locked, entries append-only) and K13 (payout balance); the API checks the same rules first, so the screens show the message.
+- [x] Migration 0031 applied on the empty test database in every test (SQLite adapter, the default) and on the local D1 database.
+- [x] The karigar API tests also pass on the D1 test backend (`DB_BACKEND=d1`, Miniflare): 26 of 26.
+- [x] `npm run typecheck`, `npx vitest run` (993 tests), `npm run build` clean.
+- [x] Browser suite `e2e/run-all.mjs` run against the local worker: all files passed, 518 PASS lines, no FAIL; `e2e/karigar.mjs` (28 checks, phone included) is last in the list.
+- [x] `docs/specs/README.md` row for 023 added; Q80 status in `docs/open-questions.md` set to DEFAULT (see Q200 to Q209).
+- Not built: an adjust (correction) screen or route (Q209), purity change on a return (Q206), karigar edit screen, the karigar outstanding report in CA reports (spec 031), payouts in the daily cash closing (Q204). The `adjust` entry kind exists in the table and is counted in the balances.
 
-Status line: draft built on branch `spec-023-karigar`, owner review pending.
+Status line: built on branch `spec-023-karigar`, owner review pending. Defaults Q200 to Q209 apply until the owner answers.

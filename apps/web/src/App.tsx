@@ -35,6 +35,7 @@ import { BulkItemPage, BulkListPage } from "./inventory/BulkPages";
 import { LocationStockPage, LocationsPage } from "./inventory/LocationPages";
 import { NewPurchasePage, PurchasePage, PurchasesListPage } from "./inventory/PurchasePages";
 import { ReconciliationPage, ReconciliationsPage } from "./inventory/ReconciliationPages";
+import { JobPage, KarigarListPage, KarigarPage, NewJobPage } from "./karigar/KarigarPages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 import ThemeToggle from "./ThemeToggle";
@@ -121,6 +122,13 @@ function Page({ path, meId }: { path: string; meId: string }) {
     if (parts[1] === "reconciliations") return parts[2] ? <ReconciliationPage id={parts[2]} /> : <ReconciliationsPage />;
     return <InventoryListPage />;
   }
+  // Spec 023: karigar job work. The new-job form takes ?karigar=<id> in the hash query.
+  if (parts[0] === "karigar") {
+    if (parts[1] === "jobs" && parts[2]?.startsWith("new")) return <NewJobPage />;
+    if (parts[1] === "jobs" && parts[2]) return <JobPage id={parts[2]} />;
+    if (parts[1]) return <KarigarPage id={parts[1]} />;
+    return <KarigarListPage />;
+  }
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
   if (parts[0] === "audit") return <AuditPage />;
@@ -176,6 +184,7 @@ function Shell() {
           {can("oldgold.view") && link("#/old-gold", "Old gold", inOldGold)}
           {can("payments.view") && link("#/cash-closing", "Cash closing", inCash)}
           {can("inventory.view") && link("#/inventory", "Inventory", path.startsWith("/inventory"))}
+          {can("karigar.view") && link("#/karigar", "Karigars", path.startsWith("/karigar"))}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
           {can("settings.view") && link("#/settings", "Settings", inSettings)}
