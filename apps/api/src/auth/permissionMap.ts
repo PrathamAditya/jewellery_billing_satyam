@@ -100,6 +100,13 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "POST", path: "/api/inventory/items/:id/status", permission: "inventory.edit" },
   { method: "POST", path: "/api/inventory/items/:id/void", permission: "inventory.edit" },
 
+  // Spec 020b: bulk quantity items and their movements.
+  { method: "GET", path: "/api/inventory/bulk", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/bulk", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/bulk/:id", permission: "inventory.view" },
+  { method: "GET", path: "/api/inventory/bulk/:id/history", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/bulk/:id/movements", permission: "inventory.edit" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

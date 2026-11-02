@@ -1,4 +1,8 @@
 import type {
+  BulkHistoryResponse,
+  BulkItemListResponse,
+  BulkItemSaveResponse,
+  BulkMovementSaveResponse,
   InventoryHistoryResponse,
   InventoryItemListResponse,
   InventoryItemSaveResponse,
@@ -19,3 +23,10 @@ export const voidItem = (id: string, reason: string) => api<InventoryItemSaveRes
 export const listTypes = () => api<InventoryTypesResponse>("/api/inventory/types");
 export const createType = (name: string, itemCode: string) => api<InventoryItemType>("/api/inventory/types", { method: "POST", body: { name, itemCode } });
 export const updateType = (id: string, body: { name?: string; active?: boolean }) => api<InventoryItemType>(`/api/inventory/types/${id}`, { method: "PATCH", body });
+
+/** Spec 020b: bulk quantity item calls. */
+export const listBulk = (query: string) => api<BulkItemListResponse>(`/api/inventory/bulk${query}`);
+export const getBulk = (id: string) => api<BulkItemSaveResponse>(`/api/inventory/bulk/${id}`);
+export const getBulkHistory = (id: string) => api<BulkHistoryResponse>(`/api/inventory/bulk/${id}/history`);
+export const createBulk = (body: Record<string, unknown>) => api<BulkItemSaveResponse>("/api/inventory/bulk", { method: "POST", body });
+export const recordBulkMovement = (id: string, body: Record<string, unknown>) => api<BulkMovementSaveResponse>(`/api/inventory/bulk/${id}/movements`, { method: "POST", body });

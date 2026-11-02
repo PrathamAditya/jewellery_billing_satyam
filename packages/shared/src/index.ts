@@ -17,6 +17,7 @@ export * from "./ledger";
 export * from "./print";
 export * from "./settings";
 export * from "./inventory";
+export * from "./bulkItems";
 
 export const healthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
