@@ -1,6 +1,6 @@
 # 012b: Job work (HSN 9988), polish percent, HSN categories
 
-Status: Built on `wave-1` (verification and owner review pending)
+Status: Built and merged (in main). Verified 2026-11-02: calculation tests, examples A and B to the paisa, typecheck and build. Owner review pending.
 Depends on: 012, 013
 Open questions: none for this spec. One interpretation to confirm is listed in section 8. Discounts and stones are spec 012c.
 
