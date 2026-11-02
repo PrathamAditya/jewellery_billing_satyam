@@ -23,6 +23,9 @@ import CreditNotesPage from "./creditNotes/CreditNotesPage";
 import CreditNotePage from "./creditNotes/CreditNotePage";
 import OrderPage from "./orders/OrderPage";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
+import InventoryListPage from "./inventory/InventoryListPage";
+import { InventoryItemPage, NewInventoryItemPage } from "./inventory/InventoryItemPages";
+import InventoryTypesPage from "./inventory/InventoryTypesPage";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 import ThemeToggle from "./ThemeToggle";
@@ -88,6 +91,12 @@ function Page({ path, meId }: { path: string; meId: string }) {
   if (parts[0] === "credit-notes") return parts[1] ? <CreditNotePage id={parts[1]} /> : <CreditNotesPage />;
   if (parts[0] === "orders") return parts[1] ? <OrderPage id={parts[1]} /> : <OrdersPage />;
   if (parts[0] === "payments") return parts[1] ? <PaymentPage id={parts[1]} /> : <PaymentsPage />;
+  if (parts[0] === "inventory") {
+    if (parts[1] === "items" && parts[2]) return <InventoryItemPage id={parts[2]} />;
+    if (parts[1] === "new") return <NewInventoryItemPage />;
+    if (parts[1] === "types") return <InventoryTypesPage />;
+    return <InventoryListPage />;
+  }
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
   if (parts[0] === "calculator") return <CalculatorPage />;
@@ -135,6 +144,7 @@ function Shell() {
           {can("ledger.view") && link("#/outstanding", "Outstanding", path.startsWith("/outstanding"))}
           {can("invoices.view") && link("#/credit-notes", "Credit notes", path.startsWith("/credit-notes"))}
           {can("oldgold.view") && link("#/old-gold", "Old gold", inOldGold)}
+          {can("inventory.view") && link("#/inventory", "Inventory", path.startsWith("/inventory"))}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
           {can("settings.view") && link("#/settings", "Settings", inSettings)}

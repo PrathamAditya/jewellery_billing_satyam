@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   "backups.view", "backups.manage",
   "reports.view",
   "audit.view",
+  "inventory.view", "inventory.edit",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -41,6 +42,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
       "oldgold.view", "oldgold.create",
       "ledger.view",
       "settings.view",
+      "inventory.view",
     ],
   },
   {

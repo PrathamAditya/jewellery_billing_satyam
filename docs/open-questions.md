@@ -249,3 +249,16 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q117. Data folder.** `DEFAULT: Documents/JewelleryBilling, changed at setup if wanted`. Is that location acceptable?
 - **Q118. Local backup.** `DEFAULT: a copy after the last save of each day to a folder the owner picks, keeping the last 30 copies`. Is that enough, and which folder should it default to?
 - **Q119. Support.** `DEFAULT: email, plus a remote session started by the developer only with the owner's permission`. How should customers get help once the software is installed?
+
+## V. Wave 2 questions for specs 020 and 020b (inventory), default used until you answer
+
+- **Q150. U No. format.** `DEFAULT: a 4-character item code plus a 2-digit serial from 01 to 99 that restarts for each code (RING01, RING02, EARR01). The owner's example CHAIN01 has 5 characters, so Chain uses the code CHAI (CHAI01). The example T00001 fits the rule as code T000 with serial 01. Typed U Nos. are checked against the same rule. What is the exact rule, and after serial 99: refuse a new item for that code, or allow 3 digits?`
+- **Q151. Item types.** `DEFAULT: Ring RING, Chain CHAI, Earring EARR, Bangle BANG, Necklace NECK. The owner adds types with a 4-character code; a type is made inactive, never deleted`. Which other items do you sell (coins, bars, utensils, pooja items, watches; Q37)?
+- **Q152. Purity and metal.** `DEFAULT: the invoice purity list (22K916, 24K995, 18K750, 14K, 24K999, silver, other); metal is gold or silver`. Is the same list right for stock?
+- **Q153. Pairs.** `DEFAULT: one record per pair with pieces 1 to 10; the weights are for the whole pair`. Is that right for earrings and other sets?
+- **Q154. Status moves.** `DEFAULT: any move except out of written off, which is final; a reason is always required`. Should some moves (for example written off) need the owner to approve?
+- **Q155. Editing an item.** `DEFAULT: no edit of an item's details after it is saved; a wrong item is voided and entered again`. Do you want an edit screen with history, like customers, in a later spec?
+- **Q156. Voiding.** `DEFAULT: only an item that is in stock or written off, with a reason; its U No. is kept on record and the automatic series never issues it again`. Is that right?
+- **Q157. Bulk units.** `DEFAULT: the units pcs, pairs, sets and packets; Tilli is counted in pcs`. How is Tilli counted in the shop: by piece, by tray, or by weight?
+- **Q158. Negative quantity.** `DEFAULT: refused, both on the screen and in the database; a correction is an adjustment with a reason`. Is that right?
+- **Q159. Opening quantity.** `DEFAULT: entered when the bulk item is created, recorded as a received movement with the reason "Opening stock"`. Is that right?

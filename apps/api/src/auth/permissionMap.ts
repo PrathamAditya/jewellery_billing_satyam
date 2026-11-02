@@ -89,6 +89,17 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/ledger/summary", permission: "ledger.view" },
   { method: "GET", path: "/api/ledger/outstanding", permission: "ledger.view" },
 
+  // Spec 020: inventory items (U No.), item types and status history.
+  { method: "GET", path: "/api/inventory/types", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/types", permission: "inventory.edit" },
+  { method: "PATCH", path: "/api/inventory/types/:id", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/items", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/items", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/items/:id", permission: "inventory.view" },
+  { method: "GET", path: "/api/inventory/items/:id/history", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/items/:id/status", permission: "inventory.edit" },
+  { method: "POST", path: "/api/inventory/items/:id/void", permission: "inventory.edit" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },
