@@ -37,7 +37,7 @@ At the end of each day the owner, or a staff member with permission, counts the 
 
 ## 3. Data and API
 
-**Migration `0022_cash_closing.sql`**
+**Migration `0023_cash_closing.sql`**
 - Table `cash_closings`: `id`, `business_date` (unique), `opening_paise`, `expected_paise`, `counted_paise`, `difference_paise`, `reason`, `totals_json` (the cash lines as they were at the close), `closed_by`, `closed_at`, standard columns. Checks: the difference is counted minus expected; a non-zero difference has a reason.
 - Table `cash_closing_notes`: `id`, `business_date`, `note`, standard columns. A trigger refuses a note for a day that is not closed.
 - Append-only triggers on both tables (no update, no delete), like the other business tables.
@@ -101,7 +101,7 @@ Opening cash counted per till or per staff member, a cash-in-transit or bank dep
 
 ## 9. Acceptance checklist
 - [x] K1 to K15 implemented and tested in `apps/api/test/cashClosing.test.ts` (21 tests)
-- [x] Migration `0022_cash_closing.sql` applied to the local database; the role changes checked by a test
+- [x] Migration `0023_cash_closing.sql` applied to the local database; the role changes checked by a test
 - [x] Browser test `e2e/cashClosing.mjs` added to `e2e/run-all.mjs`
 - [ ] Owner review of Q130 to Q138
 

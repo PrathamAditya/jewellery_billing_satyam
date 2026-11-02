@@ -17,7 +17,7 @@ The owner can read the history of every change in the system: who did what, to w
 - A5. Bad input: a date that is not a real date, or a From date after the To date, is refused (400, `invalid_date` or `invalid_range`).
 
 **Who can see it**
-- A6. Permission `audit.view`. It is already in the shared permission list (spec 004 reserved it). The default owner role has it. The default manager, shop staff and view-only roles do not. Migration `0022_cash_closing.sql` removes it from the manager and view-only roles stored in the roles table (see section 8), because the roles table is what the server checks.
+- A6. Permission `audit.view`. It is already in the shared permission list (spec 004 reserved it). The default owner role has it. The default manager, shop staff and view-only roles do not. Migration `0023_cash_closing.sql` removes it from the manager and view-only roles stored in the roles table (see section 8), because the roles table is what the server checks.
 - A7. A user without `audit.view` gets 403 on both routes, and the Audit link is not shown.
 
 **Read only**
@@ -60,7 +60,7 @@ Exporting the log, reading the log for a single customer on the customer page, r
 
 ## 8. Defaults used (owner may change later)
 - A3 default: the filters use India business dates, both ends inclusive.
-- A6 default: owner only. Manager and view-only lose the permission. Staff never had it. The roles table is seeded by migration `0012`, which gave manager and view-only `audit.view`; migration `0022_cash_closing.sql` removes it from those two stored roles (a data change, not a schema change, so this spec has no migration of its own). The owner can give it back on the People screen.
+- A6 default: owner only. Manager and view-only lose the permission. Staff never had it. The roles table is seeded by migration `0012`, which gave manager and view-only `audit.view`; migration `0023_cash_closing.sql` removes it from those two stored roles (a data change, not a schema change, so this spec has no migration of its own). The owner can give it back on the People screen.
 - Detail: shown as the stored JSON, not translated into words.
 
 ## 9. Acceptance checklist
