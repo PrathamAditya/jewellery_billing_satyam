@@ -63,6 +63,23 @@ Everything needed to make a real bill, print it on the Brother, take the money a
 | 011b | Live IBJA reference rates (needs a provider and key, O10), can move earlier if decided |
 | 024 | Refining and testing, later phase, design must leave room (D23) |
 
+## Wave 4: downloadable cross-platform version (after launch)
+The same billing software as a desktop app, installed on Windows, macOS or Linux and run on the user's own PC, with no cloud needed. The cloud version keeps running. Full plan: `docs/wave4-plan.md`. Nothing here is built; each spec needs its own draft and the owner's approval first.
+
+| Spec | Name |
+|------|------|
+| 080 | Database adapter: D1-compatible wrapper over local SQLite; the whole API test suite runs on it first |
+| 081 | Local server entry: API and web app on 127.0.0.1, data folder per OS |
+| 082 | Local migration runner: applies and records migrations, backs up the database before an upgrade |
+| 083 | Desktop shell (Electron): own window, starts and stops the local server, sends no data anywhere |
+| 084 | Installers and code signing: Windows first, then macOS (signed, notarised) and Linux |
+| 085 | First-run setup: business details, bank details, owner login, number settings, logo |
+| 086 | Local backup and restore to a folder the owner picks; restore keeps a copy of the current data (answers Q81 for desktop) |
+| 087 | Updates: signed packages, checked at start-up, installed only when the owner agrees |
+| 088 | Recovery code shown at setup, to reset the owner password without a command line |
+| 089 | Packaged-app tests: the browser suite against the installed app on each platform, plus install, upgrade and uninstall |
+| 090 | Local network access over HTTPS for phones and other PCs (optional, only if the owner chooses it, Q112) |
+
 ## Risks to watch
 - **Offline-first is the biggest risk.** Today the server recalculates and numbers every invoice, so a PC without internet cannot save one. The calculation code is already shared, so the PC can compute locally. What still has to be designed is local storage, issuing numbers while offline (default in Q82: the PC is the numbering authority), conflict-free sync and "Sync Now". A short design spec (041) should be written in Wave 1, and the first proof built early, so later modules are made offline-ready.
 - **Users and roles touch every screen**, so spec 004 comes before the payments modules, not after.

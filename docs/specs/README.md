@@ -34,5 +34,16 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 019c | Credit sales with the rate fixed later (pending rate fixation) | Wave 2, built 2026-11-02 on `spec-019c-rate-fixation`, PR open, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
 | 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |
+| 080 | Database adapter (D1-compatible over local SQLite) | Wave 4, planned, not started |
+| 081 | Local server entry (API and web app on localhost) | Wave 4, planned, not started |
+| 082 | Local migration runner with backup before upgrade | Wave 4, planned, not started |
+| 083 | Desktop shell (Electron) | Wave 4, planned, not started |
+| 084 | Installers and code signing (Windows, macOS, Linux) | Wave 4, planned, not started |
+| 085 | First-run setup | Wave 4, planned, not started |
+| 086 | Local backup and restore | Wave 4, planned, not started |
+| 087 | Updates (owner approves) | Wave 4, planned, not started |
+| 088 | Owner recovery code | Wave 4, planned, not started |
+| 089 | Packaged-app tests | Wave 4, planned, not started |
+| 090 | Local network access over HTTPS (optional) | Wave 4, planned, not started |
 
 The full list is in `docs/roadmap.md`.
