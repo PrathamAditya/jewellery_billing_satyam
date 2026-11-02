@@ -81,7 +81,7 @@ At the end of each day the owner, or a staff member with permission, counts the 
   - Only the first closing takes an opening (K5, K6); a safe retry returns the first close (K10).
   - A closed day is not editable: no route, the table refuses update and delete (K11). A later cash entry leaves the saved closing and shows the change (K13). A correction note is added to a closed day only (K12).
   - A day before the last close is refused; an open earlier day with cash blocks the later day until it is closed (K7).
-  - The list is newest first with its notes. Staff and view-only cannot close; manager can; owner can (K14). Owner and manager hold `cash.close`; manager and view-only lack `audit.view` (migration 0022).
+  - The list is newest first with its notes. Staff and view-only cannot close; manager can; owner can (K14). Owner and manager hold `cash.close`; manager and view-only lack `audit.view` (migration 0023).
 - Browser (`e2e/cashClosing.mjs`): today's cash lists the cash advance and not the UPI payment; the live difference shows as short; a reason is needed; the day closes; a second close is refused; a correction note is added; phone shows no close button or note box and does not scroll sideways. A run on a database where today is already closed checks the closed view instead.
 
 ## 7. Out of scope
