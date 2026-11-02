@@ -49,13 +49,13 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 080 | Database adapter (D1-compatible over local SQLite) | Wave 4, built on branch `spec-080-db-adapter` (PR into `wave-4`), owner approval pending |
 | 081 | Local server entry (API and web app on 127.0.0.1) | Wave 4, built on branch `spec-081-local-server` (PR into `wave-4`), owner approval pending |
 | 082 | Local migration runner with backup before upgrade | Wave 4, built on branch `spec-082-migration-runner` (PR into `wave-4`), owner approval pending |
-| 083 | Desktop shell (Electron) | Wave 4, planned, not started |
-| 084 | Installers and code signing (Windows, macOS, Linux) | Wave 4, planned, not started |
-| 085 | First-run setup | Wave 4, planned, not started |
-| 086 | Local backup and restore | Wave 4, planned, not started |
-| 087 | Updates (owner approves) | Wave 4, planned, not started |
-| 088 | Owner recovery code | Wave 4, planned, not started |
-| 089 | Packaged-app tests | Wave 4, planned, not started |
-| 090 | Local network access over HTTPS (optional) | Wave 4, planned, not started |
+| 083 | Desktop shell (Electron) | Moved to the separate desktop project (2026-11-02) |
+| 084 | Installers and code signing (Windows, macOS, Linux) | Moved to the separate desktop project (2026-11-02) |
+| 085 | First-run setup | Moved to the separate desktop project (2026-11-02) |
+| 086 | Local backup and restore | Moved to the separate desktop project (2026-11-02) |
+| 087 | Updates (owner approves) | Moved to the separate desktop project (2026-11-02) |
+| 088 | Owner recovery code | Moved to the separate desktop project (2026-11-02) |
+| 089 | Packaged-app tests | Moved to the separate desktop project (2026-11-02) |
+| 090 | Local network access over HTTPS (optional) | Moved to the separate desktop project (2026-11-02) |
 
 The full list is in `docs/roadmap.md`.
