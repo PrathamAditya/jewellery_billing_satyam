@@ -17,6 +17,7 @@ import SettingsPage from "./settings/SettingsPage";
 import UsersPage from "./users/UsersPage";
 import PaymentsPage from "./payments/PaymentsPage";
 import AuditPage from "./audit/AuditPage";
+import CashClosingPage from "./cash/CashClosingPage";
 import PaymentPage from "./payments/PaymentPage";
 import OrdersPage from "./orders/OrdersPage";
 import OutstandingPage from "./ledger/OutstandingPage";
@@ -92,6 +93,7 @@ function Page({ path, meId }: { path: string; meId: string }) {
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
   if (parts[0] === "audit") return <AuditPage />;
+  if (parts[0] === "cash-closing") return <CashClosingPage />;
   if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
   return <Home />;
@@ -120,6 +122,7 @@ function Shell() {
   const inOldGold = path.startsWith("/old-gold");
   const inCalculator = path.startsWith("/calculator");
   const inAudit = path.startsWith("/audit");
+  const inCash = path.startsWith("/cash-closing");
   const link = (href: string, label: string, active: boolean, extra = "") => (
     <a href={href} className={`px-2 sm:px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
       {label}
@@ -138,6 +141,7 @@ function Shell() {
           {can("ledger.view") && link("#/outstanding", "Outstanding", path.startsWith("/outstanding"))}
           {can("invoices.view") && link("#/credit-notes", "Credit notes", path.startsWith("/credit-notes"))}
           {can("oldgold.view") && link("#/old-gold", "Old gold", inOldGold)}
+          {can("payments.view") && link("#/cash-closing", "Cash closing", inCash)}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
           {can("settings.view") && link("#/settings", "Settings", inSettings)}

@@ -48,6 +48,8 @@ beforeAll(async () => {
   t = await createTestDb();
   await person("owner", "owner");
   await person("staff1", "staff");
+  await person("manager1", "manager");
+  await person("viewer1", "viewer");
   // Rows at known times. Times are UTC; India is UTC+5:30.
   await row("2026-10-01T04:00:00.000Z", "u-owner", "rate_create", "rate", "r-old", { date: "2026-10-01" });
   await row("2026-11-01T18:29:59.999Z", "u-owner", "invoice_create", "invoice", "inv-1", { invoiceNo: "INV-0001" }); // 1 Nov, 23:59 India
@@ -134,6 +136,13 @@ describe("owner only (spec 051 R4)", () => {
     expect(denied.status).toBe(403);
     expect(await denied.json()).toMatchObject({ error: "forbidden", permission: "audit.view" });
     expect((await call("/api/audit/options", { as: "staff1" })).status).toBe(403);
+  });
+
+  // The stored roles: 0012 gave manager and view-only audit.view; migration 0022 takes it back.
+  it("the manager and the view-only role are refused too (default roles, migration 0022)", async () => {
+    expect((await call("/api/audit", { as: "manager1" })).status).toBe(403);
+    expect((await call("/api/audit", { as: "viewer1" })).status).toBe(403);
+    expect((await call("/api/audit/options", { as: "manager1" })).status).toBe(403);
   });
 });
 

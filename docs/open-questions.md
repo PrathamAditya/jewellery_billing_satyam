@@ -168,7 +168,7 @@ Each item says what to look for. One real example of each is enough, two if they
 - **Q76. Order references.** `DEFAULT`. `ORD-0001` ties advances to an order. Default: an order is created when the first advance is taken (with an optional description and expected date), and a later invoice can be linked to it. Can an order exist without any advance? Do orders restart each financial year?
 - **Q77. Copies.** `OPEN`. The sample says `SHOP COPY`. Is a customer copy printed as well (duplex means one sheet each)? Are copies labelled Original, Duplicate, and so on?
 - **Q78. Stock reconciliation.** `OPEN`. When the monthly count differs: who approves the adjustment, is a negative difference treated as a loss, and does it need a reason code?
-- **Q79. Daily cash closing.** `OPEN`. Is closing once a day by one person, and can a closed day be reopened? Which payments count as cash (cash receipts and cash paid out only)?
+- **Q79. Daily cash closing.** `DEFAULT: see Q130 to Q138 (spec 032)`. Earlier wording: `OPEN`. Is closing once a day by one person, and can a closed day be reopened? Which payments count as cash (cash receipts and cash paid out only)?
 - **Q80. Karigar.** `OPEN`. Wastage allowed per job (a percentage of issued metal)? Is labour per gram or fixed per piece? Does the karigar account run in weight (fine gold) or in money or both?
 - **Q81. Backups to the PC.** `OPEN`. A browser cannot save a file to the PC by itself every day. Options: (a) a small helper program on the PC (best, needs installing), (b) the app downloads a backup file to a folder when it is open each day, (c) a daily cloud backup you download weekly. Which do you want? (O14)
 - **Q82. Offline numbering.** `DEFAULT`. When the PC is offline it keeps issuing numbers in order from its last known number, and phones create numbered documents only when online. Is that acceptable, or must phones also create documents offline? (O6)
@@ -249,3 +249,16 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q117. Data folder.** `DEFAULT: Documents/JewelleryBilling, changed at setup if wanted`. Is that location acceptable?
 - **Q118. Local backup.** `DEFAULT: a copy after the last save of each day to a folder the owner picks, keeping the last 30 copies`. Is that enough, and which folder should it default to?
 - **Q119. Support.** `DEFAULT: email, plus a remote session started by the developer only with the owner's permission`. How should customers get help once the software is installed?
+
+## V. Wave 2 questions for specs 032 (daily cash closing) and 051 (audit viewer), default used until you answer
+
+- **Q130. One closing per day.** `DEFAULT: one closing per business date. A day can be closed only after it has ended (India time), and days close in order (no day before the last closed day)`. Is that right, or should an earlier day be closable later?
+- **Q131. Who closes.** `DEFAULT: the owner and the manager (cash.close); shop staff and view-only can read the day and the history. A correction note needs the same permission`. Should staff be able to close the day at the counter?
+- **Q132. Count and difference.** `DEFAULT: the counted cash is typed in rupees (stored in paise). Difference = counted minus expected (negative = short). A reason of up to 300 characters is required when the difference is not zero`.
+- **Q133. A closed day.** `DEFAULT: a closed day cannot be edited. A correction is a dated note on that day, shown with the closing; the saved figures never change`. Is that right?
+- **Q134. Reopening.** `DEFAULT: not allowed. The owner adds a dated correction note instead`. Is that right?
+- **Q135. Which money is cash.** `DEFAULT: only mode cash. Cash refunds and cash credit note payouts are cash out; cash old gold payouts too (none can exist today, spec 018). UPI, card, cheque, bank transfer, old gold receipts and held credit never count`. Should credit note payouts in cash count as cash out, as they do here?
+- **Q136. Opening cash.** `DEFAULT: the first closing types the opening cash in the drawer at the start of that day (0 if not typed); every later closing opens with the last closed count, so the drawer carries forward. A day with cash entries must be closed before a later day`. Is this how the shop counts the drawer?
+- **Q137. Money taken before the system.** `DEFAULT: opening advances (money taken before the system went live, spec 015) do not count in a day's cash`. Is that right?
+- **Q138. Changes after a close.** `DEFAULT: if cash for a closed day changes later (a receipt entered for that day after the close, or a voided payment), the saved closing stays as it was, and the day shows the current figure and asks for a correction note`. Is that right?
+- **Q139. Audit history (spec 051).** `DEFAULT: the audit history is for the owner only (audit.view). Migration 0022 takes audit.view away from the stored manager and view-only roles, which migration 0012 had given them. The owner can give it back on the People screen`. Is that right?
