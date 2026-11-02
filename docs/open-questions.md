@@ -249,3 +249,12 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q117. Data folder.** `DEFAULT: Documents/JewelleryBilling, changed at setup if wanted`. Is that location acceptable?
 - **Q118. Local backup.** `DEFAULT: a copy after the last save of each day to a folder the owner picks, keeping the last 30 copies`. Is that enough, and which folder should it default to?
 - **Q119. Support.** `DEFAULT: email, plus a remote session started by the developer only with the owner's permission`. How should customers get help once the software is installed?
+
+## V. Wave 2 questions for specs 030 (dashboard) and 031 (reports), default used until you answer
+
+- **Q140. Who sees which dashboard tiles.** `DEFAULT: the route needs dashboard.view (owner, manager, staff and viewer have it). Sales tiles need invoices.view; money tiles (received today, outstanding, advances, cheques) need payments.view`. Should customer balances (outstanding and advances) be shown to staff as well, or only to the owner and manager?
+- **Q141. Payments received today.** `DEFAULT: every mode counts, including at-sale payments and old gold settlements`. Should old gold settled against a bill be left out of "received"?
+- **Q142. Advances taken today.** `DEFAULT: payments of kind advance only (no opening advances, no old gold); an advance taken against a pending-rate sale is included`. Is that the right meaning of "advances received today"?
+- **Q143. Sales waiting for the rate.** `DEFAULT: the count of every open pending-rate sale, not only today's`. Would you rather see the amount of weight waiting, or only the count?
+- **Q144. Monthly summary.** `DEFAULT: twelve months of the current and previous financial year; sales by invoice date, received by receipt date; credit notes not netted off`. Should credit notes reduce the monthly sales?
+- **Q145. Outstanding and advances on the dashboard.** `DEFAULT: the same figures as the ledger summary (spec 019), so the dashboard and the Outstanding screen always agree. Only the totals are shown; the five numbers you wanted first (Q49) are not yet ordered`. Which five numbers should be at the top?

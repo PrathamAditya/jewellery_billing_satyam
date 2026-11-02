@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export { newId } from "./id";
-export { indiaDate } from "./dates";
+export { financialYearRange, indiaDate } from "./dates";
 export * from "./customer";
 export * from "./rates";
 export * from "./weight";
@@ -54,3 +54,4 @@ export const userResponseSchema = z.object({
 });
 export type UserResponse = z.infer<typeof userResponseSchema>;
 export * from "./creditNotes";
+export * from "./dashboard";

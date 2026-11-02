@@ -89,6 +89,9 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/ledger/summary", permission: "ledger.view" },
   { method: "GET", path: "/api/ledger/outstanding", permission: "ledger.view" },
 
+  // Spec 030: the dashboard (read-only). Tiles are hidden per section by invoices.view and payments.view in the handler.
+  { method: "GET", path: "/api/dashboard", permission: "dashboard.view" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

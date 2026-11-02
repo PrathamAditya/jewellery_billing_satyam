@@ -22,6 +22,7 @@ import OutstandingPage from "./ledger/OutstandingPage";
 import CreditNotesPage from "./creditNotes/CreditNotesPage";
 import CreditNotePage from "./creditNotes/CreditNotePage";
 import OrderPage from "./orders/OrderPage";
+import DashboardPanel from "./dashboard/DashboardPanel";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
@@ -39,6 +40,7 @@ function isHealthy(body: unknown): boolean {
 }
 
 function Home() {
+  const { can } = useAuth();
   const [status, setStatus] = useState<ApiStatus>("checking");
 
   useEffect(() => {
@@ -54,6 +56,12 @@ function Home() {
         <BusinessBanner />
         <TodayRates />
       </div>
+      {/* Spec 030: read-only dashboard, shown only to users with dashboard.view. */}
+      {can("dashboard.view") && (
+        <div className="w-full mb-8">
+          <DashboardPanel />
+        </div>
+      )}
       <h1 className="text-3xl font-semibold">Jewellery Billing</h1>
       <p className="text-stone-600">
         API status:{" "}
