@@ -420,6 +420,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-semibold">Settings</h1>
         <span className="text-xs text-stone-500 max-md:hidden">Changes apply to new documents only.</span>
+        {can("integrity.view") && <a href="#/integrity" className="text-sm underline">Data checks</a>}
       </div>
       <nav className="flex gap-1 flex-wrap border-b border-stone-200" aria-label="Settings tabs">
         {TABS.map((t) => (

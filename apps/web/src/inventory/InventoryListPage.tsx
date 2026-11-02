@@ -55,6 +55,9 @@ export default function InventoryListPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <a href="#/inventory/bulk" className="text-sm underline">Bulk items</a>
           <a href="#/inventory/locations" className="text-sm underline">Locations</a>
+          {can("reconciliation.view") && (
+            <a href="#/inventory/reconciliations" className="text-sm underline">Stock count</a>
+          )}
           {can("purchases.view") && (
             <a href="#/inventory/purchases" className="text-sm underline">Purchases</a>
           )}

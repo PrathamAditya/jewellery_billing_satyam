@@ -51,17 +51,15 @@ Everything needed to make a real bill, print it on the Brother, take the money a
 | 051 | Audit history viewer |
 
 ## Wave 3: before launch (February and March)
+Built fastest first. Each spec gets a draft and the owner's approval before it is built.
+
 | Spec | Name |
 |------|------|
-| 041 | Offline-first showroom PC, local data, Sync Now, no duplicates. The design is written early in Wave 1 because it affects every module (see risk below). |
-| 040 | Android install and phone screens with create and edit by role |
-| 023 | Karigar job work (issue, receive, wastage, labour, balance) |
-| 025 | Monthly stock reconciliation |
-| 050 | Backups: daily to the cloud with versions, manual download, restore. Moved here from Wave 1 by the owner on 2026-11-02. Local PC copy needs Q81. |
-| 052 | Data integrity checks |
-| 053 | Print verification on the Brother DCP-T830DW |
-| 011b | Live IBJA reference rates (needs a provider and key, O10), can move earlier if decided |
-| 024 | Refining and testing, later phase, design must leave room (D23) |
+| 052 | Data integrity checks (fastest: checks on the stored data, no new screens) |
+| 025 | Monthly stock reconciliation (uses the inventory and stock work from Wave 2) |
+| 023 | Karigar job work (issue, receive, wastage, labour, balance); open question Q80 |
+| 011b | Live IBJA reference rates; needs a provider and key (O10), so it waits until those are decided |
+| 053 | Print verification on the Brother DCP-T830DW: a manual printer check by the owner, not a build |
 
 ## Wave 4: downloadable cross-platform version (after launch)
 The same billing software as a desktop app, installed on Windows, macOS or Linux and run on the user's own PC, with no cloud needed. The cloud version keeps running. Full plan: `docs/wave4-plan.md`. Nothing here is built; each spec needs its own draft and the owner's approval first.
@@ -79,6 +77,10 @@ The same billing software as a desktop app, installed on Windows, macOS or Linux
 | 088 | Recovery code shown at setup, to reset the owner password without a command line |
 | 089 | Packaged-app tests: the browser suite against the installed app on each platform, plus install, upgrade and uninstall |
 | 090 | Local network access over HTTPS for phones and other PCs (optional, only if the owner chooses it, Q112) |
+| 041 | Moved from Wave 3 on 2026-11-02. Offline-first showroom PC for several PCs that share data, local data, Sync Now, no duplicates. Not needed for a single desktop install (Wave 4). |
+| 040 | Moved from Wave 3 on 2026-11-02. Android install and phone screens with create and edit by role |
+| 050 | Moved from Wave 3 on 2026-11-02. Backups to the cloud: daily, with versions, manual download, restore. The desktop copy is spec 086. |
+| 024 | Moved from Wave 3 on 2026-11-02. Refining and testing, later phase, design must leave room (D23) |
 
 ## Risks to watch
 - **Offline-first is the biggest risk.** Today the server recalculates and numbers every invoice, so a PC without internet cannot save one. The calculation code is already shared, so the PC can compute locally. What still has to be designed is local storage, issuing numbers while offline (default in Q82: the PC is the numbering authority), conflict-free sync and "Sync Now". A short design spec (041) should be written in Wave 1, and the first proof built early, so later modules are made offline-ready.

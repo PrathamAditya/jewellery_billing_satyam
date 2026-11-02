@@ -22,3 +22,5 @@ export { calculateCreditNote, CREDIT_NOTE_LIMITS } from "./creditNote";
 export type { CreditNoteInput, CreditNoteLineInput, CreditNoteOutcome, CreditNoteResult } from "./creditNote";
 export { validatePendingLines, pendingChargeableWeightMg, fixPendingRate } from "./pendingRate";
 export type { PendingLineInput, PendingSaleInput } from "./pendingRate";
+export { KARIGAR_LIMITS, labourPaise, allowanceMg, wastageMg, checkWastageAllowance, labourPayable, checkPayout, heldMg, checkReturnWeight } from "./karigar";
+export type { LabourBasis, KarigarOutcome } from "./karigar";

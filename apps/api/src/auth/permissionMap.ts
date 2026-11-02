@@ -102,6 +102,8 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/cash-closing/list", permission: "payments.view" },
   { method: "POST", path: "/api/cash-closing", permission: "cash.close" },
   { method: "POST", path: "/api/cash-closing/:date/notes", permission: "cash.close" },
+  // Spec 052: read-only data checks (owner only by default, Q180).
+  { method: "GET", path: "/api/integrity", permission: "integrity.view" },
   // Spec 020: inventory items (U No.), item types and status history.
   { method: "GET", path: "/api/inventory/types", permission: "inventory.view" },
   { method: "POST", path: "/api/inventory/types", permission: "inventory.edit" },
@@ -128,12 +130,34 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/inventory/transfers", permission: "inventory.view" },
   { method: "POST", path: "/api/inventory/transfers", permission: "inventory.edit" },
 
+  // Spec 025: monthly stock reconciliation. The report is read-only; counts, lines and close need reconciliation.edit.
+  { method: "GET", path: "/api/inventory/reconciliations", permission: "reconciliation.view" },
+  { method: "POST", path: "/api/inventory/reconciliations", permission: "reconciliation.edit" },
+  { method: "GET", path: "/api/inventory/reconciliations/:id", permission: "reconciliation.view" },
+  { method: "GET", path: "/api/inventory/reconciliations/:id/report", permission: "reconciliation.view" },
+  { method: "PUT", path: "/api/inventory/reconciliations/:id/counts", permission: "reconciliation.edit" },
+  { method: "POST", path: "/api/inventory/reconciliations/:id/lines", permission: "reconciliation.edit" },
+  { method: "POST", path: "/api/inventory/reconciliations/:id/close", permission: "reconciliation.edit" },
+
   // Spec 022: purchases of three types, and the raw gold and silver stock. raw-stock is listed before :id.
   { method: "GET", path: "/api/inventory/purchases", permission: "purchases.view" },
   { method: "POST", path: "/api/inventory/purchases", permission: "purchases.edit" },
   { method: "GET", path: "/api/inventory/purchases/raw-stock", permission: "purchases.view" },
   { method: "GET", path: "/api/inventory/purchases/:id", permission: "purchases.view" },
   { method: "POST", path: "/api/inventory/purchases/:id/void", permission: "purchases.edit" },
+
+  // Spec 023: karigar job work. Reads need karigar.view; every change needs karigar.edit (owner and manager).
+  { method: "GET", path: "/api/karigar/karigars", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/karigars", permission: "karigar.edit" },
+  { method: "GET", path: "/api/karigar/karigars/:id", permission: "karigar.view" },
+  { method: "GET", path: "/api/karigar/karigars/:id/statement", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/karigars/:id/payouts", permission: "karigar.edit" },
+  { method: "GET", path: "/api/karigar/jobs", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/jobs", permission: "karigar.edit" },
+  { method: "GET", path: "/api/karigar/jobs/:id", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/jobs/:id/issues", permission: "karigar.edit" },
+  { method: "POST", path: "/api/karigar/jobs/:id/returns", permission: "karigar.edit" },
+  { method: "POST", path: "/api/karigar/jobs/:id/close", permission: "karigar.edit" },
 
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
