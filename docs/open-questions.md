@@ -177,6 +177,13 @@ Each item says what to look for. One real example of each is enough, two if they
 **Timeline**
 - **Q84. 1 December start of testing.** `OPEN`. Parallel testing is meant to start in about a month. Please see the proposed plan in `docs/roadmap.md`: the core billing, printing, payments, advances, old gold, customers, staff logins and backups can be ready for it, and inventory, karigar, reports and offline-first follow during the testing months. Is that the order you want, or is something else needed on the first day of testing?
 
+## Q. Wave 2 questions for spec 019b (cheques), default used until you answer
+
+- **Q85. Bounce charge.** `DEFAULT: none`. When a cheque bounces, should the bank's bounce charge be added to the customer's balance? Default: no. The balance only rises by the amount that was reversed.
+- **Q86. Who marks what.** `DEFAULT: anyone who can take payments marks received, deposited and cleared; only the owner marks bounced`. Is that right, or should staff also be able to bounce?
+- **Q87. Cheque fields.** `DEFAULT: number (required), bank, cheque date and drawer name (optional)`. Any other field you want on a cheque?
+- **Q88. Moves.** `DEFAULT: a bounce is allowed from any state, including after cleared (banks sometimes return a cheque later); a bounced cheque cannot be un-bounced, the money is taken again as a new payment`. Is that right?
+
 ## N. Defaults used in Wave 1
 
 The agent building Wave 1 adds every default or interpretation it uses here (ID, what was assumed, spec affected). The list of planned defaults is in `docs/wave1-plan.md`.
