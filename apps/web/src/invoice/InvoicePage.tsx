@@ -179,7 +179,8 @@ export default function InvoicePage({ id }: { id: string }) {
                 Edit
               </button>
               )}
-              {can("invoices.edit") && (
+              {/* A sale whose rate is not fixed has no amount to credit yet (spec 019c). */}
+              {can("invoices.edit") && inv.rateStatus !== "pending" && (
               <button className={btnSecondary} onClick={() => setCrediting(true)}>
                 Credit note
               </button>
