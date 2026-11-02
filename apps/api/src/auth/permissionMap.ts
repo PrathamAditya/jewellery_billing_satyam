@@ -93,6 +93,15 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/dashboard", permission: "dashboard.view" },
   // Spec 031: the four CA reports, Excel or PDF. Read-only.
   { method: "GET", path: "/api/reports/:kind", permission: "reports.view" },
+  // Spec 051: read-only audit history (owner only by default).
+  { method: "GET", path: "/api/audit", permission: "audit.view" },
+  { method: "GET", path: "/api/audit/options", permission: "audit.view" },
+
+  // Spec 032: daily cash closing. Anyone who sees payments sees the day's cash; closing and correction notes need cash.close.
+  { method: "GET", path: "/api/cash-closing", permission: "payments.view" },
+  { method: "GET", path: "/api/cash-closing/list", permission: "payments.view" },
+  { method: "POST", path: "/api/cash-closing", permission: "cash.close" },
+  { method: "POST", path: "/api/cash-closing/:date/notes", permission: "cash.close" },
 
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },

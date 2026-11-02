@@ -56,3 +56,5 @@ export type UserResponse = z.infer<typeof userResponseSchema>;
 export * from "./creditNotes";
 export * from "./dashboard";
 export * from "./reports";
+export * from "./audit";
+export * from "./cashClosing";
