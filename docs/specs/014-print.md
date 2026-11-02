@@ -3,7 +3,7 @@
 Status: Built 2026-11-02 on branch `spec-014-print` (PR to `main`, stacked on the unmerged spec 019 PR #21). Waiting for the owner's Brother print check (open-questions C3) and approval.
 Depends on: 003, 013, 015, 016, 017, 018 (build it after them)
 Open questions used with defaults: Q63 (portrait, DONE), Q64 (no HUID), Q77 (copies)
-Reference: `docs/reference-formats.md` and the four PDFs in `docs/reference/`. The printed result must look like them and print the same figures.
+Reference: `docs/reference-formats.md` and the owner's four sample PDFs (not in this repository). The printed result must look like them and print the same figures.
 
 ## 1. Goal
 Print the owner's existing document designs from the saved data on a Brother DCP-T830DW: the tax invoice on A4 portrait with the settlement page on the reverse of the same sheet (automatic duplex), and the payment receipt and old gold receipt as A5 landscape designs printed on A4 paper to cut or tear. Reprinting changes nothing.
