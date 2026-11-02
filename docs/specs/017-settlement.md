@@ -42,7 +42,7 @@ A **Settlement** tab on the invoice page (between Details and History): the rece
 - Remarks typed, then a payment added: remarks unchanged.
 
 ## 6. Test cases
-**A. The owner's settlement page** (`docs/reference/tax-invoice-and-settlement.pdf` page 2): invoice payable 20,632,300 (₹2,06,323.00), payment PAY-0001 UPI ₹14,500 allocated in full, payment PAY-0002 mode old gold (from OGP-0001, 25,596,200) with 250,000 allocated: lines UPI `PAY-0001` 1,450,000 and Old Gold `PAY-0002` 250,000, received 1,700,000 (₹17,000), balance due 18,932,300 (₹1,89,323.00), advance reference `PAY-0001, PAY-0002`, and the automatic note ends with `Old gold OGP-0001 adjusted through PAY-0002: ₹2,500.00. Remaining in PAY-0002: ₹2,53,462.00.`
+**A. The owner's settlement page** (the owner's tax invoice sample (not in this repository) page 2): invoice payable 20,632,300 (₹2,06,323.00), payment PAY-0001 UPI ₹14,500 allocated in full, payment PAY-0002 mode old gold (from OGP-0001, 25,596,200) with 250,000 allocated: lines UPI `PAY-0001` 1,450,000 and Old Gold `PAY-0002` 250,000, received 1,700,000 (₹17,000), balance due 18,932,300 (₹1,89,323.00), advance reference `PAY-0001, PAY-0002`, and the automatic note ends with `Old gold OGP-0001 adjusted through PAY-0002: ₹2,500.00. Remaining in PAY-0002: ₹2,53,462.00.`
 
 **B. Actions:** receive an at-sale payment (no receipt number, reference shown), use two advances in one call, a use larger than remaining is 400, larger than the due is 400, an advance of another customer is 400, a voided advance is 409, partial then final payment moves the status from `part_paid` to `paid`.
 

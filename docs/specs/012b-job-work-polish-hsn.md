@@ -41,7 +41,7 @@ The invoice follows the owner's rules exactly: only two HSN categories (jeweller
 - Gross weight still cannot be below net.
 
 ## 6. Test cases
-**A. The owner's reference invoice** (`docs/reference/tax-invoice-and-settlement.pdf`): HSN 7113, gross and net 12.020 g, polish 10% = 1.202 g, gold rate ₹15,150 per gram, labour 0, same state.
+**A. The owner's reference invoice** (the owner's tax invoice sample (not in this repository)): HSN 7113, gross and net 12.020 g, polish 10% = 1.202 g, gold rate ₹15,150 per gram, labour 0, same state.
 
 | Figure | Value |
 |--------|-------|

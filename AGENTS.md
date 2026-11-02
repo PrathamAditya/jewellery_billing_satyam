@@ -11,7 +11,7 @@ You are continuing a project that another AI agent (Claude Code) built up to Wav
 2. `docs/wave1-plan.md`: the work order, branch strategy and definition of done.
 3. `docs/decisions.md`: locked decisions D1 to D28. Do not change a locked decision. If a spec seems to contradict one, the decision wins and you note it in `docs/open-questions.md`.
 4. `docs/specs/*.md`: one spec per feature, with numbered rules and test cases. The spec is the requirement. Specs 000 to 013 are built. The Wave 1 specs (012b, 012c, 003, 004, 015, 016, 017, 018, 019, 014, 050) are approved and not built.
-5. `docs/reference-formats.md` and `docs/reference/*.pdf`: the owner's existing printed documents. Printing must match them.
+5. `docs/reference-formats.md` and the owner's sample PDFs (kept outside this repository, not committed): the owner's existing printed documents. Printing must match them.
 6. `docs/requirements.md`, `docs/owner-answers-2026-11-01.md`, `docs/client-invoice-reference.md`: the owner's own words.
 7. `docs/tech-stack.md`, `docs/open-questions.md`.
 
