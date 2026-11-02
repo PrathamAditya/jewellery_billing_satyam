@@ -78,6 +78,9 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "POST", path: "/api/credit-notes/:id/void", permission: "payments.void" },
   { method: "POST", path: "/api/credit-notes/applications/:id/reverse", permission: "payments.void" },
   { method: "POST", path: "/api/credit-notes/payouts/:id/reverse", permission: "payments.refund" },
+  // Spec 019c: a sale whose rate is fixed later; fixing it applies the money already paid on it.
+  { method: "POST", path: "/api/invoices/pending", permission: "invoices.create" },
+  { method: "POST", path: "/api/invoices/:id/fix-rate", permission: "invoices.edit" },
 
   { method: "GET", path: "/api/opening-balances", permission: "ledger.view" },
   { method: "POST", path: "/api/opening-balances", permission: "ledger.opening" },

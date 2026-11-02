@@ -8,8 +8,8 @@ import { getApplicable } from "../rates/api";
 import Breakdown from "./Breakdown";
 import DiscountsEditor from "./DiscountsEditor";
 import LinesEditor from "./LinesEditor";
-import { createInvoice, updateInvoice } from "./api";
-import { blankLine, isTouched, lineTextFromSaved, parseLine, type LineText } from "./lines";
+import { createInvoice, createPendingInvoice, updateInvoice } from "./api";
+import { blankLine, isTouched, lineTextFromSaved, parseLine, parsePendingLine, type LineText } from "./lines";
 
 type Props = { invoice?: InvoiceResponse; onSaved: (i: InvoiceResponse) => void; onCancel: () => void };
 
@@ -32,6 +32,8 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
   const [remarks, setRemarks] = useState(invoice?.remarks ?? "");
   const [reason, setReason] = useState("");
   const [rows, setRows] = useState<LineText[]>(invoice ? invoice.lines.map(lineTextFromSaved) : [blankLine("22K916")]);
+  // Spec 019c: a new sale whose gold rate is fixed when the customer pays. Not offered when editing.
+  const [rateLater, setRateLater] = useState(false);
   // Spec 012c R4: the three discount rows. Empty means no discount.
   const [discounts, setDiscounts] = useState<DiscountTexts>(invoice ? discountTextsFrom(invoice.discounts) : blankDiscounts());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -61,9 +63,13 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
   const discountParse = useMemo(() => parseDiscountTexts(discounts), [discounts]);
   const discountsOk = Object.keys(discountParse.errors).length === 0;
   const preview = useMemo(
-    () => (allParsed && discountsOk ? calculateInvoice({ taxMode, lines: active.map(({ p }) => p.input!), discounts: discountParse.discounts }) : null),
-    [allParsed, discountsOk, taxMode, active, discountParse],
+    () => (!rateLater && allParsed && discountsOk ? calculateInvoice({ taxMode, lines: active.map(({ p }) => p.input!), discounts: discountParse.discounts }) : null),
+    [rateLater, allParsed, discountsOk, taxMode, active, discountParse],
   );
+  // Spec 019c: the same touched rows, read for a sale whose rate is fixed later.
+  const pendingRows = useMemo(() => rows.map((t, i) => ({ t, i, p: parsePendingLine(t) })).filter(({ t }) => isTouched(t)), [rows]);
+  const pendingAllOk = pendingRows.length > 0 && pendingRows.every(({ p }) => p.input);
+  const touchedRows = rateLater ? pendingRows : active;
 
   function pick(c: CustomerResponse) {
     setCustomerId(c.id);
@@ -78,8 +84,13 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
     setFormError(null);
     setFieldErrors({});
     setRowErrors({});
-    if (!allParsed) return setFormError("Fix the highlighted boxes on the lines first.");
-    if (!discountsOk) return setFormError("Fix the discount amounts first.");
+    if (rateLater) {
+      if (!pendingAllOk) return setFormError("Fix the highlighted boxes on the lines first.");
+      if (!customerId) return setFormError("Pick the saved customer. A sale whose rate is fixed later is kept against the customer.");
+    } else {
+      if (!allParsed) return setFormError("Fix the highlighted boxes on the lines first.");
+      if (!discountsOk) return setFormError("Fix the discount amounts first.");
+    }
     setBusy(true);
     const body: Record<string, unknown> = {
       invoiceDate: date,
@@ -91,13 +102,15 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
       taxMode,
       reverseCharge,
       remarks,
-      lines: active.map(({ p }) => p.input),
-      discounts: discountParse.discounts,
+      lines: rateLater ? pendingRows.map(({ p }) => p.input) : active.map(({ p }) => p.input),
+      discounts: rateLater ? undefined : discountParse.discounts,
     };
     try {
-      const saved = editing
-        ? await updateInvoice(invoice!.id, { ...body, expectedRevision: invoice!.revisionNo, reason: reason.trim() || undefined })
-        : await createInvoice({ ...body, id: clientId.current });
+      const saved = rateLater
+        ? await createPendingInvoice({ ...body, id: clientId.current })
+        : editing
+          ? await updateInvoice(invoice!.id, { ...body, expectedRevision: invoice!.revisionNo, reason: reason.trim() || undefined })
+          : await createInvoice({ ...body, id: clientId.current });
       onSaved(saved);
     } catch (e) {
       if (e instanceof ApiError && e.body.error === "validation") {
@@ -106,7 +119,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         const r: Record<number, string[]> = {};
         for (const i of issues) {
           const m = /^lines\.(\d+)\./.exec(i.field);
-          if (m) (r[active[Number(m[1]) - 1]?.i ?? 0] ??= []).push(i.message);
+          if (m) (r[touchedRows[Number(m[1]) - 1]?.i ?? 0] ??= []).push(i.message);
           else f[i.field] = i.message;
         }
         setFieldErrors(f);
@@ -117,7 +130,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         const general: string[] = [];
         for (const er of errors) {
           if (er.line === null) general.push(er.message);
-          else (r[active[er.line - 1]?.i ?? 0] ??= []).push(er.message.replace(/^Line \d+: /, ""));
+          else (r[touchedRows[er.line - 1]?.i ?? 0] ??= []).push(er.message.replace(/^Line \d+: /, ""));
         }
         setRowErrors(r);
         if (general.length) setFormError(general.join(" "));
@@ -164,6 +177,24 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
 
       <section className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-3">
         <div className="flex gap-4 flex-wrap items-end">
+          {!editing && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Rate</span>
+              <div className="flex">
+                {([false, true] as const).map((later) => (
+                  <button
+                    key={String(later)}
+                    type="button"
+                    onClick={() => setRateLater(later)}
+                    aria-pressed={rateLater === later}
+                    className={`px-3 py-2 border first:rounded-l-lg last:rounded-r-lg -ml-px first:ml-0 ${rateLater === later ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300"}`}
+                  >
+                    {later ? "Fixed when paid (credit)" : "Fixed now"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <Field label="Invoice date" error={err("invoiceDate")}>
             <input className={`${inputClass} w-44`} type="date" value={date} max={today || undefined} onChange={(e) => setDate(e.target.value)} />
           </Field>
@@ -189,16 +220,22 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
           </label>
         </div>
         {today && date && date !== today && <Alert kind="info">This is not today's date. The invoice number comes from this date's financial year.</Alert>}
-        {rates && date && Object.values(rates).every((r) => !r) && <Alert kind="info">No rates are saved yet for this date. Type the gold rate on each line.</Alert>}
-        <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} rates={rates} showPurity />
+        {!rateLater && rates && date && Object.values(rates).every((r) => !r) && <Alert kind="info">No rates are saved yet for this date. Type the gold rate on each line.</Alert>}
+        {rateLater && <Alert kind="info">Rate pending: the gold rate is not typed now. It is fixed when the customer pays, using that day's rate. The sale needs a saved customer.</Alert>}
+        <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} rates={rates} showPurity pendingRate={rateLater} />
         {err("lines") && <Alert>{err("lines")}</Alert>}
-        <p className="text-xs text-stone-500">Choosing a purity fills today's rate. You can overtype it. Gross defaults to net when left blank. Rates are typed per gram.</p>
-        <DiscountsEditor value={discounts} onChange={setDiscounts} />
+        {rateLater ? (
+          <p className="text-xs text-stone-500">Gross defaults to net when left blank. Rates are typed per gram. Labour is typed now and fixed with the sale.</p>
+        ) : (
+          <p className="text-xs text-stone-500">Choosing a purity fills today's rate. You can overtype it. Gross defaults to net when left blank. Rates are typed per gram.</p>
+        )}
+        {!rateLater && <DiscountsEditor value={discounts} onChange={setDiscounts} />}
       </section>
 
-      {preview?.ok && <Breakdown r={preview.result} descriptions={active.map(({ t }) => t.description)} />}
-      {preview && !preview.ok && preview.errors.filter((e) => e.line === null).map((e) => <Alert key={e.code}>{e.message}</Alert>)}
-      {!preview && <p className="text-stone-500">Type a net weight and a gold rate to see the totals.</p>}
+      {rateLater && <p className="text-stone-600 text-sm">Amount and GST are worked out when the rate is fixed. Chargeable weight: net plus polish, shown on the invoice.</p>}
+      {!rateLater && preview?.ok && <Breakdown r={preview.result} descriptions={active.map(({ t }) => t.description)} />}
+      {!rateLater && preview && !preview.ok && preview.errors.filter((e) => e.line === null).map((e) => <Alert key={e.code}>{e.message}</Alert>)}
+      {!rateLater && !preview && <p className="text-stone-500">Type a net weight and a gold rate to see the totals.</p>}
 
       <section className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-4">
         <Field label="Remarks (internal, never printed)" error={err("remarks")}>
@@ -217,7 +254,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
           Cancel
         </button>
         <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
-          {busy ? "Saving..." : editing ? "Save changes" : "Save invoice"}
+          {busy ? "Saving..." : editing ? "Save changes" : rateLater ? "Save sale (rate pending)" : "Save invoice"}
         </button>
       </div>
     </div>

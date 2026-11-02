@@ -184,6 +184,19 @@ Each item says what to look for. One real example of each is enough, two if they
 - **Q87. Cheque fields.** `DEFAULT: number (required), bank, cheque date and drawer name (optional)`. Any other field you want on a cheque?
 - **Q88. Moves.** `DEFAULT: a bounce is allowed from any state, including after cleared (banks sometimes return a cheque later); a bounced cheque cannot be un-bounced, the money is taken again as a new payment`. Is that right?
 
+## R. Wave 2 questions for spec 019c (credit sales, rate fixed later), default used until you answer
+
+- **Q89. Labour on a pending sale.** `DEFAULT: the labour rate per kg is typed and fixed at the sale; only the gold rate waits`. Should the labour rate also wait until the rate is fixed?
+- **Q90. Which rate is used when fixing.** `DEFAULT: the applicable rate of the line's purity on the rate date (spec 011 R8, a carried-forward rate allowed and its date shown); a typed rate overrides it per line; a line with no rate (for example 18K750) must be typed`. Is that right?
+- **Q91. Money paid before fixing.** `DEFAULT: recorded as the customer's advance linked to the sale (numbered PAY receipt); applied to the sale up to its payable when the rate is fixed; any excess stays as advance; nothing can be allocated to the sale before fixing`. Is that right, or should it be refused until the rate is fixed?
+- **Q92. Fixed once or in parts.** `DEFAULT: once, for the whole sale, on one day; corrections afterwards are ordinary invoice edits with history`. Is that right?
+- **Q93. Invoice number.** `DEFAULT: allocated when the sale is recorded (INV series, financial year of the sale date), not when the rate is fixed`. Q70 asked the same.
+- **Q94. What a pending sale may contain.** `DEFAULT: customer required (no walk-in); HSN 7113 only; weight-priced lines only, no stones, combined totals or discounts`. Should job work (9988), stones or discounts be allowed on a pending sale?
+- **Q95. Printing a pending sale.** `DEFAULT: weights, purity and labour rate are printed, and the amount block says "Rate and amount to be fixed when paid"; no GST, rate or payable is printed until fixed`. Is that right?
+- **Q96. Outstanding.** `DEFAULT: a pending sale is not in the outstanding total or the FIFO order; it is listed in a separate "Pending rate" list with its weight and the money held against it`.
+- **Q97. Voiding a pending sale with money held.** `DEFAULT: refused; fix the rate first, then correct it with an edit`. Is that right?
+- **Q98. Date in the ledger.** `DEFAULT: a sale appears in the ledger on its invoice date, even if the rate is fixed later (the ledger is in date order)`.
+
 ## N. Defaults used in Wave 1
 
 The agent building Wave 1 adds every default or interpretation it uses here (ID, what was assumed, spec affected). The list of planned defaults is in `docs/wave1-plan.md`.

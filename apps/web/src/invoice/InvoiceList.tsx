@@ -96,7 +96,7 @@ export default function InvoiceList() {
                   {i.customerName}
                   {i.customerMobile && <span className="text-stone-500"> {i.customerMobile}</span>}
                 </td>
-                <td className={`px-3 py-2 text-right whitespace-nowrap ${i.voidedAt ? "line-through text-stone-400" : ""}`}>{formatMoney(i.payablePaise)}</td>
+                <td className={`px-3 py-2 text-right whitespace-nowrap ${i.voidedAt ? "line-through text-stone-400" : ""}`}>{i.rateStatus === "pending" ? <span className="text-stone-500">Pending rate</span> : formatMoney(i.payablePaise)}</td>
               </tr>
             ))}
             {!loading && items.length === 0 && (

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { calculateInvoice, divRoundHalfUp, polishWeightMg, type InvoiceResult } from "@jewellery/calc";
+import { calculateInvoice, divRoundHalfUp, fixPendingRate, polishWeightMg, validatePendingLines, type InvoiceResult, type PendingSaleInput } from "@jewellery/calc";
 import {
   RATE_KINDS,
   cleanMobile,
@@ -16,6 +16,11 @@ import {
   type InvoiceResponse,
   type InvoiceSummary,
   type DiscountsBody,
+  PURITY_RATE_KIND,
+  fixRateRequestSchema,
+  pendingInvoiceRequestSchema,
+  type PendingInvoiceRequest,
+  type Purity,
 } from "@jewellery/shared";
 import { financialYearOf } from "@jewellery/calc";
 import { settingsSnapshot } from "../settings/routes";
@@ -68,6 +73,9 @@ type DbInvoice = {
   /** Spec 012c: the discounts as entered ('{}' when none) and their total. Old rows predate them. */
   discount_json?: string;
   discount_paise?: number;
+  /** Spec 019c: "pending" until the rate is fixed. Rows from before migration 0020 read as fixed. */
+  rate_status?: "fixed" | "pending";
+  rate_fixed_on?: string | null;
 };
 
 type DbLine = {
@@ -98,19 +106,42 @@ type DbLine = {
 const isUniqueError = (e: unknown) =>
   e instanceof Error && /UNIQUE constraint failed/i.test(`${e.message} ${(e as { cause?: Error }).cause?.message ?? ""}`);
 
-const toSummary = (r: DbInvoice, received = 0): InvoiceSummary => ({
-  id: r.id,
-  invoiceNo: r.invoice_no,
-  invoiceDate: r.invoice_date,
-  customerName: r.customer_name,
-  customerMobile: r.customer_mobile,
-  payablePaise: r.payable_paise,
-  revisionNo: r.revision_no,
-  voidedAt: r.voided_at,
-  receivedPaise: received,
-  balanceDuePaise: Math.max(0, r.payable_paise - received),
-  paymentStatus: paymentStatusOf(r.payable_paise, received, r.voided_at !== null),
-});
+const toSummary = (r: DbInvoice, received = 0): InvoiceSummary => {
+  const pending = (r.rate_status ?? "fixed") === "pending";
+  return {
+    id: r.id,
+    invoiceNo: r.invoice_no,
+    invoiceDate: r.invoice_date,
+    customerName: r.customer_name,
+    customerMobile: r.customer_mobile,
+    // Spec 019c R3: a pending sale stores 0 and it is not an amount. Read it with rateStatus.
+    payablePaise: r.payable_paise,
+    revisionNo: r.revision_no,
+    voidedAt: r.voided_at,
+    receivedPaise: received,
+    balanceDuePaise: pending ? 0 : Math.max(0, r.payable_paise - received),
+    paymentStatus: paymentStatusOf(r.payable_paise, received, r.voided_at !== null, pending),
+    rateStatus: pending ? "pending" : "fixed",
+    rateFixedOn: r.rate_fixed_on ?? null,
+    pendingWeightMg: 0,
+    pendingHeldPaise: 0,
+  };
+};
+
+/** Spec 019c R13: the weight and the held money of a pending sale, read from its live lines and payments. */
+async function pendingFigures(db: D1Database, r: DbInvoice): Promise<{ pendingWeightMg: number; pendingHeldPaise: number }> {
+  if ((r.rate_status ?? "fixed") !== "pending") return { pendingWeightMg: 0, pendingHeldPaise: 0 };
+  const w = await db.prepare("SELECT COALESCE(SUM(chargeable_weight_mg), 0) AS n FROM invoice_lines WHERE invoice_id = ?1 AND revision_no = ?2").bind(r.id, r.revision_no).first<{ n: number }>();
+  const h = await db
+    .prepare(
+      `SELECT COALESCE(SUM(p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0)
+                 - COALESCE((SELECT SUM(x.amount_paise) FROM payment_refunds x WHERE x.payment_id = p.id AND x.reversed_at IS NULL), 0)), 0) AS n
+       FROM payments p WHERE p.pending_invoice_id = ?1 AND p.voided_at IS NULL`,
+    )
+    .bind(r.id)
+    .first<{ n: number }>();
+  return { pendingWeightMg: w?.n ?? 0, pendingHeldPaise: h?.n ?? 0 };
+}
 
 const toLine = (l: DbLine): InvoiceLineResponse => ({
   lineNo: l.line_no,
@@ -220,6 +251,12 @@ function changedParts(a0: Canon, b0: Canon): string[] {
   if (JSON.stringify(a.lines) !== JSON.stringify(b.lines)) out.push("lines");
   if (JSON.stringify(a.discounts) !== JSON.stringify(b.discounts)) out.push("discounts");
   return out;
+}
+
+/** Spec 019c R5: payments taken against a pending sale that are still live (their remaining money is held). */
+async function heldForSale(db: D1Database, invoiceId: string): Promise<number> {
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM payments WHERE pending_invoice_id = ?1 AND voided_at IS NULL").bind(invoiceId).first<{ n: number }>();
+  return row?.n ?? 0;
 }
 
 /** Money received per invoice (spec 015 R12), one query for a whole page. */
@@ -339,6 +376,8 @@ invoiceRoutes.get("/", async (c) => {
   const offset = Math.max(0, Number.parseInt(c.req.query("cursor") ?? "0", 10) || 0);
   if ((from && !isDate(from)) || (to && !isDate(to))) return c.json({ error: "invalid_date" }, 400);
   if (status && status !== "active" && status !== "voided") return c.json({ error: "invalid_status" }, 400);
+  const rateStatus = c.req.query("rateStatus");
+  if (rateStatus && rateStatus !== "pending" && rateStatus !== "fixed") return c.json({ error: "invalid_rate_status" }, 400);
 
   const where: string[] = [];
   const args: unknown[] = [];
@@ -356,6 +395,8 @@ invoiceRoutes.get("/", async (c) => {
   if (customerId) where.push(`customer_id = ${add(customerId)}`);
   if (status === "active") where.push("voided_at IS NULL");
   if (status === "voided") where.push("voided_at IS NOT NULL");
+  // Spec 019c R13: the pending-rate list.
+  if (rateStatus) where.push(`rate_status = ${add(rateStatus)}`);
   if (from) where.push(`invoice_date >= ${add(from)}`);
   if (to) where.push(`invoice_date <= ${add(to)}`);
 
@@ -365,7 +406,7 @@ invoiceRoutes.get("/", async (c) => {
   const page = rows.slice(0, PAGE_SIZE);
   const received = await receivedMap(c.env.DB, page.map((r) => r.id));
   const body: InvoiceListResponse = {
-    items: page.map((r) => toSummary(r, received.get(r.id) ?? 0)),
+    items: await Promise.all(page.map(async (r) => ({ ...toSummary(r, received.get(r.id) ?? 0), ...(await pendingFigures(c.env.DB, r)) }))),
     nextCursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
   };
   return c.json(body);
@@ -441,7 +482,9 @@ invoiceRoutes.get("/:id", async (c) => {
   const row = await loadRow(db, c.req.param("id"));
   if (!row) return c.json({ error: "not_found" }, 404);
   const wanted = c.req.query("revision");
-  if (wanted === undefined || Number(wanted) === row.revision_no) return c.json(toResponse(row, await loadLines(db, row.id, row.revision_no), false, await receivedOf(db, row.id)));
+  if (wanted === undefined || Number(wanted) === row.revision_no) {
+    return c.json({ ...toResponse(row, await loadLines(db, row.id, row.revision_no), false, await receivedOf(db, row.id)), ...(await pendingFigures(db, row)) });
+  }
 
   const n = Number(wanted);
   if (!Number.isInteger(n) || n < 1 || n > row.revision_no) return c.json({ error: "not_found" }, 404);
@@ -474,6 +517,8 @@ invoiceRoutes.put("/:id", async (c) => {
   const row = await loadRow(db, c.req.param("id"));
   if (!row) return c.json({ error: "not_found" }, 404);
   if (row.voided_at) return c.json({ error: "invoice_voided", message: "A voided invoice cannot be edited" }, 409);
+  // Spec 019c R10: a sale with its rate still to be fixed is changed by fixing the rate, not by an edit.
+  if (row.rate_status === "pending") return c.json({ error: "rate_pending", message: "The rate of this sale is not fixed yet. Fix the rate first." }, 409);
 
   const p = await prepare(c, await readJson(c), true);
   if (!p.ok) return c.json(p.body, p.status);
@@ -577,6 +622,10 @@ invoiceRoutes.post("/:id/void", async (c) => {
   if ((await receivedOf(db, row.id)) > 0) {
     return c.json({ error: "has_payments", message: "This invoice has payments recorded against it. Reverse them first." }, 409);
   }
+  // Spec 019c R7: money paid against a sale whose rate is not fixed yet blocks the void (Q97).
+  if (row.rate_status === "pending" && (await heldForSale(db, row.id)) > 0) {
+    return c.json({ error: "has_payments", message: "Money has been paid against this sale. Fix the rate first, then correct the sale." }, 409);
+  }
   const now = new Date().toISOString();
   await db.batch([
     db
@@ -586,4 +635,247 @@ invoiceRoutes.post("/:id/void", async (c) => {
   ]);
   const saved = (await loadRow(db, row.id))!;
   return c.json(toResponse(saved, await loadLines(db, row.id, saved.revision_no), false));
+});
+
+// ---- spec 019c: credit sales with the rate fixed later ----
+
+/** Spec 019c: the saved content of a pending sale. Same keys and order as canonicalInput, with gold rates 0 (not fixed yet). */
+function pendingCanon(b: PendingInvoiceRequest) {
+  return {
+    invoiceDate: b.invoiceDate,
+    customerId: b.customerId,
+    customerName: b.customerName,
+    customerMobile: b.customerMobile,
+    customerAddress: b.customerAddress,
+    customerPan: b.customerPan,
+    taxMode: b.taxMode,
+    reverseCharge: b.reverseCharge ?? false,
+    remarks: b.remarks,
+    discounts: null,
+    lines: b.lines.map((l) => ({
+      description: l.description,
+      purity: l.purity,
+      hsn: l.hsn,
+      grossWeightMg: l.grossWeightMg,
+      netWeightMg: l.netWeightMg,
+      polishBps: l.polishBps,
+      goldRatePaisePerKg: 0,
+      labourRatePaisePerKg: l.labourRatePaisePerKg,
+      pricingMode: "weight",
+      stoneWeightMg: 0,
+      stoneAmountPaise: 0,
+      totalAmountPaise: 0,
+    })),
+  };
+}
+
+const INSERT_PENDING_LINE = `INSERT INTO invoice_lines
+  (id, invoice_id, revision_no, line_no, description, purity, hsn, gross_weight_mg, net_weight_mg, polish_mg, polish_bps,
+   gold_rate_paise_per_kg, labour_rate_paise_per_kg, gst_rate_bps, chargeable_weight_mg, gold_amount_paise,
+   labour_amount_paise, amount_paise, display_rate_paise_per_gram, pricing_mode, stone_weight_mg, stone_amount_paise,
+   total_amount_paise, discount_paise, taxable_paise)
+  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)`;
+
+/** Spec 019c R3: the lines of a pending sale are stored with the weights and labour, and no amounts. */
+const pendingLineStatement = (db: D1Database, invoiceId: string, revisionNo: number, lineNo: number, l: { description: string; purity: string; hsn: string; grossWeightMg: number; netWeightMg: number; polishMg: number; polishBps: number; labourRatePaisePerKg: number }, chargeable: number) =>
+  db
+    .prepare(INSERT_PENDING_LINE)
+    .bind(newId(), invoiceId, revisionNo, lineNo, l.description, l.purity, l.hsn, l.grossWeightMg, l.netWeightMg, l.polishMg, l.polishBps, 0, l.labourRatePaisePerKg, 300, chargeable, 0, 0, 0, 0, "weight", 0, 0, 0, 0, 0);
+
+
+// ---- create a pending sale (spec 019c R1 to R4) ----
+invoiceRoutes.post("/pending", async (c) => {
+  const db = c.env.DB;
+  const user = c.get("user");
+  const parsed = pendingInvoiceRequestSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    const body = validationBody(parsed.error);
+    body.issues = parsed.error.issues.map((i) => ({
+      field: i.path.length > 1 && i.path[0] === "lines" ? `lines.${Number(i.path[1]) + 1}.${String(i.path[2] ?? "")}` : String(i.path[0] ?? ""),
+      message: i.message,
+    }));
+    return c.json(body, 400);
+  }
+  const b = parsed.data;
+  if (b.invoiceDate > indiaDate(c.get("now"))) return c.json({ error: "future_date", message: "An invoice cannot be dated in the future" }, 400);
+  const cust = await db.prepare("SELECT id, voided_at FROM customers WHERE id = ?1").bind(b.customerId).first<{ id: string; voided_at: string | null }>();
+  if (!cust) return c.json({ error: "customer_not_found", message: "That customer does not exist" }, 400);
+  if (cust.voided_at) return c.json({ error: "customer_voided", message: "That customer is voided. Restore them first." }, 409);
+
+  const polished = b.lines.map((l) => ({ ...l, hsn: l.hsn.trim(), polishMg: polishWeightMg(l.netWeightMg, l.polishBps) }));
+  const errors = validatePendingLines({
+    taxMode: b.taxMode,
+    lines: polished.map((l) => ({ hsn: l.hsn, grossWeightMg: l.grossWeightMg, netWeightMg: l.netWeightMg, polishMg: l.polishMg, labourRatePaisePerKg: l.labourRatePaisePerKg })),
+  });
+  if (errors.length) return c.json({ error: "calculation", errors }, 400);
+
+  const id = b.id ?? newId();
+  const canon = pendingCanon(b);
+  const replay = classifyReplay(await loadRow(db, id), (row) => row.input_json === JSON.stringify(canon));
+  if (replay.kind === "conflict") return c.json({ error: "id_conflict", message: "This id is already used by a different invoice" }, 409);
+  if (replay.kind === "replay") return c.json(toResponse(replay.row, await loadLines(db, id, replay.row.revision_no), false));
+
+  const fy = financialYearOf(b.invoiceDate);
+  const header = await settingsSnapshot(db);
+  const now = new Date().toISOString();
+  try {
+    await db.batch([
+      db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('INV', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy),
+      db
+        .prepare(
+          `INSERT INTO invoices
+             (id, created_at, created_by, updated_at, updated_by, invoice_no, fy, serial, header_json, invoice_date, customer_id, customer_name,
+              customer_name_search, customer_mobile, customer_address, customer_pan, tax_mode, reverse_charge, remarks,
+              rates_json, input_json, taxable_paise, tax_paise, total_before_round_off_paise, round_off_paise,
+              payable_paise, calc_json, discount_json, discount_paise, revision_no, rate_status)
+           VALUES (?1, ?2, ?3, ?2, ?3,
+              ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4)", ["?17", "?18", "?19"])}, ?4,
+              (SELECT last_no FROM number_series WHERE series = 'INV' AND fy = ?4), ?5,
+              ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, '{}', ?16, 0, 0, 0, 0, 0, '{}', '{}', 0, 1, 'pending')`,
+        )
+        .bind(
+          id, now, user.id, fy, JSON.stringify(header), b.invoiceDate, b.customerId, b.customerName, nameSearchKey(b.customerName),
+          b.customerMobile, b.customerAddress, b.customerPan, b.taxMode, b.reverseCharge ? 1 : 0, b.remarks, JSON.stringify(canon),
+          ...printedNumberValues(header.numbering, "INV", fy),
+        ),
+      ...polished.map((l, i) => pendingLineStatement(db, id, 1, i + 1, l, l.netWeightMg + l.polishMg)),
+      auditStatement(db, { actor: user.id, action: "invoice_pending_create", entity: "invoice", entityId: id, detail: { lines: b.lines.length, rateStatus: "pending" } }),
+    ]);
+  } catch (e) {
+    if (!isUniqueError(e)) throw e;
+    const again = classifyReplay(await loadRow(db, id), (row) => row.input_json === JSON.stringify(canon));
+    if (again.kind === "replay") return c.json(toResponse(again.row, await loadLines(db, id, again.row.revision_no), false));
+    if (again.kind === "conflict") return c.json({ error: "id_conflict", message: "This id is already used by a different invoice" }, 409);
+    throw e;
+  }
+  const row = (await loadRow(db, id))!;
+  return c.json(toResponse(row, await loadLines(db, id, 1), false), 201);
+});
+
+// ---- fix the rate of a pending sale (spec 019c R8 to R11) ----
+invoiceRoutes.post("/:id/fix-rate", async (c) => {
+  const db = c.env.DB;
+  const user = c.get("user");
+  const parsed = fixRateRequestSchema.safeParse(await readJson(c));
+  if (!parsed.success) return c.json(validationBody(parsed.error), 400);
+  const b = parsed.data;
+  const row = await loadRow(db, c.req.param("id"));
+  if (!row) return c.json({ error: "not_found" }, 404);
+  if (row.voided_at) return c.json({ error: "invoice_voided", message: "A voided invoice cannot be changed" }, 409);
+  if ((row.rate_status ?? "fixed") !== "pending") {
+    return c.json({ error: "already_fixed", message: "The rate of this sale is already fixed. Correct it by editing the invoice." }, 409);
+  }
+  if (b.expectedRevision !== row.revision_no) return c.json({ error: "stale_revision", message: "This invoice was changed. Reload it and try again." }, 409);
+
+  const today = indiaDate(c.get("now"));
+  const rateDate = b.rateDate ?? today;
+  if (rateDate > today) return c.json({ error: "future_date", message: "The rate date cannot be in the future" }, 400);
+  if (rateDate < row.invoice_date) return c.json({ error: "rate_date_before_sale", message: "The rate date cannot be before the sale date" }, 400);
+
+  const lines = await loadLines(db, row.id, row.revision_no);
+  const typed = new Map<number, number>();
+  for (const t of b.typedRates ?? []) {
+    if (!lines.some((l) => l.line_no === t.lineNo)) return c.json({ error: "validation", issues: [{ field: "typedRates", message: `Line ${t.lineNo} is not on this sale` }] }, 400);
+    typed.set(t.lineNo, t.goldRatePaisePerKg);
+  }
+
+  // Spec 019c Q90: a typed rate wins; otherwise the applicable rate of the purity on the rate date (spec 011 R8).
+  const goldRates: number[] = [];
+  const missing: number[] = [];
+  for (const l of lines) {
+    const t = typed.get(l.line_no);
+    if (t !== undefined) {
+      goldRates.push(t);
+      continue;
+    }
+    const kind = PURITY_RATE_KIND[l.purity as Purity];
+    const applicable = kind ? await applicableRate(db, kind, rateDate) : null;
+    if (!applicable) {
+      missing.push(l.line_no);
+      goldRates.push(0);
+    } else goldRates.push(applicable.pricePaisePerKg);
+  }
+  if (missing.length) {
+    return c.json({ error: "rate_missing", message: `There is no saved rate for line ${missing.join(", ")} on ${rateDate}. Type the rate for that line.`, lines: missing }, 400);
+  }
+
+  const input: PendingSaleInput = {
+    taxMode: row.tax_mode,
+    lines: lines.map((l) => ({ hsn: l.hsn, grossWeightMg: l.gross_weight_mg, netWeightMg: l.net_weight_mg, polishMg: l.polish_mg, labourRatePaisePerKg: l.labour_rate_paise_per_kg })),
+  };
+  const outcome = fixPendingRate(input, goldRates);
+  if (!outcome.ok) return c.json({ error: "calculation", errors: outcome.errors }, 400);
+  const result = outcome.result;
+
+  const rates = Object.fromEntries(await Promise.all(RATE_KINDS.map(async (k) => [k, await applicableRate(db, k, rateDate)] as const))) as ApplicableRatesResponse["rates"];
+  const oldCanon = JSON.parse(row.input_json) as { lines: Record<string, unknown>[] } & Record<string, unknown>;
+  const canon = { ...oldCanon, lines: oldCanon.lines.map((l, i) => ({ ...l, goldRatePaisePerKg: goldRates[i] })) };
+
+  // Spec 019c R8: the money already paid against this sale is applied now, oldest receipt first, up to the payable.
+  const held = (
+    await db
+      .prepare(
+        `SELECT p.id, p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0)
+                - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0) AS remaining
+         FROM payments p WHERE p.pending_invoice_id = ?1 AND p.voided_at IS NULL ORDER BY p.receipt_date, p.created_at, p.id`,
+      )
+      .bind(row.id)
+      .all<{ id: string; remaining: number }>()
+  ).results;
+  let left = result.payablePaise;
+  const applied: { paymentId: string; amount: number }[] = [];
+  for (const h of held) {
+    if (left <= 0) break;
+    const take = Math.min(h.remaining, left);
+    if (take > 0) {
+      applied.push({ paymentId: h.id, amount: take });
+      left -= take;
+    }
+  }
+  const appliedTotal = result.payablePaise - left;
+
+  const next = row.revision_no + 1;
+  const now = new Date().toISOString();
+  try {
+    await db.batch([
+      revisionStatement(db, { entity: "invoice", entityId: row.id, snapshot: row, reason: b.reason || "rate fixed", actor: user.id }),
+      db
+        .prepare(
+          `UPDATE invoices SET updated_at = ?2, updated_by = ?3, rates_json = ?4, input_json = ?5, taxable_paise = ?6, tax_paise = ?7,
+             total_before_round_off_paise = ?8, round_off_paise = ?9, payable_paise = ?10, calc_json = ?11, revision_no = ?12,
+             rate_status = 'fixed', rate_fixed_on = ?13
+           WHERE id = ?1 AND revision_no = ?14`,
+        )
+        .bind(row.id, now, user.id, JSON.stringify(rates), JSON.stringify(canon), result.taxablePaise, result.taxPaise, result.totalBeforeRoundOffPaise, result.roundOffPaise, result.payablePaise, JSON.stringify(result), next, rateDate, row.revision_no),
+      ...lines.map((l, i) => {
+        const r = result.lines[i]!;
+        return db
+          .prepare(INSERT_LINE)
+          .bind(
+            newId(), row.id, next, l.line_no, l.description, l.purity, l.hsn, l.gross_weight_mg, l.net_weight_mg, l.polish_mg, l.polish_bps,
+            goldRates[i], l.labour_rate_paise_per_kg, 300, r.chargeableWeightMg, r.goldAmountPaise, r.labourAmountPaise, r.amountPaise, r.displayRatePaisePerGram,
+            "weight", 0, 0, 0, 0, r.taxablePaise,
+          );
+      }),
+      ...applied.map((a) =>
+        db
+          .prepare("INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)")
+          .bind(newId(), a.paymentId, row.id, a.amount, now, user.id),
+      ),
+      auditStatement(db, {
+        actor: user.id,
+        action: "invoice_rate_fixed",
+        entity: "invoice",
+        entityId: row.id,
+        detail: { fromRevision: row.revision_no, toRevision: next, rateDate, payablePaise: result.payablePaise, appliedPaise: appliedTotal, payments: applied.length, reason: b.reason || undefined },
+      }),
+    ]);
+  } catch (e) {
+    if (isUniqueError(e)) return c.json({ error: "stale_revision", message: "This invoice was changed. Reload it and try again." }, 409);
+    const m = e instanceof Error ? e.message : "";
+    if (/exceeds_due|exceeds_payment/.test(m)) return c.json({ error: "exceeds_due", message: "The money paid is more than the new amount allows. Reload and try again." }, 409);
+    throw e;
+  }
+  const saved = (await loadRow(db, row.id))!;
+  return c.json(toResponse(saved, await loadLines(db, row.id, next), false, await receivedOf(db, row.id)));
 });

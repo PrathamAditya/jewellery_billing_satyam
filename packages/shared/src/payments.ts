@@ -36,7 +36,7 @@ export const paymentRequestSchema = z.object({
   reference: z.string().trim().max(60, "Reference is too long (60 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
   amountPaise: z.number({ error: "Enter the amount" }).int("Amount must be whole paise").min(1, "Amount must be more than 0").max(MAX_PAYMENT_PAISE, "Amount is too large"),
   /** `advance` = no invoice yet. `against_invoices` = pay one or more invoices. `at_sale` = recorded on one invoice at the time of sale. */
-  purpose: z.enum(["advance", "against_invoices", "at_sale", "opening_advance"], { error: "Choose what this payment is for" }),
+  purpose: z.enum(["advance", "against_invoices", "at_sale", "opening_advance", "pending_sale"], { error: "Choose what this payment is for" }),
   /** Old booklet receipt number, for opening advances (spec 016 R3). */
   oldReference: z.string().trim().max(60).optional().nullable().transform((v) => (v ? v : null)),
   invoiceId: z.string().uuid().optional(),
@@ -121,7 +121,7 @@ export type PaymentSaveResponse = { payment: PaymentResponse; warnings: PaymentW
 export type PaymentSummary = { id: string; kind: PaymentKind; receiptNo: string | null; receiptDate: string; payerName: string; mode: PaymentMode; amountPaise: number; remainingPaise: number; voided: boolean; chequeStatus: ChequeStatus | null };
 export type PaymentListResponse = { items: PaymentSummary[]; nextCursor: string | null };
 
-export type PaymentStatus = "unpaid" | "part_paid" | "paid" | "voided";
-/** Spec 015 R12: computed from allocations, never stored. */
-export const paymentStatusOf = (payablePaise: number, receivedPaise: number, voided: boolean): PaymentStatus =>
-  voided ? "voided" : receivedPaise <= 0 ? "unpaid" : receivedPaise >= payablePaise ? "paid" : "part_paid";
+export type PaymentStatus = "unpaid" | "part_paid" | "paid" | "voided" | "pending_rate";
+/** Spec 015 R12: computed from allocations, never stored. Spec 019c: a sale whose rate is not fixed yet is "pending_rate". */
+export const paymentStatusOf = (payablePaise: number, receivedPaise: number, voided: boolean, pendingRate = false): PaymentStatus =>
+  voided ? "voided" : pendingRate ? "pending_rate" : receivedPaise <= 0 ? "unpaid" : receivedPaise >= payablePaise ? "paid" : "part_paid";

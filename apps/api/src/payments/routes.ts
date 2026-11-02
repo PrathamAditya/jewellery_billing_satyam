@@ -139,7 +139,7 @@ export async function openItems(db: D1Database, customerId: string) {
         `SELECT 'invoice' AS src, i.id, i.invoice_no AS label, i.invoice_date AS d, i.created_at AS c,
                 i.payable_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.invoice_id = i.id AND a.reversed_at IS NULL), 0)
                   - COALESCE((SELECT SUM(x.amount_paise) FROM credit_applications x WHERE x.invoice_id = i.id AND x.reversed_at IS NULL), 0) AS due
-         FROM invoices i WHERE i.customer_id = ?1 AND i.voided_at IS NULL
+         FROM invoices i WHERE i.customer_id = ?1 AND i.voided_at IS NULL AND i.rate_status = 'fixed'
          UNION ALL
          SELECT 'opening' AS src, o.id, COALESCE(o.reference, 'Opening balance') AS label, o.as_of_date AS d, o.created_at AS c,
                 o.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.opening_balance_id = o.id AND a.reversed_at IS NULL), 0) AS due
@@ -220,18 +220,19 @@ const canonical = (b: PaymentRequest) =>
     chequeDrawer: b.chequeDrawer ?? null,
   });
 
-type Plan = { kind: PaymentKind; allocations: { invoiceId?: string; openingBalanceId?: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null };
+type Plan = { kind: PaymentKind; allocations: { invoiceId?: string; openingBalanceId?: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null; /** Spec 019c R5: the pending sale this money is held against. */ pendingInvoiceId?: string };
 
 /** Works out who is paid and which invoices are paid, or says why not (R2 to R4). */
 async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan: Plan } | { ok: false; status: 400 | 409; body: unknown }> {
   if (b.purpose === "at_sale") {
     if (!b.invoiceId) return { ok: false, status: 400, body: { error: "validation", issues: [{ field: "invoiceId", message: "Choose the invoice" }] } };
     const inv = await db
-      .prepare("SELECT id, customer_id, customer_name, customer_mobile, customer_pan, customer_address, payable_paise, voided_at FROM invoices WHERE id = ?1")
+      .prepare("SELECT id, customer_id, customer_name, customer_mobile, customer_pan, customer_address, payable_paise, voided_at, rate_status FROM invoices WHERE id = ?1")
       .bind(b.invoiceId)
-      .first<{ id: string; customer_id: string | null; customer_name: string; customer_mobile: string | null; customer_pan: string | null; customer_address: string | null; payable_paise: number; voided_at: string | null }>();
+      .first<{ id: string; customer_id: string | null; customer_name: string; customer_mobile: string | null; customer_pan: string | null; customer_address: string | null; payable_paise: number; voided_at: string | null; rate_status: string }>();
     if (!inv) return { ok: false, status: 400, body: { error: "invoice_not_found", message: "That invoice does not exist" } };
     if (inv.voided_at) return { ok: false, status: 409, body: { error: "invoice_voided", message: "That invoice is voided" } };
+    if (inv.rate_status === "pending") return { ok: false, status: 409, body: { error: "rate_pending", message: "The rate of that sale is not fixed yet. Take the money as a payment on the sale, then fix the rate." } };
     if (b.customerId && b.customerId !== inv.customer_id) return { ok: false, status: 400, body: { error: "customer_mismatch", message: "That invoice belongs to another customer" } };
     const due = inv.payable_paise - (await receivedFor(db, inv.id));
     if (b.amountPaise > due) return { ok: false, status: 409, body: { error: "exceeds_due", message: `The invoice only owes ₹${(due / 100).toFixed(2)}`, dueAmountPaise: due } };
@@ -245,6 +246,20 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
         allocations: [{ invoiceId: inv.id, amountPaise: b.amountPaise }],
       },
     };
+  }
+
+  if (b.purpose === "pending_sale") {
+    // Spec 019c R5: money paid before the rate is fixed. It is the sale customer's advance, linked to the sale.
+    if (!b.invoiceId) return { ok: false, status: 400, body: { error: "validation", issues: [{ field: "invoiceId", message: "Choose the sale" }] } };
+    const sale = await db.prepare("SELECT customer_id, voided_at, rate_status FROM invoices WHERE id = ?1").bind(b.invoiceId).first<{ customer_id: string | null; voided_at: string | null; rate_status: string }>();
+    if (!sale) return { ok: false, status: 400, body: { error: "invoice_not_found", message: "That sale does not exist" } };
+    if (sale.voided_at) return { ok: false, status: 409, body: { error: "invoice_voided", message: "That sale is voided" } };
+    if (sale.rate_status !== "pending") return { ok: false, status: 409, body: { error: "not_pending", message: "The rate of that sale is already fixed. Take the payment against the invoice instead." } };
+    if (!sale.customer_id) return { ok: false, status: 400, body: { error: "customer_required", message: "That sale has no customer" } };
+    if (b.customerId && b.customerId !== sale.customer_id) return { ok: false, status: 400, body: { error: "customer_mismatch", message: "That sale belongs to another customer" } };
+    const c = await db.prepare("SELECT id, name, mobile, pan, address, voided_at FROM customers WHERE id = ?1").bind(sale.customer_id).first<{ id: string; name: string; mobile: string | null; pan: string | null; address: string | null; voided_at: string | null }>();
+    if (!c) return { ok: false, status: 400, body: { error: "customer_not_found", message: "That customer does not exist" } };
+    return { ok: true, plan: { kind: "advance", customerId: c.id, payer: { name: c.name, mobile: c.mobile, pan: c.pan, address: c.address }, allocations: [], orderId: null, pendingInvoiceId: b.invoiceId } };
   }
 
   if (!b.customerId) return { ok: false, status: 400, body: { error: "validation", issues: [{ field: "customerId", message: "Choose the customer" }] } };
@@ -298,9 +313,10 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
       if (ob.voided_at) return { ok: false, status: 409, body: { error: "voided", message: "That opening balance is voided" } };
       return { ok: false, status: 409, body: { error: "exceeds_due", message: "That balance is already paid" } };
     }
-    const exists = await db.prepare("SELECT customer_id, voided_at FROM invoices WHERE id = ?1").bind(x.invoiceId!).first<{ customer_id: string | null; voided_at: string | null }>();
+    const exists = await db.prepare("SELECT customer_id, voided_at, rate_status FROM invoices WHERE id = ?1").bind(x.invoiceId!).first<{ customer_id: string | null; voided_at: string | null; rate_status: string }>();
     if (!exists) return { ok: false, status: 400, body: { error: "invoice_not_found", message: "That invoice does not exist" } };
     if (exists.voided_at) return { ok: false, status: 409, body: { error: "invoice_voided", message: "That invoice is voided" } };
+    if (exists.rate_status === "pending") return { ok: false, status: 409, body: { error: "rate_pending", message: "The rate of that sale is not fixed yet." } };
     if (exists.customer_id !== cust.id) return { ok: false, status: 400, body: { error: "customer_mismatch", message: "That invoice belongs to another customer" } };
     return { ok: false, status: 409, body: { error: "exceeds_due", message: "That invoice is already paid" } };
   }
@@ -377,6 +393,10 @@ paymentRoutes.post("/", async (c) => {
         pl.orderId, ...(numbered ? printedNumberValues(settings.numbering, "PAY", fy) : []),
       ),
   );
+  if (pl.pendingInvoiceId) {
+    // Spec 019c R5: the money is linked to the pending sale, and applied when its rate is fixed.
+    statements.push(db.prepare("UPDATE payments SET pending_invoice_id = ?2 WHERE id = ?1").bind(id, pl.pendingInvoiceId));
+  }
   if (b.mode === "cheque") {
     // Spec 019b C1, C8: the cheque details, and the first event: every cheque starts as 'received'.
     statements.push(
