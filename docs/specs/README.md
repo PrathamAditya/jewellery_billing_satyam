@@ -20,7 +20,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 011 | Daily gold and silver rates | Built, merged, owner check pending |
 | 012 | Invoice calculation engine | Built, merged, owner check pending |
 | 013 | Invoices (create, search, edit, void, history) | Built, merged, awaiting deploy and owner check |
-| 012b | Job work 9988, polish percent, HSN categories | Built on `wave-1`, verification and owner review pending |
+| 012b | Job work 9988, polish percent, HSN categories | Built and merged, verified 2026-11-02, owner review pending |
 | 003 | Settings, number formats, document headers | Built, checked on `spec-003-leftovers` (PR open, owner check pending); migration tests on old rows still to do |
 | 004 | Users, roles and permissions | Built, owner review pending |
 | 012c | Discounts, stones and diamonds | Built 2026-11-02, owner review pending |

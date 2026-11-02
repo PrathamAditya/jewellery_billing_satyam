@@ -81,3 +81,9 @@ grep -rIn -E "[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]" . --exclude-dir=no
 
 ## After Wave 1 (do not start without the owner)
 Wave 2 and 3 are in `docs/roadmap.md` and need their own specs, approved one by one. The owner will bring answers to `docs/open-questions.md` (rates feed provider, v84 HTML file, role details, discount and stone rules, U No. format). Offline-first (041) needs a design spec first because it affects every module.
+
+## Final pass results (2026-11-02)
+- Fresh local database (deleted state, migrated, owner seeded, built), full `e2e/run-all.mjs`: 233 checks pass.
+- Every screen at 390 px: no sideways scroll (owner view, 15 routes).
+- Old gold receipt settled as an advance: receipt and linked payment print without error (the earlier "print crash" report did not reproduce).
+- Not done in this pass: a browser sweep of permission-hidden buttons for the `viewer` role; migration tests on seeded old rows (spec 003 R7, R8); a browser test of a changed number prefix (API tests only).
