@@ -78,3 +78,9 @@ Node 22.22 has no TypeScript stripping: scripts run through `tsx`. Package manag
 - If a spec is wrong or impossible, fix the spec file in the same commit and say so in the commit message. If it conflicts with a locked decision, follow the decision.
 - Before every commit: `npm run typecheck`, `npm test`, `npm run build`, and for UI work `npm run e2e`. Fix what you break. Never weaken or delete an existing test to make it pass.
 - Finish by updating `docs/HANDOFF.md` (state, what is deployed, what the owner must do next) and writing the PR description with a test plan and deploy notes.
+
+## Branches and CI (owner decision, 2026-11-02)
+- Each spec is its own pull request into the **wave branch** (`wave-N`, created from `main` when the wave starts), not into `main`. Spec PRs run **no CI**; the owner merges them without waiting.
+- When every spec of the wave is in, open **one pull request from `wave-N` into `main`**. That is the only pull request that runs CI (`.github/workflows/ci.yml` triggers on pull requests into `main` and by hand). The owner merges it once that check is green.
+- Do not open a single-spec pull request into `main`. Docs-only changes can go into the wave branch too.
+- Run the full local checks (typecheck, unit and API tests, build, and the browser suite where the spec needs it) before pushing a spec branch, because the spec PR itself will not run CI.
