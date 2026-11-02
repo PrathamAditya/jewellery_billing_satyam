@@ -220,8 +220,23 @@ async function oldestUnpaid(db: D1Database, customerId: string): Promise<string 
   return items[0]?.d ?? null;
 }
 
+/** Spec 019 R5 for every customer: the one definition the summary, the outstanding list, the reports and the dashboard share. */
+export async function customerBalances(db: D1Database): Promise<{ customer_id: string; customer_name: string; outstanding: number; advance: number }[]> {
+  return (await db.prepare(TOTALS_SQL).all<{ customer_id: string; customer_name: string; outstanding: number; advance: number }>()).results;
+}
+
+/** Spec 019 R6 totals only (the dashboard reads these). Same figures as `GET /api/ledger/summary`. */
+export async function ledgerTotals(db: D1Database): Promise<{ totalOutstandingPaise: number; totalAdvanceHeldPaise: number; customersWithOutstanding: number }> {
+  const rows = await customerBalances(db);
+  return {
+    totalOutstandingPaise: rows.filter((r) => r.outstanding > 0).reduce((s, r) => s + r.outstanding, 0),
+    totalAdvanceHeldPaise: rows.reduce((s, r) => s + Math.max(0, r.advance), 0),
+    customersWithOutstanding: rows.filter((r) => r.outstanding > 0).length,
+  };
+}
+
 ledgerRoutes.get("/ledger/summary", async (c) => {
-  const rows = (await c.env.DB.prepare(TOTALS_SQL).all<{ customer_id: string; customer_name: string; outstanding: number; advance: number }>()).results;
+  const rows = await customerBalances(c.env.DB);
   const withOut = rows.filter((r) => r.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding);
   const top: OutstandingRow[] = [];
   for (const r of withOut.slice(0, 10)) {
@@ -240,7 +255,7 @@ ledgerRoutes.get("/ledger/summary", async (c) => {
 ledgerRoutes.get("/ledger/outstanding", async (c) => {
   const q = (c.req.query("q") ?? "").trim().toLowerCase();
   const offset = Math.max(0, Number.parseInt(c.req.query("cursor") ?? "0", 10) || 0);
-  const rows = (await c.env.DB.prepare(TOTALS_SQL).all<{ customer_id: string; customer_name: string; outstanding: number; advance: number }>()).results
+  const rows = (await customerBalances(c.env.DB))
     .filter((r) => r.outstanding > 0 && (!q || r.customer_name.toLowerCase().includes(q)))
     .sort((a, b) => b.outstanding - a.outstanding || a.customer_name.localeCompare(b.customer_name));
   const page = rows.slice(offset, offset + 20);

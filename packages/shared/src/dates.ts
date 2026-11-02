@@ -9,3 +9,9 @@ const indiaFormat = new Intl.DateTimeFormat("en-CA", {
 export function indiaDate(at: Date = new Date()): string {
   return indiaFormat.format(at);
 }
+
+/** Spec 030 and 031: the first and last business date of a financial year, `2026-27` is 1 Apr 2026 to 31 Mar 2027. */
+export function financialYearRange(fy: string): { from: string; to: string } {
+  const start = Number(fy.slice(0, 4));
+  return { from: `${start}-04-01`, to: `${start + 1}-03-31` };
+}

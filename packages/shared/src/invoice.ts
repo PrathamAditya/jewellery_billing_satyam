@@ -2,6 +2,7 @@ import { z } from "zod";
 import { cleanMobile, cleanName, cleanPan } from "./customer";
 import type { ApplicableRatesResponse, RateKind } from "./rates";
 import { isValidBusinessDate } from "./rates";
+import type { BulkUnit } from "./bulkItems";
 
 /** Spec 013 R8. */
 export const PURITIES = ["22K916", "24K995", "silver", "18K750", "14K", "24K999", "other"] as const;
@@ -71,6 +72,14 @@ export const invoiceLineSchema = z.object({
   totalAmountPaise: int("Total amount is not valid").optional(),
   // Accepted for backward-compatible clients, but ignored by the server (012b R1).
   gstRateBps: int("GST rate is not valid").optional(),
+  /** Spec 021 S2: the U No. of one individual item (any case). Blank or missing: no item on this line. */
+  stockUNo: z.preprocess(blankToNull, z.string().trim().toUpperCase().max(20, "U No. is not valid").nullable()).optional(),
+  /** Spec 021 S1: one bulk item (Tilli and similar), with its quantity below. A line links one stock item at most. */
+  bulkItemId: z.preprocess(blankToNull, z.string().uuid("Choose the bulk item from the list").nullable()).optional(),
+  bulkQuantity: z.preprocess(
+    blankToNull,
+    z.number({ error: "Enter the quantity" }).int("Quantity must be a whole number").min(1, "Quantity must be 1 or more").max(10_000_000, "Quantity is too large").nullable(),
+  ).optional(),
 });
 export type InvoiceLineBody = z.infer<typeof invoiceLineSchema>;
 
@@ -105,8 +114,30 @@ export const invoiceRequestSchema = z.object({
 });
 export type InvoiceRequest = z.infer<typeof invoiceRequestSchema>;
 
-/** Spec 019c R1: a line of a sale whose rate is fixed later. No gold rate, discount, stone or combined total. */
-const pendingLineSchema = invoiceLineSchema.omit({ goldRatePaisePerKg: true, pricingMode: true, stoneWeightMg: true, stoneAmountPaise: true, totalAmountPaise: true, gstRateBps: true });
+/** Spec 021 S1, S3: the stock links of an invoice line, checked after the schema. Returns the problems by field name. */
+export function stockLinkProblems(lines: { stockUNo?: string | null; bulkItemId?: string | null; bulkQuantity?: number | null }[]): { field: string; message: string }[] {
+  const out: { field: string; message: string }[] = [];
+  lines.forEach((l, i) => {
+    const at = `lines.${i + 1}`;
+    if (l.stockUNo && l.bulkItemId) out.push({ field: `${at}.bulkItemId`, message: "A line takes one individual item or one bulk item, not both" });
+    if (l.bulkItemId && !l.bulkQuantity) out.push({ field: `${at}.bulkQuantity`, message: "Enter how many to take out" });
+    if (!l.bulkItemId && l.bulkQuantity) out.push({ field: `${at}.bulkItemId`, message: "Choose the bulk item for this quantity" });
+  });
+  return out;
+}
+
+/** Spec 019c R1: a line of a sale whose rate is fixed later. No gold rate, discount, stone or combined total. No stock links (spec 021 S4). */
+const pendingLineSchema = invoiceLineSchema.omit({
+  goldRatePaisePerKg: true,
+  pricingMode: true,
+  stoneWeightMg: true,
+  stoneAmountPaise: true,
+  totalAmountPaise: true,
+  gstRateBps: true,
+  stockUNo: true,
+  bulkItemId: true,
+  bulkQuantity: true,
+});
 export const pendingInvoiceRequestSchema = z.object({
   id: z.string().uuid().optional(),
   invoiceDate: z.string({ error: "Date is required" }).refine(isValidBusinessDate, "Date must look like 2026-11-01"),
@@ -153,6 +184,12 @@ export type InvoiceLineResponse = InvoiceLineBody & {
   stoneAmountPaise: number;
   discountPaise: number;
   taxablePaise: number;
+  /** Spec 021: the stock this line took, from the stored links (null or 0 when none). */
+  stockUNo: string | null;
+  bulkItemId: string | null;
+  bulkItemName: string | null;
+  bulkUnit: BulkUnit | null;
+  bulkQuantity: number | null;
 };
 
 export type DiscountBody = { kind: "fixed" | "percent"; value: number };

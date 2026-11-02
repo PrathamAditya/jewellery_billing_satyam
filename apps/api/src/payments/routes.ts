@@ -558,13 +558,16 @@ paymentRoutes.post("/:id/void", async (c) => {
 });
 
 /** Spec 019b C12: the cheques not yet cleared or bounced, for the Payments page. Declared before /:id routes. */
-paymentRoutes.get("/cheques/pending", async (c) => {
-  const row = await c.env.DB.prepare(
+/** Spec 019b C12: cheques still out (received or deposited, not voided). Shared with the dashboard (spec 030). */
+export async function pendingCheques(db: D1Database): Promise<ChequePendingResponse> {
+  const row = await db.prepare(
     `SELECT COUNT(*) AS n, COALESCE(SUM(p.amount_paise), 0) AS total FROM payments p
      WHERE p.mode = 'cheque' AND p.voided_at IS NULL AND ${LATEST_CHEQUE} IN ('received', 'deposited')`,
   ).first<{ n: number; total: number }>();
-  return c.json<ChequePendingResponse>({ count: row?.n ?? 0, totalPaise: row?.total ?? 0 });
-});
+  return { count: row?.n ?? 0, totalPaise: row?.total ?? 0 };
+}
+
+paymentRoutes.get("/cheques/pending", async (c) => c.json<ChequePendingResponse>(await pendingCheques(c.env.DB)));
 
 /**
  * Spec 019b C2 to C6: move a cheque along its statuses. Deposited and cleared change no money.

@@ -16,13 +16,23 @@ import TodayRates from "./rates/TodayRates";
 import SettingsPage from "./settings/SettingsPage";
 import UsersPage from "./users/UsersPage";
 import PaymentsPage from "./payments/PaymentsPage";
+import AuditPage from "./audit/AuditPage";
+import CashClosingPage from "./cash/CashClosingPage";
 import PaymentPage from "./payments/PaymentPage";
 import OrdersPage from "./orders/OrdersPage";
 import OutstandingPage from "./ledger/OutstandingPage";
 import CreditNotesPage from "./creditNotes/CreditNotesPage";
 import CreditNotePage from "./creditNotes/CreditNotePage";
 import OrderPage from "./orders/OrderPage";
+import DashboardPanel from "./dashboard/DashboardPanel";
+import ReportsPage from "./reports/ReportsPage";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
+import InventoryListPage from "./inventory/InventoryListPage";
+import { InventoryItemPage, NewInventoryItemPage } from "./inventory/InventoryItemPages";
+import InventoryTypesPage from "./inventory/InventoryTypesPage";
+import { BulkItemPage, BulkListPage } from "./inventory/BulkPages";
+import { LocationStockPage, LocationsPage } from "./inventory/LocationPages";
+import { NewPurchasePage, PurchasePage, PurchasesListPage } from "./inventory/PurchasePages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 import ThemeToggle from "./ThemeToggle";
@@ -39,6 +49,7 @@ function isHealthy(body: unknown): boolean {
 }
 
 function Home() {
+  const { can } = useAuth();
   const [status, setStatus] = useState<ApiStatus>("checking");
 
   useEffect(() => {
@@ -54,6 +65,12 @@ function Home() {
         <BusinessBanner />
         <TodayRates />
       </div>
+      {/* Spec 030: read-only dashboard, shown only to users with dashboard.view. */}
+      {can("dashboard.view") && (
+        <div className="w-full mb-8">
+          <DashboardPanel />
+        </div>
+      )}
       <h1 className="text-3xl font-semibold">Jewellery Billing</h1>
       <p className="text-stone-600">
         API status:{" "}
@@ -88,8 +105,23 @@ function Page({ path, meId }: { path: string; meId: string }) {
   if (parts[0] === "credit-notes") return parts[1] ? <CreditNotePage id={parts[1]} /> : <CreditNotesPage />;
   if (parts[0] === "orders") return parts[1] ? <OrderPage id={parts[1]} /> : <OrdersPage />;
   if (parts[0] === "payments") return parts[1] ? <PaymentPage id={parts[1]} /> : <PaymentsPage />;
+  if (parts[0] === "reports") return <ReportsPage />;
+  if (parts[0] === "inventory") {
+    if (parts[1] === "items" && parts[2]) return <InventoryItemPage id={parts[2]} />;
+    if (parts[1] === "new") return <NewInventoryItemPage />;
+    if (parts[1] === "types") return <InventoryTypesPage />;
+    if (parts[1] === "purchases") {
+      if (parts[2] === "new") return <NewPurchasePage />;
+      return parts[2] ? <PurchasePage id={parts[2]} /> : <PurchasesListPage />;
+    }
+    if (parts[1] === "locations") return parts[2] ? <LocationStockPage id={parts[2]} /> : <LocationsPage />;
+    if (parts[1] === "bulk") return parts[2] ? <BulkItemPage id={parts[2]} /> : <BulkListPage />;
+    return <InventoryListPage />;
+  }
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
+  if (parts[0] === "audit") return <AuditPage />;
+  if (parts[0] === "cash-closing") return <CashClosingPage />;
   if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
   return <Home />;
@@ -117,6 +149,8 @@ function Shell() {
   const inOrders = path.startsWith("/orders");
   const inOldGold = path.startsWith("/old-gold");
   const inCalculator = path.startsWith("/calculator");
+  const inAudit = path.startsWith("/audit");
+  const inCash = path.startsWith("/cash-closing");
   const link = (href: string, label: string, active: boolean, extra = "") => (
     <a href={href} className={`px-2 sm:px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${extra} ${active ? "bg-stone-900 text-white" : "text-stone-700 hover:bg-stone-100"}`}>
       {label}
@@ -134,11 +168,15 @@ function Shell() {
           {can("advances.view") && link("#/orders", "Orders", inOrders)}
           {can("ledger.view") && link("#/outstanding", "Outstanding", path.startsWith("/outstanding"))}
           {can("invoices.view") && link("#/credit-notes", "Credit notes", path.startsWith("/credit-notes"))}
+          {can("reports.view") && link("#/reports", "Reports", path.startsWith("/reports"))}
           {can("oldgold.view") && link("#/old-gold", "Old gold", inOldGold)}
+          {can("payments.view") && link("#/cash-closing", "Cash closing", inCash)}
+          {can("inventory.view") && link("#/inventory", "Inventory", path.startsWith("/inventory"))}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
           {can("settings.view") && link("#/settings", "Settings", inSettings)}
           {can("users.manage") && link("#/users", "People", path.startsWith("/users"))}
+          {can("audit.view") && link("#/audit", "Audit", inAudit)}
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />

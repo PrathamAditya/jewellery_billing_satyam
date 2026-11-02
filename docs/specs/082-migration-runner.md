@@ -2,7 +2,7 @@
 
 Status: Built (Wave 4) on branch `spec-082-migration-runner`, PR into `wave-4`. Owner approval pending. The build follows `docs/wave4-plan.md` (step 3).
 Depends on: 080 (database adapter), 081 (local server and the temporary `local:migrate`), 001 (migration files), 000 (test setup)
-Open questions used with defaults: Q128 to Q132 (listed in `docs/open-questions.md`, section U).
+Open questions used with defaults: Q175 to Q179 (listed in `docs/open-questions.md`, section U).
 
 ## 1. Goal
 The desktop app's database is upgraded safely when the server starts. The migration files run in order, each in its own transaction, and the runner records what ran. Before any upgrade, the database is copied next to itself. If an upgrade fails, the server does not start, and the message says why and where the copy is. This replaces the temporary `local:migrate` step of spec 081. The cloud version keeps `wrangler d1 migrations` and does not change.
@@ -91,11 +91,11 @@ Browser suite: `BASE_URL=http://127.0.0.1:8820 node e2e/run-all.mjs` after the r
 - Journal mode (081 Q125 is unchanged).
 
 ## 8. Defaults used (owner may change later)
-- Q128 (backup when recognising an old database): the runner makes a backup whenever it writes to a database that already has applied migrations, including the first run that only records the files (M13).
-- Q129 (backup name and keeping): `billing.sqlite.backup-<UTC time>-from-<version>.sqlite` in the data folder; the 5 newest of that kind are kept (M7, M10).
-- Q130 (unclear states): refuse and ask, never guess (M12).
-- Q131 (owner command): `local:owner` runs the runner before setting the password (M16).
-- Q132 (empty folder): the server creates and migrates an empty folder at start-up, replacing the 081 refusal (M17).
+- Q175 (backup when recognising an old database): the runner makes a backup whenever it writes to a database that already has applied migrations, including the first run that only records the files (M13).
+- Q176 (backup name and keeping): `billing.sqlite.backup-<UTC time>-from-<version>.sqlite` in the data folder; the 5 newest of that kind are kept (M7, M10).
+- Q177 (unclear states): refuse and ask, never guess (M12).
+- Q178 (owner command): `local:owner` runs the runner before setting the password (M16).
+- Q179 (empty folder): the server creates and migrates an empty folder at start-up, replacing the 081 refusal (M17).
 
 ## 9. Acceptance checklist
 - [x] M1 to M18 implemented in `apps/api/src/local/migrations.ts`, with `server.ts`, `run.ts` and `cli.ts` updated. `migrate.ts` (081) removed.
@@ -107,7 +107,7 @@ Browser suite: `BASE_URL=http://127.0.0.1:8820 node e2e/run-all.mjs` after the r
 - [x] Real upgrade: a folder whose database was made by the runner from the files up to `0018_discounts_stones.sql` (19 records) and given the owner login. `npm run local -w @jewellery/api` with `JB_DATA_DIR` on port 8820 made `billing.sqlite.backup-<time>-from-0018.sqlite` (19 records), applied 0019, 0020 and 0021, and served. A setup step saved the 2026-02-03 silver fixture through `PUT /api/rates/...` (Q127), outside the test files.
 - [x] Browser suite `BASE_URL=http://127.0.0.1:8820 node e2e/run-all.mjs` on that upgraded database: 289 PASS, exit 0.
 - [x] `npm run local:migrate` on the upgraded folder: nothing applied, no backup.
-- [ ] Owner approves this spec and the defaults for Q128 to Q132.
+- [ ] Owner approves this spec and the defaults for Q175 to Q179.
 - [ ] Not checked: a failing migration through the command line output (the message is tested through the function and through `startLocalServer`); a database made by the real 081 `local:migrate` (the 081 step is removed, so its state is rebuilt in the test by the same steps); a power cut during a backup; Windows paths.
 - [ ] Spec 083 checks the runner under Electron's bundled Node (Q120).
 
