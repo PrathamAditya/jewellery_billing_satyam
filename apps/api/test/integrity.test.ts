@@ -115,6 +115,15 @@ async function cleanWorld(): Promise<{ w: World; ids: Record<string, string> }> 
   expect((await call(w, `/api/invoices/${inv3.id}/void`, { method: "POST", body: { reason: "wrong customer" } })).status).toBe(200);
   const ob = await call(w, "/api/opening-balances", { method: "POST", body: { customerId: b, amountPaise: 250_000, asOfDate: "2026-03-31", reference: "OLD-INT-1" } });
   expect(ob.status).toBe(201);
+  // A sale whose rate is fixed later (spec 019c): it has no stored calculation yet, and the checks skip it.
+  const pending = await call(w, "/api/invoices/pending", {
+    method: "POST",
+    body: { invoiceDate: "2026-11-02", customerId: a, customerName: "Integrity Asha", taxMode: "intra", lines: [{ description: "Silver chain", purity: "silver", hsn: "7113", grossWeightMg: 9_800, netWeightMg: 9_800, polishBps: 0, labourRatePaisePerKg: 0 }] },
+  });
+  expect(pending.status).toBe(201);
+  // An old gold receipt that moves its money into the advance: the payment carries source_ogp_id (spec 018).
+  const og = await call(w, "/api/old-gold", { method: "POST", body: { date: "2026-11-02", customerId: a, treatment: "advance", rows: [{ description: "Old Gold", grossMg: 25_000, lessMg: 2_020, karat: "22K", purityBps: 7_526, rateKgPaise: 1_480_000_000 }] } });
+  expect(og.status).toBe(201);
   return { w, ids: { inv1: inv1.id, inv2: inv2.id, inv3: inv3.id, a, b, advance, against, refunded, voidedPay } };
 }
 
@@ -126,7 +135,7 @@ async function checks(w: World): Promise<IntegrityResponse> {
 const check = (r: IntegrityResponse, id: string) => r.checks.find((c) => c.id === id)!;
 
 describe("clean data passes every check", () => {
-  it("all ten checks are ok, and a second run gives the same answer", async () => {
+  it("all ten checks are ok, and a second run gives the same answer (with a pending sale and an old gold receipt)", async () => {
     const { w } = await cleanWorld();
     const first = await checks(w);
     expect(first.checks.map((c) => c.id)).toEqual(["invoice_totals", "invoice_lines", "invoice_balance", "payment_balance", "links_exist", "number_series", "customer_numbers", "ledger_totals", "voided_links", "audit_rows"]);

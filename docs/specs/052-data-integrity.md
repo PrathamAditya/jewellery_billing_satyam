@@ -17,7 +17,7 @@ The owner can run a set of checks on the stored data at any time and see whether
 
 **The checks** (`apps/api/src/integrity/checks.ts`; the list is the single source for the API, the screen and the command line)
 - I5. `invoice_totals`: for every invoice whose rate is fixed: the stored payable equals `payable_paise` in `calc_json`; total before round-off = taxable + tax; round-off equals `roundOffPaise(total before round-off) - total before round-off` (spec 012 R12, the same function as the calculation); the sum of the current revision's line amounts equals `totalValuePaise` in `calc_json`. Pending-rate invoices are skipped (spec 019c).
-- I6. `invoice_lines`: for every line of the current revision, with the stored `calc_json` line of the same position: for `weight` and `separate` lines, `amount = gold + labour + stone`. For `combined` lines (a typed total with no split, spec 012c), gold and labour must be 0 and the amount must be more than 0 (Q183).
+- I6. `invoice_lines`: for every line of the current revision of a fixed-rate invoice (pending-rate sales are skipped, spec 019c, because they store no calculation until the rate is fixed), with the stored `calc_json` line of the same position: for `weight` and `separate` lines, `amount = gold + labour + stone`. For `combined` lines (a typed total with no split, spec 012c), gold and labour must be 0 and the amount must be more than 0 (Q183).
 - I7. `invoice_balance`: for every invoice, the non-reversed allocations plus the non-reversed credit applications (spec 019d) are at most the payable. So the balance due is never negative (spec 015 M4).
 - I8. `payment_balance`: for every payment, remaining = amount - non-reversed allocations - non-reversed refunds, and remaining is never negative. Allocations + refunds + remaining = amount (spec 015 M2).
 - I9. `links_exist`: every live allocation points to an invoice or an opening balance that exists, and to a payment that exists; every refund points to a payment that exists.
@@ -25,7 +25,7 @@ The owner can run a set of checks on the stored data at any time and see whether
 - I11. `customer_numbers`: every customer number matches `C` followed by at least 4 digits (`C0001`, Q188), no two customers share a number, and the customer counter is not below the highest number issued (spec 010 R2).
 - I12. `ledger_totals`: (a) for every customer, the ledger's final outstanding and advance held (spec 019 R4, the event ledger) equal the customer's balance from the totals query (spec 019 R5); (b) the ledger summary's total outstanding equals the sum of the positive customer balances, and its total advance equals the sum of the positive advances.
 - I13. `voided_links`: no voided invoice, payment, opening balance or credit note still has a live (non-reversed) allocation, credit application, refund or payout (spec 015 M7, M8; spec 019d).
-- I14. `audit_rows`: every payment has a `payment_create` audit row and every invoice has an `invoice_create` or `invoice_pending_create` audit row, for the same entity id (CLAUDE.md rule 11).
+- I14. `audit_rows`: every payment has a `payment_create` audit row and every invoice has an `invoice_create` or `invoice_pending_create` audit row, for the same entity id (CLAUDE.md rule 11). A payment made by an old gold receipt (`source_ogp_id` set, spec 018) is covered by that receipt's `old_gold_create` row instead; the first browser run flagged these two payments, and the rule was added for them.
 
 **Access**
 - I15. `GET /api/integrity` needs the new permission `integrity.view`. It is granted to the owner only (Q180): the owner role has every permission, and manager and viewer are built without it. The route is read-only.
@@ -53,8 +53,9 @@ The owner can run a set of checks on the stored data at any time and see whether
 
 ## 5. Edge cases
 - A fresh install with no business data: every check passes.
-- A pending-rate invoice (spec 019c): skipped by I5, and its ledger line has no amount (I12 still holds).
+- A pending-rate invoice (spec 019c): skipped by I5 and I6, and its ledger line has no amount (I12 still holds).
 - A combined-price line (I6) and a job-work line: their amounts follow the calculation, so the same rule holds.
+- An old gold payment (spec 018): its receipt's audit row counts (I14).
 - A payment voided after an allocation was reversed: the allocation is not live, so it does not count (I8, I13).
 - A customer number above 9999 (`C10000`): valid under I11.
 - A database written by a broken import: the checks report the rows; they never fix them.
@@ -62,7 +63,7 @@ The owner can run a set of checks on the stored data at any time and see whether
 
 ## 6. Test cases
 - `apps/api/test/integrity.test.ts`:
-  - Clean data created through the API (customers, invoices with a discount and a combined line, an advance, an invoice payment, a reversed allocation, a refund and its reversal, a voided payment, a voided invoice, an opening balance): every check passes (I1 to I14). A second run gives the same result (I1).
+  - Clean data created through the API (customers, invoices with a combined line, a pending-rate sale, an advance, an invoice payment, a reversed allocation, a refund and its reversal, a voided payment, a voided invoice, an opening balance, an old gold receipt paid into the advance): every check passes (I1 to I14). A second run gives the same result (I1).
   - Each check fails on deliberately broken data written directly to the database in the test (the triggers are dropped in the test only):
     - I5: an invoice whose stored payable differs from its calc total;
     - I6: a line whose amount is not gold + labour + stone;

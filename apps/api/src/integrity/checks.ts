@@ -66,12 +66,13 @@ async function invoiceTotals(db: D1Database): Promise<Problem[]> {
   return out;
 }
 
-/** I6: each line's amount is gold + labour + stone; combined lines carry only the typed total (Q183). */
+/** I6: each line (pending-rate sales are skipped: they have no stored calculation until the rate is fixed, spec 019c)'s amount is gold + labour + stone; combined lines carry only the typed total (Q183). */
 async function invoiceLinesCheck(db: D1Database): Promise<Problem[]> {
   const lines = await rows<{ invoice_id: string; invoice_no: string; line_no: number; gold_amount_paise: number; labour_amount_paise: number; amount_paise: number; calc_json: string }>(
     db,
     `SELECT l.invoice_id, i.invoice_no, l.line_no, l.gold_amount_paise, l.labour_amount_paise, l.amount_paise, i.calc_json
-     FROM invoice_lines l JOIN invoices i ON i.id = l.invoice_id AND i.revision_no = l.revision_no`,
+     FROM invoice_lines l JOIN invoices i ON i.id = l.invoice_id AND i.revision_no = l.revision_no
+     WHERE i.rate_status <> 'pending'`,
   );
   const out: Problem[] = [];
   for (const l of lines) {
@@ -265,7 +266,11 @@ async function voidedLinks(db: D1Database): Promise<Problem[]> {
 /** I14: every payment has a payment_create row and every invoice an invoice_create (or pending) row (CLAUDE.md rule 11). */
 async function auditRows(db: D1Database): Promise<Problem[]> {
   const out: Problem[] = [];
-  for (const p of await rows<{ id: string; receipt_no: string | null }>(db, "SELECT p.id, p.receipt_no FROM payments p WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity = 'payment' AND a.entity_id = p.id AND a.action = 'payment_create')")) {
+  // A payment made by an old gold receipt is covered by that receipt's old_gold_create row (spec 018).
+  const sql = `SELECT p.id, p.receipt_no FROM payments p
+    WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity = 'payment' AND a.entity_id = p.id AND a.action = 'payment_create')
+      AND NOT (p.source_ogp_id IS NOT NULL AND EXISTS (SELECT 1 FROM audit_log g WHERE g.entity = 'old_gold' AND g.entity_id = p.source_ogp_id AND g.action = 'old_gold_create'))`;
+  for (const p of await rows<{ id: string; receipt_no: string | null }>(db, sql)) {
     out.push(problem(p.id, "payment", p.receipt_no ?? "Payment at sale", "No payment_create audit row for this payment.", paymentLink(p.id)));
   }
   for (const i of await rows<{ id: string; invoice_no: string }>(db, "SELECT i.id, i.invoice_no FROM invoices i WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.entity = 'invoice' AND a.entity_id = i.id AND a.action IN ('invoice_create', 'invoice_pending_create'))")) {
