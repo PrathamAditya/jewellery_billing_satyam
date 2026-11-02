@@ -27,6 +27,12 @@ import OrderPage from "./orders/OrderPage";
 import DashboardPanel from "./dashboard/DashboardPanel";
 import ReportsPage from "./reports/ReportsPage";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
+import InventoryListPage from "./inventory/InventoryListPage";
+import { InventoryItemPage, NewInventoryItemPage } from "./inventory/InventoryItemPages";
+import InventoryTypesPage from "./inventory/InventoryTypesPage";
+import { BulkItemPage, BulkListPage } from "./inventory/BulkPages";
+import { LocationStockPage, LocationsPage } from "./inventory/LocationPages";
+import { NewPurchasePage, PurchasePage, PurchasesListPage } from "./inventory/PurchasePages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 import ThemeToggle from "./ThemeToggle";
@@ -100,6 +106,18 @@ function Page({ path, meId }: { path: string; meId: string }) {
   if (parts[0] === "orders") return parts[1] ? <OrderPage id={parts[1]} /> : <OrdersPage />;
   if (parts[0] === "payments") return parts[1] ? <PaymentPage id={parts[1]} /> : <PaymentsPage />;
   if (parts[0] === "reports") return <ReportsPage />;
+  if (parts[0] === "inventory") {
+    if (parts[1] === "items" && parts[2]) return <InventoryItemPage id={parts[2]} />;
+    if (parts[1] === "new") return <NewInventoryItemPage />;
+    if (parts[1] === "types") return <InventoryTypesPage />;
+    if (parts[1] === "purchases") {
+      if (parts[2] === "new") return <NewPurchasePage />;
+      return parts[2] ? <PurchasePage id={parts[2]} /> : <PurchasesListPage />;
+    }
+    if (parts[1] === "locations") return parts[2] ? <LocationStockPage id={parts[2]} /> : <LocationsPage />;
+    if (parts[1] === "bulk") return parts[2] ? <BulkItemPage id={parts[2]} /> : <BulkListPage />;
+    return <InventoryListPage />;
+  }
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
   if (parts[0] === "audit") return <AuditPage />;
@@ -153,6 +171,7 @@ function Shell() {
           {can("reports.view") && link("#/reports", "Reports", path.startsWith("/reports"))}
           {can("oldgold.view") && link("#/old-gold", "Old gold", inOldGold)}
           {can("payments.view") && link("#/cash-closing", "Cash closing", inCash)}
+          {can("inventory.view") && link("#/inventory", "Inventory", path.startsWith("/inventory"))}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}
           {can("settings.view") && link("#/settings", "Settings", inSettings)}

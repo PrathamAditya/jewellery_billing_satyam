@@ -206,6 +206,9 @@ export const invoiceLines = sqliteTable(
     amountPaise: integer("amount_paise").notNull(),
     displayRatePaisePerGram: integer("display_rate_paise_per_gram").notNull(),
     inventoryItemId: text("inventory_item_id"),
+    /** Spec 021: a bulk item and its quantity (both null when the line links no bulk item). */
+    bulkItemId: text("bulk_item_id"),
+    bulkQuantity: integer("bulk_quantity"),
   },
   (t) => [uniqueIndex("invoice_lines_rev_line_unique").on(t.invoiceId, t.revisionNo, t.lineNo)],
 );

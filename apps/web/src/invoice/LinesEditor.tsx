@@ -1,5 +1,5 @@
 import { polishWeightMg } from "@jewellery/calc";
-import { PURITIES, PURITY_RATE_KIND, formatWeightGrams, paisePerKgToInput, parseWeightGrams, type ApplicableRatesResponse, type Purity } from "@jewellery/shared";
+import { PURITIES, PURITY_RATE_KIND, formatWeightGrams, paisePerKgToInput, parseWeightGrams, type ApplicableRatesResponse, type BulkItemResponse, type Purity } from "@jewellery/shared";
 import { btnSecondary, inputClass } from "../customers/ui";
 import { blankLine, isTouched, parseLine, parsePendingLine, type LineText } from "./lines";
 
@@ -13,17 +13,22 @@ type Props = {
   showPurity?: boolean;
   /** Spec 019c: the sale's rate is fixed later. Gold, stone, total and pricing boxes are not shown. */
   pendingRate?: boolean;
+  /** Spec 021: given only on the invoice form. The "Stock" cell shows when this is set (the calculator does not set it). */
+  bulkItems?: BulkItemResponse[];
 };
 
 /** The text boxes of a row (the selects and the GST output are handled separately). */
 type BoxKey = "description" | "gross" | "net" | "polish" | "gold" | "labour" | "stoneWeight" | "stoneAmount" | "total";
 
 /** The lines grid shared by the Calculator (spec 012) and the invoice form (spec 013). */
-export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, showPurity = false, pendingRate = false }: Props) {
+export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, showPurity = false, pendingRate = false, bulkItems }: Props) {
   if (pendingRate) return <PendingLines rows={rows} onChange={onChange} rowErrors={rowErrors} />;
   const setField = (i: number, k: keyof LineText, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const setHsn = (i: number, hsn: string) => onChange(rows.map((r, j) => (j === i ? { ...r, hsn, gst: hsn === "9988" ? "5" : "3" } : r)));
   const setPricing = (i: number, pricing: LineText["pricing"]) => onChange(rows.map((r, j) => (j === i ? { ...r, pricing } : r)));
+  const showStock = bulkItems !== undefined;
+  const setStockKind = (i: number, stockKind: LineText["stockKind"]) =>
+    onChange(rows.map((r, j) => (j === i ? { ...r, stockKind, stockUNo: stockKind === "item" ? r.stockUNo : "", bulkItemId: stockKind === "bulk" ? r.bulkItemId : "", bulkQty: stockKind === "bulk" ? r.bulkQty : "" } : r)));
 
   function setPurity(i: number, purity: Purity) {
     const kind = PURITY_RATE_KIND[purity];
@@ -57,7 +62,7 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
   };
   const dash = <span className="block py-2 text-stone-400">–</span>;
 
-  const headers = ["Description", ...(showPurity ? ["Purity"] : []), "Pricing", "HSN", "Gross g", "Net g", "Polish %", "Gold rate / g", "Labour rate / g", "Stone g", "Stone ₹", "Total ₹", "GST %", ""];
+  const headers = ["Description", ...(showPurity ? ["Purity"] : []), "Pricing", "HSN", "Gross g", "Net g", "Polish %", "Gold rate / g", "Labour rate / g", "Stone g", "Stone ₹", "Total ₹", "GST %", ...(showStock ? ["Stock (optional)"] : []), ""];
   return (
     <div className="overflow-x-auto">
       <table className="text-sm">
@@ -127,6 +132,18 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
                     {r.hsn === "9988" ? "5%" : "3%"}
                   </output>
                 </td>
+                {showStock && (
+                  <td className="pr-2 pb-2">
+                    <StockCell
+                      row={r}
+                      index={i}
+                      bulkItems={bulkItems ?? []}
+                      errors={isTouched(r) ? parseLine(r).fieldErrors : {}}
+                      onKind={(k) => setStockKind(i, k)}
+                      onField={(k, v) => setField(i, k, v)}
+                    />
+                  </td>
+                )}
                 <td className="pb-2">
                   <div className="flex flex-col gap-1">
                     <button
@@ -152,6 +169,69 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
       <button className={`${btnSecondary} mt-1`} onClick={() => onChange([...rows, blankLine(showPurity ? "22K916" : "other")])} disabled={rows.length >= 50}>
         Add line
       </button>
+    </div>
+  );
+}
+
+/** Spec 021: the optional stock of one line. A U No. or a bulk item with a quantity; "No stock" by default. */
+function StockCell({
+  row,
+  index,
+  bulkItems,
+  errors,
+  onKind,
+  onField,
+}: {
+  row: LineText;
+  index: number;
+  bulkItems: BulkItemResponse[];
+  errors: Partial<Record<keyof LineText, string>>;
+  onKind: (k: LineText["stockKind"]) => void;
+  onField: (k: "stockUNo" | "bulkItemId" | "bulkQty", v: string) => void;
+}) {
+  const msg = (k: keyof LineText) => (errors[k] ? <span className="text-xs text-red-700 max-w-40">{errors[k]}</span> : null);
+  return (
+    <div className="flex flex-col gap-1 min-w-36">
+      <select className={`${inputClass} w-36`} value={row.stockKind} onChange={(e) => onKind(e.target.value as LineText["stockKind"])} aria-label={`Stock line ${index + 1}`}>
+        <option value="none">No stock</option>
+        <option value="item">Item by U No.</option>
+        <option value="bulk">Bulk item</option>
+      </select>
+      {row.stockKind === "item" && (
+        <>
+          <input
+            className={`${inputClass} w-36 ${errors.stockUNo ? "border-red-400" : ""}`}
+            value={row.stockUNo}
+            onChange={(e) => onField("stockUNo", e.target.value)}
+            aria-label={`U No. line ${index + 1}`}
+            placeholder="RING01"
+            autoComplete="off"
+          />
+          {msg("stockUNo")}
+        </>
+      )}
+      {row.stockKind === "bulk" && (
+        <>
+          <select className={`${inputClass} w-36 ${errors.bulkItemId ? "border-red-400" : ""}`} value={row.bulkItemId} onChange={(e) => onField("bulkItemId", e.target.value)} aria-label={`Bulk item line ${index + 1}`}>
+            <option value="">Choose…</option>
+            {bulkItems.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} ({b.quantity} {b.unit} in stock)
+              </option>
+            ))}
+          </select>
+          {msg("bulkItemId")}
+          <input
+            className={`${inputClass} w-24 ${errors.bulkQty ? "border-red-400" : ""}`}
+            value={row.bulkQty}
+            onChange={(e) => onField("bulkQty", e.target.value)}
+            aria-label={`Quantity line ${index + 1}`}
+            placeholder="Qty"
+            inputMode="numeric"
+          />
+          {msg("bulkQty")}
+        </>
+      )}
     </div>
   );
 }

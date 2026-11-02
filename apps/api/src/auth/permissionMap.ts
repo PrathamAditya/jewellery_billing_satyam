@@ -102,6 +102,38 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/cash-closing/list", permission: "payments.view" },
   { method: "POST", path: "/api/cash-closing", permission: "cash.close" },
   { method: "POST", path: "/api/cash-closing/:date/notes", permission: "cash.close" },
+  // Spec 020: inventory items (U No.), item types and status history.
+  { method: "GET", path: "/api/inventory/types", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/types", permission: "inventory.edit" },
+  { method: "PATCH", path: "/api/inventory/types/:id", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/items", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/items", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/items/:id", permission: "inventory.view" },
+  { method: "GET", path: "/api/inventory/items/:id/history", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/items/:id/status", permission: "inventory.edit" },
+  { method: "POST", path: "/api/inventory/items/:id/void", permission: "inventory.edit" },
+
+  // Spec 020b: bulk quantity items and their movements.
+  { method: "GET", path: "/api/inventory/bulk", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/bulk", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/bulk/:id", permission: "inventory.view" },
+  { method: "GET", path: "/api/inventory/bulk/:id/history", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/bulk/:id/movements", permission: "inventory.edit" },
+
+  // Spec 021b: stock locations, the stock at each place, and transfers between places.
+  { method: "GET", path: "/api/inventory/locations", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/locations", permission: "inventory.edit" },
+  { method: "PATCH", path: "/api/inventory/locations/:id", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/locations/:id/stock", permission: "inventory.view" },
+  { method: "GET", path: "/api/inventory/transfers", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/transfers", permission: "inventory.edit" },
+
+  // Spec 022: purchases of three types, and the raw gold and silver stock. raw-stock is listed before :id.
+  { method: "GET", path: "/api/inventory/purchases", permission: "purchases.view" },
+  { method: "POST", path: "/api/inventory/purchases", permission: "purchases.edit" },
+  { method: "GET", path: "/api/inventory/purchases/raw-stock", permission: "purchases.view" },
+  { method: "GET", path: "/api/inventory/purchases/:id", permission: "purchases.view" },
+  { method: "POST", path: "/api/inventory/purchases/:id/void", permission: "purchases.edit" },
 
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
