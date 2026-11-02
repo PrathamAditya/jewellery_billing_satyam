@@ -21,6 +21,8 @@ export const PERMISSIONS = [
   // Spec 052: the data integrity checks (owner only by default, Q180).
   "integrity.view",
   "reconciliation.view", "reconciliation.edit",
+  // Spec 023: karigar job work (view for staff and viewer, edit for owner and manager).
+  "karigar.view", "karigar.edit",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -52,6 +54,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
       "inventory.view",
       "purchases.view",
       "reconciliation.view",
+      "karigar.view",
     ],
   },
   {

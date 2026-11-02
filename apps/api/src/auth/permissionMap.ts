@@ -146,6 +146,19 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/inventory/purchases/:id", permission: "purchases.view" },
   { method: "POST", path: "/api/inventory/purchases/:id/void", permission: "purchases.edit" },
 
+  // Spec 023: karigar job work. Reads need karigar.view; every change needs karigar.edit (owner and manager).
+  { method: "GET", path: "/api/karigar/karigars", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/karigars", permission: "karigar.edit" },
+  { method: "GET", path: "/api/karigar/karigars/:id", permission: "karigar.view" },
+  { method: "GET", path: "/api/karigar/karigars/:id/statement", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/karigars/:id/payouts", permission: "karigar.edit" },
+  { method: "GET", path: "/api/karigar/jobs", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/jobs", permission: "karigar.edit" },
+  { method: "GET", path: "/api/karigar/jobs/:id", permission: "karigar.view" },
+  { method: "POST", path: "/api/karigar/jobs/:id/issues", permission: "karigar.edit" },
+  { method: "POST", path: "/api/karigar/jobs/:id/returns", permission: "karigar.edit" },
+  { method: "POST", path: "/api/karigar/jobs/:id/close", permission: "karigar.edit" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

@@ -164,6 +164,7 @@ const NUMBERED = [
   { series: "ORD", sql: "SELECT id, order_no AS number, fy, serial FROM orders", kind: "order", link: null },
   { series: "CN", sql: "SELECT id, cn_no AS number, fy, serial FROM credit_notes", kind: "credit_note", link: null },
   { series: "PUR", sql: "SELECT id, purchase_no AS number, fy, serial FROM purchases", kind: "purchase", link: null },
+  { series: "JOB", sql: "SELECT id, job_no AS number, fy, serial FROM karigar_jobs", kind: "karigar_job", link: null },
 ];
 async function numberSeries(db: D1Database): Promise<Problem[]> {
   const counters = new Map<string, number>();
