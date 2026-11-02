@@ -28,6 +28,7 @@ import { InventoryItemPage, NewInventoryItemPage } from "./inventory/InventoryIt
 import InventoryTypesPage from "./inventory/InventoryTypesPage";
 import { BulkItemPage, BulkListPage } from "./inventory/BulkPages";
 import { LocationStockPage, LocationsPage } from "./inventory/LocationPages";
+import { NewPurchasePage, PurchasePage, PurchasesListPage } from "./inventory/PurchasePages";
 import ForcePasswordChange from "./ForcePasswordChange";
 import BusinessBanner from "./settings/BusinessBanner";
 import ThemeToggle from "./ThemeToggle";
@@ -97,6 +98,10 @@ function Page({ path, meId }: { path: string; meId: string }) {
     if (parts[1] === "items" && parts[2]) return <InventoryItemPage id={parts[2]} />;
     if (parts[1] === "new") return <NewInventoryItemPage />;
     if (parts[1] === "types") return <InventoryTypesPage />;
+    if (parts[1] === "purchases") {
+      if (parts[2] === "new") return <NewPurchasePage />;
+      return parts[2] ? <PurchasePage id={parts[2]} /> : <PurchasesListPage />;
+    }
     if (parts[1] === "locations") return parts[2] ? <LocationStockPage id={parts[2]} /> : <LocationsPage />;
     if (parts[1] === "bulk") return parts[2] ? <BulkItemPage id={parts[2]} /> : <BulkListPage />;
     return <InventoryListPage />;

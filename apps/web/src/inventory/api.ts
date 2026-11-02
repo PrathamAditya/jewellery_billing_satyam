@@ -15,6 +15,9 @@ import type {
   StockLocationSaveResponse,
   StockTransferListResponse,
   StockTransferSaveResponse,
+  PurchaseListResponse,
+  PurchaseSaveResponse,
+  RawStockResponse,
 } from "@jewellery/shared";
 import { api } from "../api";
 
@@ -45,3 +48,10 @@ export const updateLocation = (id: string, body: { name?: string; active?: boole
 export const getLocationStock = (id: string) => api<LocationStockResponse>(`/api/inventory/locations/${id}/stock`);
 export const createTransfer = (body: Record<string, unknown>) => api<StockTransferSaveResponse>("/api/inventory/transfers", { method: "POST", body });
 export const listTransfers = (query: string) => api<StockTransferListResponse>(`/api/inventory/transfers${query}`);
+
+/** Spec 022: purchases of three types, and the raw gold and silver stock. */
+export const listPurchases = (query: string) => api<PurchaseListResponse>(`/api/inventory/purchases${query}`);
+export const getPurchase = (id: string) => api<PurchaseSaveResponse>(`/api/inventory/purchases/${id}`);
+export const createPurchase = (body: Record<string, unknown>) => api<PurchaseSaveResponse>("/api/inventory/purchases", { method: "POST", body });
+export const voidPurchase = (id: string, reason: string) => api<PurchaseSaveResponse>(`/api/inventory/purchases/${id}/void`, { method: "POST", body: { reason } });
+export const getRawStock = () => api<RawStockResponse>("/api/inventory/purchases/raw-stock");

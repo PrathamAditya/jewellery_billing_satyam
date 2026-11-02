@@ -115,6 +115,13 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/inventory/transfers", permission: "inventory.view" },
   { method: "POST", path: "/api/inventory/transfers", permission: "inventory.edit" },
 
+  // Spec 022: purchases of three types, and the raw gold and silver stock. raw-stock is listed before :id.
+  { method: "GET", path: "/api/inventory/purchases", permission: "purchases.view" },
+  { method: "POST", path: "/api/inventory/purchases", permission: "purchases.edit" },
+  { method: "GET", path: "/api/inventory/purchases/raw-stock", permission: "purchases.view" },
+  { method: "GET", path: "/api/inventory/purchases/:id", permission: "purchases.view" },
+  { method: "POST", path: "/api/inventory/purchases/:id/void", permission: "purchases.edit" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },
