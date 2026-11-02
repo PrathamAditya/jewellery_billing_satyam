@@ -35,7 +35,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
 | 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |
 | 080 | Database adapter (D1-compatible over local SQLite) | Wave 4, built on branch `spec-080-db-adapter` (PR into `wave-4`), owner approval pending |
-| 081 | Local server entry (API and web app on localhost) | Wave 4, planned, not started |
+| 081 | Local server entry (API and web app on 127.0.0.1) | Wave 4, built on branch `spec-081-local-server` (PR into `wave-4`), owner approval pending |
 | 082 | Local migration runner with backup before upgrade | Wave 4, planned, not started |
 | 083 | Desktop shell (Electron) | Wave 4, planned, not started |
 | 084 | Installers and code signing (Windows, macOS, Linux) | Wave 4, planned, not started |

@@ -10,9 +10,13 @@
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "owner:set": "tsx scripts/owner-set.ts",
-    "dev:e2e": "wrangler dev --port 8799"
+    "dev:e2e": "wrangler dev --port 8799",
+    "local": "tsx src/local/run.ts",
+    "local:migrate": "tsx src/local/cli.ts migrate",
+    "local:owner": "tsx src/local/cli.ts owner"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
     "@jewellery/shared": "*",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.16"
