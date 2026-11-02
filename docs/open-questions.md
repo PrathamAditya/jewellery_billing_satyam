@@ -236,3 +236,16 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q99. Stock.** `DEFAULT: stock is not updated in this spec (no stock table yet). The hook is in place and spec 021 puts returned goods back into stock`. Owner answer 25 said "stock updated": is it fine to wait for spec 021?
 - **Q100. Dates.** `DEFAULT: the credit note date is between the original invoice date and today, and it takes its number from the financial year of its own date`. Is that right?
 - **Q101. Print.** `DEFAULT: credit note printed A4 portrait, one copy, from the stored data only (a GST document, same sheet as the invoice). Layout to be checked against a paper sample`. Do you have a sample credit note from the old system?
+
+## T. Wave 4 questions (downloadable version), default used until you answer
+
+- **Q110. Platforms and order.** `DEFAULT: Windows first, then macOS and Linux`. Which computers do your customers use? Does Windows come first?
+- **Q111. Desktop framework.** `DEFAULT: Electron`. It is large but mature, and it runs the same Node server as the cloud version. The alternative, Tauri, is smaller but needs more work to bundle the SQLite database. Is the size of the download a concern?
+- **Q112. One PC or the whole shop network.** `DEFAULT: one PC first; network access (spec 090) later, only if you want it`. Will phones or other PCs need to open the same data? If yes, that changes the login and security work.
+- **Q113. Cloud version alongside.** `DEFAULT: yes, both keep running from the same code`. Should the cloud version stay at your showroom, or move to the downloadable version when it is ready?
+- **Q114. Certificates and distribution.** `DEFAULT: the developer buys the code-signing certificates and publishes the downloads on the website`. Who pays for and owns the certificates?
+- **Q115. Updates.** `DEFAULT: checked at start-up; the owner is asked before any update is installed`. Should updates install by themselves?
+- **Q116. Licence and price.** `DEFAULT: not decided; the first version has no licence check`. Is the software free, paid once per PC, or a yearly subscription? A licence check is a separate spec.
+- **Q117. Data folder.** `DEFAULT: Documents/JewelleryBilling, changed at setup if wanted`. Is that location acceptable?
+- **Q118. Local backup.** `DEFAULT: a copy after the last save of each day to a folder the owner picks, keeping the last 30 copies`. Is that enough, and which folder should it default to?
+- **Q119. Support.** `DEFAULT: email, plus a remote session started by the developer only with the owner's permission`. How should customers get help once the software is installed?
