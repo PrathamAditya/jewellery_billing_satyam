@@ -91,6 +91,8 @@ export const PERMISSION_MAP: Rule[] = [
 
   // Spec 030: the dashboard (read-only). Tiles are hidden per section by invoices.view and payments.view in the handler.
   { method: "GET", path: "/api/dashboard", permission: "dashboard.view" },
+  // Spec 031: the four CA reports, Excel or PDF. Read-only.
+  { method: "GET", path: "/api/reports/:kind", permission: "reports.view" },
 
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
