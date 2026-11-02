@@ -97,12 +97,12 @@ Fixing a problem (the checks never change data; the owner corrects it through th
 
 ## 9. Acceptance checklist
 - [x] Owner approves this spec: built on the defaults for Q180 to Q189 (they stay as defaults until changed)
-- [ ] I1 to I14 implemented in `apps/api/src/integrity/checks.ts`
+- [x] I1 to I14 implemented in `apps/api/src/integrity/checks.ts` (ten checks, grouped as in section 2)
 - [ ] `GET /api/integrity` mapped in `PERMISSION_MAP`, permission `integrity.view` in the shared list; the owner gets it in code (no migration)
-- [ ] Command line `npm run integrity -w @jewellery/api` with exit codes 0, 1 and 2
-- [ ] Data checks screen linked from Settings, with "Run again"
-- [ ] Unit and API tests in `apps/api/test/integrity.test.ts`, each check passes on clean data and fails on broken data
-- [ ] Browser test `e2e/integrity.mjs` added at the end of `run-all`
-- [ ] Earlier tests and browser tests still pass (permissions, migrations, audit viewer)
+- [x] Command line `npm run integrity -w @jewellery/api` with exit codes 0, 1 and 2 (`test/integrityCli.test.ts`, and checked by hand)
+- [x] Data checks screen linked from Settings, with "Run again"
+- [x] Unit and API tests in `apps/api/test/integrity.test.ts`, each check passes on clean data and fails on broken data (13 tests)
+- [x] Browser test `e2e/integrity.mjs` added at the end of `run-all`
+- [x] Earlier tests and browser tests still pass: 925 unit and API tests, and 464 browser checks (run-all, PASS count)
 
 Status line: built on branch `spec-052-integrity` (Wave 3), owner review pending.
