@@ -7,6 +7,17 @@ Each line is one feature spec in `docs/specs/`, built and committed one at a tim
 - **1 April 2027:** the new system becomes the main one.
 - The testing months only help if the core billing flow is ready on the first day. So the work is ordered in three waves, and each wave ends with something the owner can test with the real printer.
 
+## Pending (as of 2026-11-02)
+| Item | Waiting for |
+|------|-------------|
+| 011b Live IBJA reference rates | A provider and key (open question O10) |
+| 053 Brother printer check | Your manual test on the DCP-T830DW |
+| Owner review of Waves 1 to 3 | Your review and approval of each spec; defaults are in `docs/open-questions.md` |
+| Open questions with defaults | Your answers (sections Q to AB) |
+| Owner checks C1 to C3 | Your checks, listed in `docs/open-questions.md` section K |
+| Deploy of the latest `main` | Your `npm run deploy` (migrations 0019 to 0031 are already run) |
+| Desktop version (separate project) | Creating the new repository: waiting for your name and visibility choice. Spec 083 work in progress is on branch `spec-083-desktop-shell`. |
+
 ## Done
 | Spec | Name |
 |------|------|
