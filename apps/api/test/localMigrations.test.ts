@@ -306,8 +306,8 @@ describe("refusals (spec 082)", () => {
 
 describe("a migration that fails halfway (spec 082)", () => {
   const extra = {
-    "0022_ok.sql": "CREATE TABLE ok_one (id TEXT PRIMARY KEY);",
-    "0023_broken.sql": "CREATE TABLE broken_one (id TEXT PRIMARY KEY);\n--> statement-breakpoint\nINSERT INTO no_such_table (id) VALUES ('x');",
+    "0901_ok.sql": "CREATE TABLE ok_one (id TEXT PRIMARY KEY);",
+    "0902_broken.sql": "CREATE TABLE broken_one (id TEXT PRIMARY KEY);\n--> statement-breakpoint\nINSERT INTO no_such_table (id) VALUES ('x');",
   };
   let dataDir: string;
   let db: SqliteDatabase;
@@ -324,17 +324,17 @@ describe("a migration that fails halfway (spec 082)", () => {
 
     expect(err).toBeInstanceOf(MigrationError);
     const message = (err as Error).message;
-    expect(message).toContain("0023_broken.sql");
+    expect(message).toContain("0902_broken.sql");
     expect(message).toContain("rolled back");
-    expect(message).toContain("0022_ok.sql");
+    expect(message).toContain("0901_ok.sql");
     const backupPath = (err as MigrationError).backupPath;
     expect(backupPath).not.toBeNull();
     expect(message).toContain(backupPath!);
     expect(existsSync(backupPath!)).toBe(true);
 
     const names = await recordedNames(db);
-    expect(names).toContain("0022_ok.sql");
-    expect(names).not.toContain("0023_broken.sql");
+    expect(names).toContain("0901_ok.sql");
+    expect(names).not.toContain("0902_broken.sql");
     const tables = await tableNames(db);
     expect(tables).toContain("ok_one");
     expect(tables).not.toContain("broken_one"); // the CREATE in the failing file was rolled back too
@@ -353,7 +353,7 @@ describe("a migration that fails halfway (spec 082)", () => {
     );
     expect(server).toBeUndefined();
     expect(err).toBeInstanceOf(MigrationError);
-    expect((err as Error).message).toContain("0023_broken.sql");
+    expect((err as Error).message).toContain("0902_broken.sql");
     expect((err as MigrationError).backupPath).not.toBeNull();
     expect((err as Error).message).toContain((err as MigrationError).backupPath!);
   });
