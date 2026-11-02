@@ -14,6 +14,7 @@ import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
 import { readJson, validationBody } from "../http";
 import { openItems, refundedOf } from "../payments/routes";
+import { HELD_SQL } from "../creditNotes/money";
 
 export const openingRoutes = new Hono<AppEnv>();
 export const ledgerRoutes = new Hono<AppEnv>();
@@ -76,7 +77,8 @@ openingRoutes.post("/:id/void", async (c) => {
 });
 
 /** One event that changes what the customer owes (outstanding) or what the shop holds (advance). */
-type Event = { date: string; ts: string; order: number; type: string; reference: string | null; description: string; out: number; adv: number };
+/** Spec 019d R18: `cr` is the change to credit held (credit notes not yet used or paid back). */
+type Event = { date: string; ts: string; order: number; type: string; reference: string | null; description: string; out: number; adv: number; cr?: number };
 
 /**
  * Spec 019 R4: the customer's ledger from stored rows only. Every line is a change to outstanding or to advance held,
@@ -127,26 +129,55 @@ export async function ledgerOf(db: D1Database, customerId: string, from: string 
   const og = (await db.prepare("SELECT receipt_no, receipt_date, created_at, final_paise FROM old_gold_purchases WHERE customer_id = ?1 AND voided_at IS NULL").bind(customerId).all<{ receipt_no: string; receipt_date: string; created_at: string; final_paise: number }>()).results;
   for (const g of og) events.push({ date: g.receipt_date, ts: g.created_at, order: 6, type: "Old gold purchase", reference: g.receipt_no, description: `${g.receipt_no} for ${formatMoney(g.final_paise)} (its money is on its advance or payout line)`, out: 0, adv: 0 });
 
+  // Spec 019d R18: credit notes. Issue adds the whole amount to credit held; each application moves money
+  // from held to the bill; a payout moves money out of held; voiding adds back what reversing the
+  // applications restored, then removes the whole amount.
+  const notes = (await db.prepare("SELECT id, cn_no, cn_date, created_at, amount_paise, voided_at FROM credit_notes WHERE customer_id = ?1").bind(customerId).all<{ id: string; cn_no: string; cn_date: string; created_at: string; amount_paise: number; voided_at: string | null }>()).results;
+  for (const n of notes) {
+    events.push({ date: n.cn_date, ts: n.created_at, order: 0, type: "Credit note", reference: n.cn_no, description: `Credit note ${n.cn_no} issued`, out: 0, adv: 0, cr: n.amount_paise });
+    if (n.voided_at) events.push({ date: ist(n.voided_at), ts: n.voided_at, order: 5, type: "Credit note voided", reference: n.cn_no, description: `Credit note ${n.cn_no} voided`, out: 0, adv: 0, cr: -n.amount_paise });
+  }
+  const credApps = (await db.prepare(
+    `SELECT a.amount_paise, a.created_at, a.reversed_at, c.cn_no, i.invoice_no FROM credit_applications a
+     JOIN credit_notes c ON c.id = a.credit_note_id JOIN invoices i ON i.id = a.invoice_id WHERE c.customer_id = ?1`,
+  ).bind(customerId).all<{ amount_paise: number; created_at: string; reversed_at: string | null; cn_no: string; invoice_no: string }>()).results;
+  for (const a of credApps) {
+    events.push({ date: ist(a.created_at), ts: a.created_at, order: 2, type: "Credit applied", reference: a.cn_no, description: `Credit ${a.cn_no} applied to invoice ${a.invoice_no}`, out: -a.amount_paise, adv: 0, cr: -a.amount_paise });
+    if (a.reversed_at) events.push({ date: ist(a.reversed_at), ts: a.reversed_at, order: 4, type: "Credit application reversed", reference: a.cn_no, description: `Credit ${a.cn_no} from invoice ${a.invoice_no} reversed`, out: a.amount_paise, adv: 0, cr: a.amount_paise });
+  }
+  const credPays = (await db.prepare(
+    `SELECT p.amount_paise, p.paid_date, p.created_at, p.reversed_at, p.mode, c.cn_no FROM credit_note_payouts p JOIN credit_notes c ON c.id = p.credit_note_id WHERE c.customer_id = ?1`,
+  ).bind(customerId).all<{ amount_paise: number; paid_date: string; created_at: string; reversed_at: string | null; mode: string; cn_no: string }>()).results;
+  for (const p of credPays) {
+    events.push({ date: p.paid_date, ts: p.created_at, order: 3, type: "Credit paid out", reference: p.cn_no, description: `Paid out from ${p.cn_no} (${p.mode.replace("_", " ")})`, out: 0, adv: 0, cr: -p.amount_paise });
+    if (p.reversed_at) events.push({ date: ist(p.reversed_at), ts: p.reversed_at, order: 4, type: "Credit payout reversed", reference: p.cn_no, description: `Payout from ${p.cn_no} reversed`, out: 0, adv: 0, cr: p.amount_paise });
+  }
+
   events.sort((x, y) => x.date.localeCompare(y.date) || x.order - y.order || x.ts.localeCompare(y.ts));
 
   let out = 0;
   let adv = 0;
+  let cr = 0;
   const entries: LedgerEntry[] = [];
   let broughtOut = 0;
   let broughtAdv = 0;
+  let broughtCr = 0;
   for (const e of events) {
     if (from && e.date < from) {
       out += e.out;
       adv += e.adv;
+      cr += e.cr ?? 0;
       broughtOut = out;
       broughtAdv = adv;
+      broughtCr = cr;
       continue;
     }
     if (from && entries.length === 0) {
-      entries.push({ date: from, type: "Brought forward", reference: null, description: "Balance brought forward", debitPaise: 0, creditPaise: 0, outstandingAfterPaise: broughtOut, advanceAfterPaise: broughtAdv });
+      entries.push({ date: from, type: "Brought forward", reference: null, description: "Balance brought forward", debitPaise: 0, creditPaise: 0, outstandingAfterPaise: broughtOut, advanceAfterPaise: broughtAdv, creditAfterPaise: broughtCr });
     }
     out += e.out;
     adv += e.adv;
+    cr += e.cr ?? 0;
     entries.push({
       date: e.date,
       type: e.type,
@@ -156,12 +187,14 @@ export async function ledgerOf(db: D1Database, customerId: string, from: string 
       creditPaise: Math.max(-e.out, 0) + Math.max(e.adv, 0),
       outstandingAfterPaise: out,
       advanceAfterPaise: adv,
+      creditAfterPaise: cr,
     });
   }
   if (from && entries.length === 0) {
-    entries.push({ date: from, type: "Brought forward", reference: null, description: "Balance brought forward", debitPaise: 0, creditPaise: 0, outstandingAfterPaise: broughtOut, advanceAfterPaise: broughtAdv });
+    entries.push({ date: from, type: "Brought forward", reference: null, description: "Balance brought forward", debitPaise: 0, creditPaise: 0, outstandingAfterPaise: broughtOut, advanceAfterPaise: broughtAdv, creditAfterPaise: broughtCr });
   }
-  return { customerId, customerName: cust.name, from, outstandingPaise: out, advanceHeldPaise: adv, netPaise: out - adv, entries };
+  const held = (await db.prepare(`SELECT COALESCE(SUM(${HELD_SQL}), 0) AS n FROM credit_notes c WHERE c.customer_id = ?1 AND c.voided_at IS NULL`).bind(customerId).first<{ n: number }>())?.n ?? 0;
+  return { customerId, customerName: cust.name, from, outstandingPaise: out, advanceHeldPaise: adv, creditHeldPaise: held, netPaise: out - adv - held, entries };
 }
 
 ledgerRoutes.get("/customers/:id/ledger", async (c) => {
@@ -176,7 +209,8 @@ ledgerRoutes.get("/customers/:id/ledger", async (c) => {
 const TOTALS_SQL = `SELECT c.id AS customer_id, c.name AS customer_name,
   COALESCE((SELECT SUM(i.payable_paise) FROM invoices i WHERE i.customer_id = c.id AND i.voided_at IS NULL), 0)
   + COALESCE((SELECT SUM(o.amount_paise) FROM opening_balances o WHERE o.customer_id = c.id AND o.voided_at IS NULL), 0)
-  - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id WHERE p.customer_id = c.id AND a.reversed_at IS NULL), 0) AS outstanding,
+  - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id WHERE p.customer_id = c.id AND a.reversed_at IS NULL), 0)
+  - COALESCE((SELECT SUM(x.amount_paise) FROM credit_applications x JOIN credit_notes n ON n.id = x.credit_note_id WHERE n.customer_id = c.id AND x.reversed_at IS NULL), 0) AS outstanding,
   COALESCE((SELECT SUM(p.amount_paise - COALESCE((SELECT SUM(x.amount_paise) FROM payment_allocations x WHERE x.payment_id = p.id AND x.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0))
             FROM payments p WHERE p.customer_id = c.id AND p.voided_at IS NULL), 0) AS advance
   FROM customers c`;

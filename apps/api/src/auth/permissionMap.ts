@@ -69,6 +69,15 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/invoices/:id/settlement", permission: "invoices.view" },
   { method: "PUT", path: "/api/invoices/:id/settlement", permission: "invoices.edit" },
   { method: "POST", path: "/api/invoices/:id/advance-allocations", permission: "payments.create" },
+  // Spec 019d (credit notes), one permission per route (Q94).
+  { method: "GET", path: "/api/credit-notes", permission: "invoices.view" },
+  { method: "POST", path: "/api/credit-notes", permission: "invoices.edit" },
+  { method: "GET", path: "/api/credit-notes/:id", permission: "invoices.view" },
+  { method: "POST", path: "/api/credit-notes/:id/apply", permission: "payments.create" },
+  { method: "POST", path: "/api/credit-notes/:id/payouts", permission: "payments.refund" },
+  { method: "POST", path: "/api/credit-notes/:id/void", permission: "payments.void" },
+  { method: "POST", path: "/api/credit-notes/applications/:id/reverse", permission: "payments.void" },
+  { method: "POST", path: "/api/credit-notes/payouts/:id/reverse", permission: "payments.refund" },
   // Spec 019c: a sale whose rate is fixed later; fixing it applies the money already paid on it.
   { method: "POST", path: "/api/invoices/pending", permission: "invoices.create" },
   { method: "POST", path: "/api/invoices/:id/fix-rate", permission: "invoices.edit" },

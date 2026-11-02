@@ -18,5 +18,7 @@ export type {
 } from "./invoice";
 export { calculateOldGold, OLD_GOLD_LIMITS } from "./oldGold";
 export type { OldGoldRowInput, OldGoldResult, OldGoldOutcome } from "./oldGold";
+export { calculateCreditNote, CREDIT_NOTE_LIMITS } from "./creditNote";
+export type { CreditNoteInput, CreditNoteLineInput, CreditNoteOutcome, CreditNoteResult } from "./creditNote";
 export { validatePendingLines, pendingChargeableWeightMg, fixPendingRate } from "./pendingRate";
 export type { PendingLineInput, PendingSaleInput } from "./pendingRate";

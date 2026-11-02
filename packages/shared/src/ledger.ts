@@ -22,6 +22,8 @@ export type LedgerEntry = {
   outstandingAfterPaise: number;
   /** What the shop holds for the customer after this line. */
   advanceAfterPaise: number;
+  /** Spec 019d R18: credit held by the customer after this line. */
+  creditAfterPaise: number;
 };
 
 export type LedgerResponse = {
@@ -30,6 +32,9 @@ export type LedgerResponse = {
   from: string | null;
   outstandingPaise: number;
   advanceHeldPaise: number;
+  /** Spec 019d R18: credit notes not yet applied or paid back. */
+  creditHeldPaise: number;
+  /** Outstanding minus advance held minus credit held. */
   netPaise: number;
   entries: LedgerEntry[];
 };

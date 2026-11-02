@@ -32,6 +32,7 @@ import { revisionStatement } from "../db/revisions";
 import { readJson, validationBody } from "../http";
 import { applicableRate } from "../rates/routes";
 import { paymentStatusOf } from "@jewellery/shared";
+import { liveCreditTotalOn } from "../creditNotes/money";
 
 export const invoiceRoutes = new Hono<AppEnv>();
 
@@ -265,7 +266,13 @@ async function receivedMap(db: D1Database, ids: string[]): Promise<Map<string, n
   const marks = ids.map((_, i) => `?${i + 1}`).join(", ");
   const rows = (
     await db
-      .prepare(`SELECT invoice_id, COALESCE(SUM(amount_paise), 0) AS n FROM payment_allocations WHERE invoice_id IN (${marks}) AND reversed_at IS NULL GROUP BY invoice_id`)
+      // Spec 019d R16: credit applications count as settled money on the bill, next to payment allocations.
+      .prepare(
+        `SELECT i.id AS invoice_id,
+                COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.invoice_id = i.id AND a.reversed_at IS NULL), 0)
+              + COALESCE((SELECT SUM(x.amount_paise) FROM credit_applications x WHERE x.invoice_id = i.id AND x.reversed_at IS NULL), 0) AS n
+         FROM invoices i WHERE i.id IN (${marks})`,
+      )
       .bind(...ids)
       .all<{ invoice_id: string; n: number }>()
   ).results;
@@ -520,6 +527,10 @@ invoiceRoutes.put("/:id", async (c) => {
   if (body.expectedRevision !== row.revision_no) return c.json(stale, 409);
 
   // Spec 015 M8: an edit cannot make the bill smaller than what has already been received.
+  // Spec 019d R15: and not below the live credit notes on the bill.
+  if (result.payablePaise < (await liveCreditTotalOn(db, row.id))) {
+    return c.json({ error: "payable_below_received", message: "Credit notes are already recorded on this bill for more than the new total.", receivedPaise: await liveCreditTotalOn(db, row.id) }, 409);
+  }
   if (result.payablePaise < (await receivedOf(db, row.id))) {
     return c.json({ error: "payable_below_received", message: "Payments are already recorded above the new total. Reverse them first.", receivedPaise: await receivedOf(db, row.id) }, 409);
   }
@@ -604,6 +615,10 @@ invoiceRoutes.post("/:id/void", async (c) => {
   const row = await loadRow(db, c.req.param("id"));
   if (!row) return c.json({ error: "not_found" }, 404);
   if (row.voided_at) return c.json({ error: "already_voided" }, 409);
+  // Spec 019d R15: a bill with a live credit note cannot be voided (checked first: credit is also "received").
+  if ((await liveCreditTotalOn(db, row.id)) > 0) {
+    return c.json({ error: "has_credit_notes", message: "This invoice has credit notes against it. Void them first." }, 409);
+  }
   if ((await receivedOf(db, row.id)) > 0) {
     return c.json({ error: "has_payments", message: "This invoice has payments recorded against it. Reverse them first." }, 409);
   }

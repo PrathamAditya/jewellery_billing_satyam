@@ -19,6 +19,8 @@ import PaymentsPage from "./payments/PaymentsPage";
 import PaymentPage from "./payments/PaymentPage";
 import OrdersPage from "./orders/OrdersPage";
 import OutstandingPage from "./ledger/OutstandingPage";
+import CreditNotesPage from "./creditNotes/CreditNotesPage";
+import CreditNotePage from "./creditNotes/CreditNotePage";
 import OrderPage from "./orders/OrderPage";
 import { NewOldGoldPage, OldGoldListPage, OldGoldPage } from "./oldgold/OldGoldPages";
 import ForcePasswordChange from "./ForcePasswordChange";
@@ -83,6 +85,7 @@ function Page({ path, meId }: { path: string; meId: string }) {
     return parts[1] ? <OldGoldPage id={parts[1]} /> : <OldGoldListPage />;
   }
   if (parts[0] === "outstanding") return <OutstandingPage />;
+  if (parts[0] === "credit-notes") return parts[1] ? <CreditNotePage id={parts[1]} /> : <CreditNotesPage />;
   if (parts[0] === "orders") return parts[1] ? <OrderPage id={parts[1]} /> : <OrdersPage />;
   if (parts[0] === "payments") return parts[1] ? <PaymentPage id={parts[1]} /> : <PaymentsPage />;
   if (parts[0] === "settings") return <SettingsPage />;
@@ -130,6 +133,7 @@ function Shell() {
           {can("payments.view") && link("#/payments", "Payments", inPayments)}
           {can("advances.view") && link("#/orders", "Orders", inOrders)}
           {can("ledger.view") && link("#/outstanding", "Outstanding", path.startsWith("/outstanding"))}
+          {can("invoices.view") && link("#/credit-notes", "Credit notes", path.startsWith("/credit-notes"))}
           {can("oldgold.view") && link("#/old-gold", "Old gold", inOldGold)}
           {can("rates.view") && link("#/rates", "Rates", inRates)}
           {can("invoices.view") && link("#/calculator", "Calculator", inCalculator, "max-md:hidden")}

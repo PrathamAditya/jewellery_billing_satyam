@@ -31,6 +31,7 @@ import { printedNumberSql, printedNumberValues } from "../db/numbering";
 import { revisionStatement } from "../db/revisions";
 import { readJson, validationBody } from "../http";
 import { settingsSnapshot } from "../settings/routes";
+import { settledOn } from "../creditNotes/money";
 
 export const paymentRoutes = new Hono<AppEnv>();
 export const allocationRoutes = new Hono<AppEnv>();
@@ -113,13 +114,9 @@ export async function refundedOf(db: D1Database, paymentId: string): Promise<num
   return row?.n ?? 0;
 }
 
-/** Money received for an invoice: its live allocations (spec 015 M4). */
+/** Money received for an invoice: its live allocations (spec 015 M4) and live credit applications (spec 019d R16). */
 export async function receivedFor(db: D1Database, invoiceId: string): Promise<number> {
-  const row = await db
-    .prepare("SELECT COALESCE(SUM(amount_paise), 0) AS n FROM payment_allocations WHERE invoice_id = ?1 AND reversed_at IS NULL")
-    .bind(invoiceId)
-    .first<{ n: number }>();
-  return row?.n ?? 0;
+  return settledOn(db, invoiceId);
 }
 
 /** Remaining money of a customer across live payments (their advance held, spec 015 M5). */
@@ -140,7 +137,8 @@ export async function openItems(db: D1Database, customerId: string) {
     await db
       .prepare(
         `SELECT 'invoice' AS src, i.id, i.invoice_no AS label, i.invoice_date AS d, i.created_at AS c,
-                i.payable_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.invoice_id = i.id AND a.reversed_at IS NULL), 0) AS due
+                i.payable_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.invoice_id = i.id AND a.reversed_at IS NULL), 0)
+                  - COALESCE((SELECT SUM(x.amount_paise) FROM credit_applications x WHERE x.invoice_id = i.id AND x.reversed_at IS NULL), 0) AS due
          FROM invoices i WHERE i.customer_id = ?1 AND i.voided_at IS NULL AND i.rate_status = 'fixed'
          UNION ALL
          SELECT 'opening' AS src, o.id, COALESCE(o.reference, 'Opening balance') AS label, o.as_of_date AS d, o.created_at AS c,

@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { copyOrder, type InvoiceResponse, type OldGoldResponse, type PaymentResponse, type SettingsSnapshot, type SettlementResponse } from "@jewellery/shared";
+import { copyOrder, type CreditNoteDetail, type InvoiceResponse, type OldGoldResponse, type PaymentResponse, type SettingsSnapshot, type SettlementResponse } from "@jewellery/shared";
 import { api, ApiError } from "../api";
 import { btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { navigate } from "../router";
 import BusinessBanner from "../settings/BusinessBanner";
 import { InvoiceSheets } from "./InvoicePrint";
 import { OldGoldReceipt, PaymentReceipt, ReceiptSheet } from "./ReceiptPrint";
+import { CreditNoteSheet } from "./CreditNotePrint";
 import type { Header } from "./common";
 import "./fonts";
 
@@ -20,12 +21,13 @@ async function headerFor(doc: { header: Record<string, unknown> | null }): Promi
 
 const messageOf = (e: unknown) => (e instanceof ApiError ? e.message : "Could not load this document. Check the connection and try again.");
 
-/** Routes: #/print/invoice/:id, #/print/payment/:id, #/print/old-gold/:id */
+/** Routes: #/print/invoice/:id, #/print/payment/:id, #/print/old-gold/:id, #/print/credit-note/:id */
 export function PrintRoute({ path }: { path: string }) {
   const [, kind, id] = path.split("/").filter(Boolean);
   if (kind === "invoice" && id) return <InvoicePrintPage id={id} />;
   if (kind === "payment" && id) return <PaymentPrintPage id={id} />;
   if (kind === "old-gold" && id) return <OldGoldPrintPage id={id} />;
+  if (kind === "credit-note" && id) return <CreditNotePrintPage id={id} />;
   return <Message text="Nothing to print here." backTo="/" />;
 }
 
@@ -138,6 +140,33 @@ function OldGoldPrintPage({ id }: { id: string }) {
       <Toolbar backTo={`/old-gold/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={() => window.print()} hint="A4 paper, scale 100%, margins none. Two copies share one sheet, cut along the dashed line." />
       <div className="print-stage">
         <ReceiptSheet labels={copies} render={(label) => <OldGoldReceipt r={data.r} header={data.header} copyLabel={label} />} />
+      </div>
+    </>
+  );
+}
+
+/** Spec 019d section 4: one A4 portrait copy from the stored header and rows only (Q101). */
+function CreditNotePrintPage({ id }: { id: string }) {
+  const [data, setData] = useState<CreditNoteDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api<CreditNoteDetail>(`/api/credit-notes/${id}`)
+      .then((n) => alive && setData(n))
+      .catch((e) => alive && setError(messageOf(e)));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  if (error) return <Message text={error} backTo={`/credit-notes/${id}`} />;
+  if (!data) return <Message text="Loading..." />;
+  if (!data.header) return <Message text="This credit note has no saved header, so it cannot be printed." backTo={`/credit-notes/${id}`} />;
+  const header = data.header as unknown as Header;
+  return (
+    <>
+      <Toolbar backTo={`/credit-notes/${id}`} choice="first" onChoice={() => undefined} labels={["Credit note"]} onPrint={() => window.print()} hint="A4 paper, portrait, scale 100%, margins none. One copy." />
+      <div className="print-stage">
+        <CreditNoteSheet note={data} header={header} />
       </div>
     </>
   );

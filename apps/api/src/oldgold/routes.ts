@@ -22,6 +22,7 @@ import { printedNumberSql, printedNumberValues } from "../db/numbering";
 import { readJson, validationBody } from "../http";
 import { advanceHeld, refundedOf } from "../payments/routes";
 import { settingsSnapshot } from "../settings/routes";
+import { settledOn } from "../creditNotes/money";
 
 export const oldGoldRoutes = new Hono<AppEnv>();
 const PAGE_SIZE = 20;
@@ -168,7 +169,8 @@ oldGoldRoutes.post("/", async (c) => {
     if (!iv) return c.json({ error: "invoice_not_found", message: "That invoice does not exist" }, 400);
     if (iv.voided_at) return c.json({ error: "invoice_voided", message: "That invoice is voided" }, 409);
     if (iv.customer_id !== cust.id) return c.json({ error: "customer_mismatch", message: "That invoice belongs to another customer" }, 400);
-    const due = iv.payable_paise - ((await db.prepare("SELECT COALESCE(SUM(amount_paise), 0) AS n FROM payment_allocations WHERE invoice_id = ?1 AND reversed_at IS NULL").bind(b.invoiceId).first<{ n: number }>())?.n ?? 0);
+    // Spec 019d R16: credit applications also settle the bill.
+    const due = iv.payable_paise - (await settledOn(db, b.invoiceId!));
     if (inv > due) return c.json({ error: "exceeds_due", message: `${iv.invoice_no} only owes ₹${(due / 100).toFixed(2)}`, dueAmountPaise: due }, 409);
   }
   if (advance > 0 && b.orderId) {
@@ -307,6 +309,9 @@ oldGoldRoutes.post("/:id/void", async (c) => {
   const r = await loadReceipt(db, c.req.param("id"));
   if (!r) return c.json({ error: "not_found" }, 404);
   if (r.voided_at) return c.json({ error: "already_voided", message: "This receipt is already voided" }, 409);
+  // Spec 019d R9, R14: a receipt that a live credit note links to is voided only after that credit note.
+  const linkedNote = await db.prepare("SELECT cn_no FROM credit_notes WHERE ogp_id = ?1 AND voided_at IS NULL").bind(r.id).first<{ cn_no: string }>();
+  if (linkedNote) return c.json({ error: "linked_to_credit_note", message: `Credit note ${linkedNote.cn_no} uses this receipt. Void it first.` }, 409);
   const now = new Date().toISOString();
   const statements = [];
   if (r.payment_id) {

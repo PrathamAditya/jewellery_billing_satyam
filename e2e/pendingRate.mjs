@@ -59,7 +59,7 @@ await page.waitForSelector("h1:has-text('INV-')");
 const number = (await page.locator("h1").first().innerText()).trim().split(/\s/)[0];
 const pendingId = await idOf(number);
 ok(number.startsWith("INV-") && !!pendingId, "the sale is saved with a number: " + number);
-ok((await page.locator('button:has-text("Edit") >> visible=true').count()) === 0, "a pending sale has no Edit button");
+ok((await page.locator('button:text-is("Edit") >> visible=true').count()) === 0, "a pending sale has no Edit button");
 ok((await page.locator('button:has-text("Fix the rate") >> visible=true').count()) === 1, "a pending sale shows Fix the rate");
 ok((await page.locator("text=Amount due is shown once the rate is fixed").count()) === 1, "the invoice page shows no amount due while pending");
 
@@ -82,7 +82,7 @@ await page.click('button:has-text("Fix the rate and save")');
 await page.waitForSelector("text=Part paid");
 const bar = await page.locator("body").innerText();
 ok(bar.includes("₹2,884.00") && bar.includes("1,884.00"), "after fixing: payable ₹2,884.00 and balance due ₹1,884.00 (₹1,000 applied)");
-ok((await page.locator('button:has-text("Edit") >> visible=true').count()) === 1, "a fixed sale can be edited again");
+ok((await page.locator('button:text-is("Edit") >> visible=true').count()) === 1, "a fixed sale can be edited again");
 await page.screenshot({ path: `${S}/shot-fixed-invoice.png` });
 const led = await api("GET", `/api/customers/${customerId}/ledger`);
 ok(led.body.outstandingPaise === 188400 && led.body.advanceHeldPaise === 0, "the ledger owes ₹1,884.00 and holds no advance");

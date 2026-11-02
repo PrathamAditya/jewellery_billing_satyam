@@ -56,7 +56,7 @@ export default function SettlementTab({ invoice }: { invoice: { id: string; invo
 
       <section className="flex flex-col gap-2">
         <h2 className="font-semibold">Received against this invoice</h2>
-        {s.lines.length === 0 ? <p className="text-sm text-stone-600">Nothing received yet.</p> : (
+        {s.lines.length === 0 && s.creditLines.length === 0 ? <p className="text-sm text-stone-600">Nothing received yet.</p> : (
           <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-stone-100 text-left text-stone-600"><tr><th className="px-3 py-2 font-medium">Date</th><th className="px-3 py-2 font-medium">Mode</th><th className="px-3 py-2 font-medium">Reference</th><th className="px-3 py-2 font-medium">Type</th><th className="px-3 py-2 font-medium text-right">Amount</th><th className="px-3 py-2"></th></tr></thead>
@@ -69,6 +69,17 @@ export default function SettlementTab({ invoice }: { invoice: { id: string; invo
                     <td className="px-3 py-2">{l.type}</td>
                     <td className="px-3 py-2 text-right">{formatMoney(l.amountPaise)}</td>
                     <td className="px-3 py-2 text-right">{can("payments.void") && !voided && <button className="underline" onClick={() => { setReverseId(l.allocationId); setReason(""); }}>Reverse</button>}</td>
+                  </tr>
+                ))}
+                {/* Spec 019d R17: credit applied to this bill. Reversed from the credit note page. */}
+                {s.creditLines.map((c) => (
+                  <tr key={c.applicationId} className="border-t border-stone-100">
+                    <td className="px-3 py-2 whitespace-nowrap">{niceDate(c.date)}</td>
+                    <td className="px-3 py-2">Credit</td>
+                    <td className="px-3 py-2"><a className="underline" href={`#/credit-notes/${c.creditNoteId}`}>{c.creditNoteNo}</a></td>
+                    <td className="px-3 py-2">Credit note</td>
+                    <td className="px-3 py-2 text-right">{formatMoney(c.amountPaise)}</td>
+                    <td className="px-3 py-2 text-right" />
                   </tr>
                 ))}
               </tbody>

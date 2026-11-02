@@ -8,6 +8,7 @@ import {
   settlementRemarksSchema,
   type PaymentKind,
   type PaymentMode,
+  type SettlementCreditLine,
   type SettlementLine,
   type SettlementResponse,
 } from "@jewellery/shared";
@@ -16,6 +17,8 @@ import { auditStatement } from "../db/audit";
 import { revisionStatement } from "../db/revisions";
 import { readJson, validationBody } from "../http";
 import { receivedFor, refundedOf } from "../payments/routes";
+import { indiaDate } from "@jewellery/shared";
+import { HELD_SQL } from "../creditNotes/money";
 
 export const settlementRoutes = new Hono<AppEnv>();
 
@@ -70,7 +73,29 @@ export async function settlementOf(db: D1Database, invoiceId: string): Promise<S
     }
   }
 
-  const received = lines.reduce((s, l) => s + l.amountPaise, 0);
+  // Spec 019d R17: credit applied to this bill, and one auto-note sentence each.
+  const creditRows = (
+    await db
+      .prepare(
+        `SELECT a.id AS application_id, a.amount_paise, a.created_at, c.id AS note_id, c.cn_no, ${HELD_SQL} AS held
+         FROM credit_applications a JOIN credit_notes c ON c.id = a.credit_note_id
+         WHERE a.invoice_id = ?1 AND a.reversed_at IS NULL ORDER BY a.created_at, a.id`,
+      )
+      .bind(invoiceId)
+      .all<{ application_id: string; amount_paise: number; created_at: string; note_id: string; cn_no: string; held: number }>()
+  ).results;
+  const creditLines: SettlementCreditLine[] = creditRows.map((r) => ({
+    applicationId: r.application_id,
+    creditNoteId: r.note_id,
+    creditNoteNo: r.cn_no,
+    date: indiaDate(new Date(r.created_at)),
+    amountPaise: r.amount_paise,
+  }));
+  for (const r of creditRows) {
+    autoNote.push(`Credit note ${r.cn_no} applied: ${formatMoney(r.amount_paise)}. Credit still held in ${r.cn_no}: ${formatMoney(r.held)}.`);
+  }
+
+  const received = lines.reduce((s, l) => s + l.amountPaise, 0) + creditLines.reduce((s, l) => s + l.amountPaise, 0);
   const remarks = (await db.prepare("SELECT remarks FROM invoice_settlements WHERE invoice_id = ?1").bind(invoiceId).first<{ remarks: string | null }>())?.remarks ?? null;
   return {
     invoice: { id: inv.id, invoiceNo: inv.invoice_no, invoiceDate: inv.invoice_date, customerId: inv.customer_id, customerName: inv.customer_name, voided: inv.voided_at !== null },
@@ -81,6 +106,7 @@ export async function settlementOf(db: D1Database, invoiceId: string): Promise<S
     autoNote,
     remarks,
     lines,
+    creditLines,
   };
 }
 
