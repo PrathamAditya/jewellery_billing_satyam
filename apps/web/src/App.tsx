@@ -17,6 +17,7 @@ import SettingsPage from "./settings/SettingsPage";
 import UsersPage from "./users/UsersPage";
 import PaymentsPage from "./payments/PaymentsPage";
 import AuditPage from "./audit/AuditPage";
+import IntegrityPage from "./integrity/IntegrityPage";
 import CashClosingPage from "./cash/CashClosingPage";
 import PaymentPage from "./payments/PaymentPage";
 import OrdersPage from "./orders/OrdersPage";
@@ -121,6 +122,7 @@ function Page({ path, meId }: { path: string; meId: string }) {
   if (parts[0] === "settings") return <SettingsPage />;
   if (parts[0] === "users") return <UsersPage me={meId} />;
   if (parts[0] === "audit") return <AuditPage />;
+  if (parts[0] === "integrity") return <IntegrityPage />;
   if (parts[0] === "cash-closing") return <CashClosingPage />;
   if (parts[0] === "calculator") return <CalculatorPage />;
   if (parts[0] === "picker-demo") return <PickerDemoPage />;
