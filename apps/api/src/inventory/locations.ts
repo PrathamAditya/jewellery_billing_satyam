@@ -80,7 +80,8 @@ const balanceAt = async (db: D1Database, bulkId: string, locationId: string) =>
 // ---- places (spec 021b L1 to L5) ----
 
 locationRoutes.get("/locations", async (c) => {
-  const rows = (await c.env.DB.prepare("SELECT id, name, active FROM stock_locations ORDER BY active DESC, name COLLATE NOCASE").all<LocationRow>()).results;
+  // Spec 025 R12: the hidden Missing place is not listed; it is reached through the reconciliation only.
+  const rows = (await c.env.DB.prepare("SELECT id, name, active FROM stock_locations WHERE hidden = 0 ORDER BY active DESC, name COLLATE NOCASE").all<LocationRow>()).results;
   return c.json<StockLocationListResponse>({ items: rows.map(toLocation) });
 });
 
@@ -125,6 +126,8 @@ locationRoutes.patch("/locations/:id", async (c) => {
   const id = c.req.param("id");
   const row = await loadLocation(db, id);
   if (!row) return c.json({ error: "not_found" }, 404);
+  const system = await db.prepare("SELECT hidden FROM stock_locations WHERE id = ?1").bind(id).first<{ hidden: number }>();
+  if (system?.hidden === 1) return c.json({ error: "system_locked", message: "This place is kept by the system and cannot be changed" }, 409);
   const { name, active } = parsed.data;
 
   if (name !== undefined) {

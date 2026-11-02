@@ -128,6 +128,15 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/inventory/transfers", permission: "inventory.view" },
   { method: "POST", path: "/api/inventory/transfers", permission: "inventory.edit" },
 
+  // Spec 025: monthly stock reconciliation. The report is read-only; counts, lines and close need reconciliation.edit.
+  { method: "GET", path: "/api/inventory/reconciliations", permission: "reconciliation.view" },
+  { method: "POST", path: "/api/inventory/reconciliations", permission: "reconciliation.edit" },
+  { method: "GET", path: "/api/inventory/reconciliations/:id", permission: "reconciliation.view" },
+  { method: "GET", path: "/api/inventory/reconciliations/:id/report", permission: "reconciliation.view" },
+  { method: "PUT", path: "/api/inventory/reconciliations/:id/counts", permission: "reconciliation.edit" },
+  { method: "POST", path: "/api/inventory/reconciliations/:id/lines", permission: "reconciliation.edit" },
+  { method: "POST", path: "/api/inventory/reconciliations/:id/close", permission: "reconciliation.edit" },
+
   // Spec 022: purchases of three types, and the raw gold and silver stock. raw-stock is listed before :id.
   { method: "GET", path: "/api/inventory/purchases", permission: "purchases.view" },
   { method: "POST", path: "/api/inventory/purchases", permission: "purchases.edit" },
