@@ -1,9 +1,10 @@
 import { Hono } from "hono";
-import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, newId, roleNameSchema, rolePermissionsSchema } from "@jewellery/shared";
+import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, PERMISSIONS, newId, roleNameSchema, rolePermissionsSchema } from "@jewellery/shared";
 import type { AppEnv } from "../env";
 import { auditStatement } from "../db/audit";
 import { readJson } from "../http";
 import { hashPassword } from "../auth/password";
+import { LOCKED_OWNER } from "../auth/permissions";
 
 export const userRoutes = new Hono<AppEnv>();
 export const roleRoutes = new Hono<AppEnv>();
@@ -175,7 +176,7 @@ userRoutes.get("/:id/activity", async (c) => {
 // ---- roles ----
 
 type RoleRow = { name: string; label: string; permissions_json: string; system: number };
-const toRole = (r: RoleRow) => ({ name: r.name, label: r.label, permissions: JSON.parse(r.permissions_json) as string[], system: r.system === 1 });
+const toRole = (r: RoleRow) => ({ name: r.name, label: r.label, permissions: r.name === LOCKED_OWNER ? [...PERMISSIONS] : (JSON.parse(r.permissions_json) as string[]), system: r.system === 1 });
 
 roleRoutes.get("/", async (c) => {
   const rows = (await c.env.DB.prepare("SELECT name, label, permissions_json, system FROM roles ORDER BY system DESC, name").all<RoleRow>()).results;

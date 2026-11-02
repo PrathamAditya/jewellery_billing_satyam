@@ -22,6 +22,7 @@ import { inventoryRoutes } from "./inventory/routes";
 import { bulkRoutes } from "./inventory/bulk";
 import { locationRoutes } from "./inventory/locations";
 import { purchaseRoutes } from "./inventory/purchases";
+import { integrityRoutes } from "./integrity/routes";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -77,6 +78,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/reports", reportRoutes);
   app.route("/api/audit", auditRoutes);
   app.route("/api/cash-closing", cashClosingRoutes);
+  app.route("/api/integrity", integrityRoutes);
   app.get("/api/customers/:id/advances", async (c) => c.json({ items: await customerAdvances(c.env.DB, c.req.param("id")) }));
 
   app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));

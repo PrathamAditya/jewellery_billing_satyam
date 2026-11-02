@@ -102,6 +102,8 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/cash-closing/list", permission: "payments.view" },
   { method: "POST", path: "/api/cash-closing", permission: "cash.close" },
   { method: "POST", path: "/api/cash-closing/:date/notes", permission: "cash.close" },
+  // Spec 052: read-only data checks (owner only by default, Q180).
+  { method: "GET", path: "/api/integrity", permission: "integrity.view" },
   // Spec 020: inventory items (U No.), item types and status history.
   { method: "GET", path: "/api/inventory/types", permission: "inventory.view" },
   { method: "POST", path: "/api/inventory/types", permission: "inventory.edit" },

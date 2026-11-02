@@ -18,6 +18,8 @@ export const PERMISSIONS = [
   "cash.close",
   "inventory.view", "inventory.edit",
   "purchases.view", "purchases.edit",
+  // Spec 052: the data integrity checks (owner only by default, Q180).
+  "integrity.view",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -30,7 +32,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
     name: "manager",
     label: "Manager",
     system: false,
-    permissions: PERMISSIONS.filter((p) => !["users.manage", "settings.manage", "backups.manage", "audit.view"].includes(p)),
+    permissions: PERMISSIONS.filter((p) => !["users.manage", "settings.manage", "backups.manage", "audit.view", "integrity.view"].includes(p)),
   },
   {
     name: "staff",
@@ -54,7 +56,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
     name: "viewer",
     label: "View only",
     system: false,
-    permissions: PERMISSIONS.filter((p) => p.endsWith(".view") && p !== "audit.view").concat(["invoices.print"]) as Permission[],
+    permissions: PERMISSIONS.filter((p) => p.endsWith(".view") && p !== "audit.view" && p !== "integrity.view").concat(["invoices.print"]) as Permission[],
   },
 ];
 

@@ -37,8 +37,8 @@ The owner can run a set of checks on the stored data at any time and see whether
 ## 3. Data and API
 
 **Data**
-- No migration is needed for the checks: they read existing tables only.
-- The permission `integrity.view` is stored in the `roles` table (spec 004), so migration `0029_integrity.sql` adds it to the owner role (the only role that gets it). It is the same pattern as migrations 0022 and 0028. It changes no business row.
+- No migration. The checks read existing tables only.
+- The permission `integrity.view` is in the shared list. The owner role is locked (spec 004 R2), so its permission list is the full shared list in code (`permissionsForRole` and the role list), and the stored `roles` row is not changed. A migration was tried first (`0029_integrity.sql`, the pattern of 0022 and 0028), but it changes only a row, and the spec 082 runner then refuses to upgrade a database made by the earlier temporary step, because it cannot tell whether the file ran. The code grant avoids that, and it covers any future permission for the owner too.
 
 **API**
 - `GET /api/integrity` (permission `integrity.view`): returns `{ ranAt, ok, failed, checks: [{ id, title, description, status: "ok" | "fail", count, problems: [{ recordId, kind, label, detail, link }], truncated }] }`.
@@ -83,7 +83,7 @@ The owner can run a set of checks on the stored data at any time and see whether
 Fixing a problem (the checks never change data; the owner corrects it through the normal screens or the void flow), scheduled runs, e-mail or WhatsApp alerts, checks on the cloud database from the command line, checks of stock (spec 021 to 022) and of the GST return figures (spec 031 reports), a history of past runs.
 
 ## 8. Defaults used (owner may change later)
-- Q180 (who sees the page): the owner only, by `integrity.view`.
+- Q180 (who sees the page): the owner only, by `integrity.view`; no migration, see section 3.
 - Q181 (rounding): exact integer comparison, no tolerance.
 - Q182 (credit applications): counted as money received against the bill in I7, as the database triggers already do (spec 019d).
 - Q183 (combined lines): gold and labour must be 0, and the amount is the typed total (no split to compare).
@@ -97,7 +97,7 @@ Fixing a problem (the checks never change data; the owner corrects it through th
 ## 9. Acceptance checklist
 - [x] Owner approves this spec: built on the defaults for Q180 to Q189 (they stay as defaults until changed)
 - [ ] I1 to I14 implemented in `apps/api/src/integrity/checks.ts`
-- [ ] `GET /api/integrity` mapped in `PERMISSION_MAP`, permission `integrity.view` in the shared list and the owner role (migration 0029)
+- [ ] `GET /api/integrity` mapped in `PERMISSION_MAP`, permission `integrity.view` in the shared list; the owner gets it in code (no migration)
 - [ ] Command line `npm run integrity -w @jewellery/api` with exit codes 0, 1 and 2
 - [ ] Data checks screen linked from Settings, with "Run again"
 - [ ] Unit and API tests in `apps/api/test/integrity.test.ts`, each check passes on clean data and fails on broken data
