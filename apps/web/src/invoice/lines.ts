@@ -153,3 +153,35 @@ export const lineTextFromSaved = (l: InvoiceLineResponse): LineText => {
 };
 
 export const rateKindFor = (p: Purity) => PURITY_RATE_KIND[p];
+
+/** Spec 019c: a row of a sale whose rate is fixed later. Weights, purity and labour only; HSN is always 7113. */
+export type PendingParsed = {
+  input: { description: string; purity: Purity; hsn: string; grossWeightMg: number; netWeightMg: number; polishBps: number; labourRatePaisePerKg: number } | null;
+  fieldErrors: Partial<Record<keyof LineText, string>>;
+};
+
+export function parsePendingLine(t: LineText): PendingParsed {
+  const fieldErrors: PendingParsed["fieldErrors"] = {};
+  const net = parseWeightGrams(t.net);
+  if (!net.ok) fieldErrors.net = net.message;
+  const gross = t.gross.trim() === "" ? net : parseWeightGrams(t.gross);
+  if (!gross.ok) fieldErrors.gross = gross.message;
+  const polishText = t.polish.trim() === "" ? "0" : t.polish.trim().replace(/%/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(polishText) || Number(polishText) > 100) fieldErrors.polish = "Polish must be 0% to 100% (up to 2 decimals)";
+  const labourIsZero = t.labour.trim() === "" || /^[₹\s,.0]*$/.test(t.labour);
+  const labour = labourIsZero ? { ok: true as const, paisePerKg: 0 } : parseRateInput(t.labour, "gram");
+  if (!labour.ok) fieldErrors.labour = labour.message;
+  if (Object.keys(fieldErrors).length) return { input: null, fieldErrors };
+  return {
+    fieldErrors,
+    input: {
+      description: t.description,
+      purity: t.purity,
+      hsn: "7113",
+      grossWeightMg: (gross as { mg: number }).mg,
+      netWeightMg: (net as { mg: number }).mg,
+      polishBps: Math.round(Number(polishText) * 100),
+      labourRatePaisePerKg: labour.ok ? labour.paisePerKg : 0,
+    },
+  };
+}

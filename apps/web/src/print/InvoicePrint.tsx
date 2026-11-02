@@ -26,12 +26,14 @@ export function InvoiceSheets({ invoice, settlement, header, copyLabel }: Invoic
   const calc = invoice.calc as StoredCalc;
   const pages = paginate(invoice.lines);
   const last = pages.length - 1;
+  // Spec 019c Q95: a sale whose rate is not fixed has no amounts to print, and no settlement page.
+  const pending = invoice.rateStatus === "pending";
   return (
     <>
       {pages.map((rows, i) => (
         <Fragment key={i}>
-          <FrontPage invoice={invoice} calc={calc} header={header} copyLabel={copyLabel} rows={rows} pageNo={i + 1} isLast={i === last} />
-          {i === last ? <SettlementPage invoice={invoice} calc={calc} header={header} settlement={settlement} /> : <div className="page" />}
+          <FrontPage invoice={invoice} calc={calc} header={header} copyLabel={copyLabel} rows={rows} pageNo={i + 1} isLast={i === last} pending={pending} />
+          {i === last && !pending ? <SettlementPage invoice={invoice} calc={calc} header={header} settlement={settlement} /> : <div className="page" />}
         </Fragment>
       ))}
     </>
@@ -40,7 +42,7 @@ export function InvoiceSheets({ invoice, settlement, header, copyLabel }: Invoic
 
 type Lines = InvoiceResponse["lines"];
 
-function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast }: { invoice: InvoiceResponse; calc: StoredCalc; header: Header; copyLabel: string; rows: Lines; pageNo: number; isLast: boolean }) {
+function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pending = false }: { invoice: InvoiceResponse; calc: StoredCalc; header: Header; copyLabel: string; rows: Lines; pageNo: number; isLast: boolean; pending?: boolean }) {
   const b = header.business;
   const cityLine = [b.city, b.state, b.pincode].filter(Boolean).join(" ");
   return (
@@ -106,14 +108,19 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast }: {
               <td className="r">{formatWeightPrint(l.grossWeightMg)}</td>
               <td className="r">{formatWeightPrint(l.netWeightMg)}</td>
               <td className="r">{l.polishMg > 0 ? formatWeightPrint(l.polishMg) : "-"}</td>
-              <td className="r">{formatMoney(l.displayRatePaisePerGram)}/g</td>
-              <td className="r">{money(l.amountPaise)}</td>
+              <td className="r">{pending ? "to be fixed" : `${formatMoney(l.displayRatePaisePerGram)}/g`}</td>
+              <td className="r">{pending ? "-" : money(l.amountPaise)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {isLast ? (
+      {isLast && pending ? (
+        <div className="mt-4 border border-dashed p-3 text-[8.5pt]" style={{ borderColor: "var(--print-gold)" }}>
+          <div className="label">Rate and amount to be fixed when paid</div>
+          <p className="mt-1 leading-snug">No amount is payable on this sheet. The gold rate of the day of payment, the GST and the total are written on the final invoice when the customer pays.</p>
+        </div>
+      ) : isLast ? (
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div>
             <div className="label">Invoice note and tax structure</div>

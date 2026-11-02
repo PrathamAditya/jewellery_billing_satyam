@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { LedgerSummary, OutstandingRow } from "@jewellery/shared";
-import { formatMoney } from "@jewellery/shared";
+import { formatMoney, formatWeightGrams } from "@jewellery/shared";
 import { navigate } from "../router";
 import { niceDate } from "../rates/api";
 import { useDebounced } from "../customers/useDebounced";
 import { Alert, inputClass } from "../customers/ui";
 import { getLedgerSummary, getOutstanding } from "./api";
+import { searchInvoices } from "../invoice/api";
+import type { InvoiceSummary } from "@jewellery/shared";
 
 /** Spec 019 R6, R7: who owes money, and who the shop holds money for. */
 export default function OutstandingPage() {
@@ -14,6 +16,11 @@ export default function OutstandingPage() {
   const [items, setItems] = useState<OutstandingRow[]>([]);
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Spec 019c R13: sales whose rate is not fixed yet. Not in the totals above.
+  const [pending, setPending] = useState<InvoiceSummary[]>([]);
+  useEffect(() => {
+    searchInvoices("", { rateStatus: "pending" }).then((r) => setPending(r.items)).catch(() => undefined);
+  }, []);
   useEffect(() => {
     getLedgerSummary().then(setSummary).catch((e) => setError(e instanceof Error ? e.message : "Could not load"));
   }, []);
@@ -29,6 +36,24 @@ export default function OutstandingPage() {
           <div><dt className="text-sm text-stone-500">Advances held</dt><dd className="font-semibold text-lg">{formatMoney(summary.totalAdvanceHeldPaise)}</dd></div>
           <div><dt className="text-sm text-stone-500">Customers with balances</dt><dd className="font-semibold text-lg">{summary.customersWithOutstanding}</dd></div>
         </dl>
+      )}
+      {pending.length > 0 && (
+        <section className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+          <h2 className="px-3 py-2 font-medium bg-stone-100 text-stone-600">Pending rate (not in the totals until the rate is fixed)</h2>
+          <table className="w-full text-sm min-w-[32rem]">
+            <thead className="text-left text-stone-600"><tr><th className="px-3 py-2 font-medium">Sale</th><th className="px-3 py-2 font-medium">Customer</th><th className="px-3 py-2 font-medium text-right">Weight</th><th className="px-3 py-2 font-medium text-right">Held on the sale</th></tr></thead>
+            <tbody>
+              {pending.map((i) => (
+                <tr key={i.id} className="border-t border-stone-100 hover:bg-stone-50 cursor-pointer" onClick={() => navigate(`/invoices/${i.id}`)}>
+                  <td className="px-3 py-2">{i.invoiceNo} <span className="text-stone-500">{niceDate(i.invoiceDate)}</span></td>
+                  <td className="px-3 py-2 font-medium">{i.customerName}</td>
+                  <td className="px-3 py-2 text-right">{formatWeightGrams(i.pendingWeightMg)} g</td>
+                  <td className="px-3 py-2 text-right">{formatMoney(i.pendingHeldPaise)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
       <input className={inputClass} type="search" placeholder="Search by customer name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search outstanding" />
       {error && <Alert>{error}</Alert>}

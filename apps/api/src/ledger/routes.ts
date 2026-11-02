@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { polishWeightMg } from "@jewellery/calc";
 import {
   formatMoney,
   indiaDate,
@@ -87,9 +88,13 @@ export async function ledgerOf(db: D1Database, customerId: string, from: string 
   const events: Event[] = [];
   const ist = (iso: string) => indiaDate(new Date(iso));
 
-  const invoices = (await db.prepare("SELECT id, invoice_no, invoice_date, created_at, payable_paise, voided_at FROM invoices WHERE customer_id = ?1").bind(customerId).all<{ id: string; invoice_no: string; invoice_date: string; created_at: string; payable_paise: number; voided_at: string | null }>()).results;
+  const invoices = (await db.prepare("SELECT id, invoice_no, invoice_date, created_at, payable_paise, voided_at, rate_status, input_json FROM invoices WHERE customer_id = ?1").bind(customerId).all<{ id: string; invoice_no: string; invoice_date: string; created_at: string; payable_paise: number; voided_at: string | null; rate_status: string; input_json: string }>()).results;
   for (const i of invoices) {
-    events.push({ date: i.invoice_date, ts: i.created_at, order: 0, type: "Invoice", reference: i.invoice_no, description: `Invoice ${i.invoice_no}`, out: i.payable_paise, adv: 0 });
+    if (i.rate_status === "pending") {
+      // Spec 019c R14: a sale waiting for its rate shows on its date with no amount and no balance effect.
+      const chargeableMg = (JSON.parse(i.input_json) as { lines: { netWeightMg: number; polishBps: number }[] }).lines.reduce((t, l) => t + l.netWeightMg + polishWeightMg(l.netWeightMg, l.polishBps), 0);
+      events.push({ date: i.invoice_date, ts: i.created_at, order: 0, type: "Invoice (rate pending)", reference: i.invoice_no, description: `Invoice ${i.invoice_no}: ${(chargeableMg / 1000).toFixed(3)} g, rate to be fixed when paid`, out: 0, adv: 0 });
+    } else events.push({ date: i.invoice_date, ts: i.created_at, order: 0, type: "Invoice", reference: i.invoice_no, description: `Invoice ${i.invoice_no}`, out: i.payable_paise, adv: 0 });
     if (i.voided_at) events.push({ date: ist(i.voided_at), ts: i.voided_at, order: 5, type: "Invoice voided", reference: i.invoice_no, description: `Invoice ${i.invoice_no} voided`, out: -i.payable_paise, adv: 0 });
   }
   const openings = (await db.prepare("SELECT id, reference, as_of_date, created_at, amount_paise, voided_at FROM opening_balances WHERE customer_id = ?1").bind(customerId).all<{ id: string; reference: string | null; as_of_date: string; created_at: string; amount_paise: number; voided_at: string | null }>()).results;
