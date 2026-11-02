@@ -167,6 +167,9 @@ export const invoices = sqliteTable(
     payablePaise: integer("payable_paise").notNull(),
     calcJson: text("calc_json").notNull(),
     revisionNo: integer("revision_no").notNull().default(1),
+    /** Spec 019c: "pending" until the rate is fixed (migration 0020). */
+    rateStatus: text("rate_status").notNull().default("fixed"),
+    rateFixedOn: text("rate_fixed_on"),
     ...voidColumns(),
   },
   (t) => [

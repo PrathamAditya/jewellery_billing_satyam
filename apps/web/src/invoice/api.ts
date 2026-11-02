@@ -1,8 +1,9 @@
 import type { InvoiceHistoryEntry, InvoiceListResponse, InvoiceResponse } from "@jewellery/shared";
 import { api } from "../api";
 
-export const searchInvoices = (q: string, o: { status?: string; from?: string; to?: string; cursor?: string | null; customerId?: string } = {}) => {
+export const searchInvoices = (q: string, o: { status?: string; rateStatus?: string; from?: string; to?: string; cursor?: string | null; customerId?: string } = {}) => {
   const p = new URLSearchParams({ q });
+  if (o.rateStatus) p.set("rateStatus", o.rateStatus);
   if (o.customerId) p.set("customerId", o.customerId);
   if (o.status) p.set("status", o.status);
   if (o.from) p.set("from", o.from);
@@ -15,3 +16,6 @@ export const getInvoiceHistory = (id: string) => api<{ items: InvoiceHistoryEntr
 export const createInvoice = (body: Record<string, unknown>) => api<InvoiceResponse>("/api/invoices", { method: "POST", body });
 export const updateInvoice = (id: string, body: Record<string, unknown>) => api<InvoiceResponse>(`/api/invoices/${id}`, { method: "PUT", body });
 export const voidInvoice = (id: string, reason: string) => api<InvoiceResponse>(`/api/invoices/${id}/void`, { method: "POST", body: { reason } });
+/** Spec 019c: a sale whose rate is fixed later. */
+export const createPendingInvoice = (body: Record<string, unknown>) => api<InvoiceResponse>("/api/invoices/pending", { method: "POST", body });
+export const fixRate = (id: string, body: Record<string, unknown>) => api<InvoiceResponse>(`/api/invoices/${id}/fix-rate`, { method: "POST", body });

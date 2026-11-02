@@ -1,7 +1,7 @@
 import { polishWeightMg } from "@jewellery/calc";
 import { PURITIES, PURITY_RATE_KIND, formatWeightGrams, paisePerKgToInput, parseWeightGrams, type ApplicableRatesResponse, type Purity } from "@jewellery/shared";
 import { btnSecondary, inputClass } from "../customers/ui";
-import { blankLine, isTouched, parseLine, type LineText } from "./lines";
+import { blankLine, isTouched, parseLine, parsePendingLine, type LineText } from "./lines";
 
 type Props = {
   rows: LineText[];
@@ -11,13 +11,16 @@ type Props = {
   /** Show the purity column and fill the gold rate from these day rates (spec 013 R8). */
   rates?: ApplicableRatesResponse["rates"] | null;
   showPurity?: boolean;
+  /** Spec 019c: the sale's rate is fixed later. Gold, stone, total and pricing boxes are not shown. */
+  pendingRate?: boolean;
 };
 
 /** The text boxes of a row (the selects and the GST output are handled separately). */
 type BoxKey = "description" | "gross" | "net" | "polish" | "gold" | "labour" | "stoneWeight" | "stoneAmount" | "total";
 
 /** The lines grid shared by the Calculator (spec 012) and the invoice form (spec 013). */
-export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, showPurity = false }: Props) {
+export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, showPurity = false, pendingRate = false }: Props) {
+  if (pendingRate) return <PendingLines rows={rows} onChange={onChange} rowErrors={rowErrors} />;
   const setField = (i: number, k: keyof LineText, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const setHsn = (i: number, hsn: string) => onChange(rows.map((r, j) => (j === i ? { ...r, hsn, gst: hsn === "9988" ? "5" : "3" } : r)));
   const setPricing = (i: number, pricing: LineText["pricing"]) => onChange(rows.map((r, j) => (j === i ? { ...r, pricing } : r)));
@@ -147,6 +150,69 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
         </tbody>
       </table>
       <button className={`${btnSecondary} mt-1`} onClick={() => onChange([...rows, blankLine(showPurity ? "22K916" : "other")])} disabled={rows.length >= 50}>
+        Add line
+      </button>
+    </div>
+  );
+}
+
+/** Spec 019c: weights, purity and the labour rate only. The gold rate is fixed when the customer pays. */
+function PendingLines({ rows, onChange, rowErrors }: { rows: LineText[]; onChange: (rows: LineText[]) => void; rowErrors: Record<number, string[]> }) {
+  const setField = (i: number, k: keyof LineText, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const cell = (i: number, k: "description" | "gross" | "net" | "polish" | "labour", label: string, placeholder: string, width: string) => {
+    const err = isTouched(rows[i]!) ? parsePendingLine(rows[i]!).fieldErrors[k] : undefined;
+    return (
+      <div className="flex flex-col gap-0.5">
+        <input
+          className={`${inputClass} ${width} ${err ? "border-red-400" : ""}`}
+          value={rows[i]![k]}
+          onChange={(e) => setField(i, k, e.target.value)}
+          aria-label={`${label} line ${i + 1}`}
+          placeholder={placeholder}
+          inputMode={k === "description" ? "text" : "decimal"}
+        />
+        {err && <span className="text-xs text-red-700 max-w-32">{err}</span>}
+      </div>
+    );
+  };
+  const headers = ["Description", "Purity", "Gross g", "Net g", "Polish %", "Labour rate / g", "Gold rate", ""];
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-sm">
+        <thead className="text-left text-stone-600">
+          <tr>{headers.map((h, i) => <th key={`${h}${i}`} className="pr-2 pb-2 font-medium whitespace-nowrap">{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="align-top">
+              <td className="pr-2 pb-2">{cell(i, "description", "Description", "Silver Chain", "w-44")}</td>
+              <td className="pr-2 pb-2">
+                <select className={`${inputClass} w-28`} value={r.purity} onChange={(e) => onChange(rows.map((x, j) => (j === i ? { ...x, purity: e.target.value as Purity } : x)))} aria-label={`Purity line ${i + 1}`}>
+                  {PURITIES.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </td>
+              <td className="pr-2 pb-2">{cell(i, "gross", "Gross g", "9.800", "w-24")}</td>
+              <td className="pr-2 pb-2">{cell(i, "net", "Net g", "9.800", "w-24")}</td>
+              <td className="pr-2 pb-2">{cell(i, "polish", "Polish %", "0", "w-24")}</td>
+              <td className="pr-2 pb-2">{cell(i, "labour", "Labour rate", "0", "w-28")}</td>
+              <td className="pr-2 pb-2"><span className="block py-2 text-sm text-stone-500">Fixed when paid</span></td>
+              <td className="pb-2">
+                <div className="flex flex-col gap-1">
+                  <button className="px-2 py-2 text-sm text-stone-600 hover:text-red-700 disabled:opacity-30" disabled={rows.length === 1} onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label={`Remove line ${i + 1}`}>
+                    Remove
+                  </button>
+                  {(rowErrors[i] ?? []).map((m) => (
+                    <span key={m} role="alert" className="text-xs text-red-700 max-w-40">{m}</span>
+                  ))}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className={`${btnSecondary} mt-1`} onClick={() => onChange([...rows, blankLine("silver")])} disabled={rows.length >= 50}>
         Add line
       </button>
     </div>

@@ -125,9 +125,11 @@ settlementRoutes.post("/:id/advance-allocations", async (c) => {
   const user = c.get("user");
   const parsed = advanceAllocationsSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json(validationBody(parsed.error), 400);
-  const inv = await db.prepare("SELECT id, customer_id, payable_paise, voided_at FROM invoices WHERE id = ?1").bind(c.req.param("id")).first<{ id: string; customer_id: string | null; payable_paise: number; voided_at: string | null }>();
+  const inv = await db.prepare("SELECT id, customer_id, payable_paise, voided_at, rate_status FROM invoices WHERE id = ?1").bind(c.req.param("id")).first<{ id: string; customer_id: string | null; payable_paise: number; voided_at: string | null; rate_status: string }>();
   if (!inv) return c.json({ error: "not_found" }, 404);
   if (inv.voided_at) return c.json({ error: "invoice_voided", message: "A voided invoice cannot be paid" }, 409);
+  // Spec 019c R6: a sale whose rate is not fixed has no amount due yet.
+  if (inv.rate_status === "pending") return c.json({ error: "rate_pending", message: "The rate of this sale is not fixed yet. Fix the rate first." }, 409);
 
   const due = inv.payable_paise - (await receivedFor(db, inv.id));
   const requested = parsed.data.allocations;

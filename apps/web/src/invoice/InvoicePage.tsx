@@ -7,6 +7,8 @@ import { navigate } from "../router";
 import { niceDate } from "../rates/api";
 import Breakdown from "./Breakdown";
 import { getInvoice, getInvoiceHistory, voidInvoice } from "./api";
+import { FixRateDialog, PendingNote, ReceiveOnSaleDialog } from "./PendingRate";
+import { getApplicable } from "../rates/api";
 import ReceiveDialog from "../payments/ReceiveDialog";
 import SettlementTab from "../settlement/SettlementTab";
 import { formatMoney as fm } from "@jewellery/shared";
@@ -89,6 +91,13 @@ export default function InvoicePage({ id }: { id: string }) {
   const [tab, setTab] = useState<"details" | "settlement" | "history">("details");
   const [voiding, setVoiding] = useState(false);
   const [receiving, setReceiving] = useState(false);
+  // Spec 019c: the pending-rate dialogs.
+  const [receivingOnSale, setReceivingOnSale] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    getApplicable().then((a) => setToday(a.date)).catch(() => undefined);
+  }, []);
 
   const load = useCallback(
     (revision?: number) => {
@@ -147,9 +156,23 @@ export default function InvoicePage({ id }: { id: string }) {
               Print
             </button>
           )}
+          {!inv.voidedAt && !inv.isEarlierVersion && inv.rateStatus === "pending" && (
+            <>
+              {can("payments.create") && (
+                <button className={btnSecondary} onClick={() => setReceivingOnSale(true)}>
+                  Receive payment on this sale
+                </button>
+              )}
+              {can("invoices.edit") && (
+                <button className={btnPrimary} onClick={() => setFixing(true)}>
+                  Fix the rate
+                </button>
+              )}
+            </>
+          )}
           {!inv.voidedAt && !inv.isEarlierVersion && (
             <>
-              {can("invoices.edit") && (
+              {can("invoices.edit") && inv.rateStatus !== "pending" && (
               <button className={btnPrimary} onClick={() => navigate(`/invoices/${inv.id}/edit`)}>
                 Edit
               </button>
@@ -170,7 +193,14 @@ export default function InvoicePage({ id }: { id: string }) {
         {tabBtn("history", "History")}
       </div>
 
-      {!inv.voidedAt && (
+      {!inv.voidedAt && inv.rateStatus === "pending" && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-sm flex gap-6 flex-wrap">
+          <span>Rate <strong>pending</strong></span>
+          <span>Held on this sale <strong>{fm(inv.pendingHeldPaise)}</strong></span>
+          <span className="text-stone-600">Amount due is shown once the rate is fixed</span>
+        </div>
+      )}
+      {!inv.voidedAt && inv.rateStatus !== "pending" && (
         <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap text-sm">
           <div className="flex gap-6 flex-wrap">
             <span>Received <strong>{fm(inv.receivedPaise)}</strong></span>
@@ -221,7 +251,7 @@ export default function InvoicePage({ id }: { id: string }) {
                     <td className="px-3 py-2 text-right">{formatWeightGrams(l.grossWeightMg)}</td>
                     <td className="px-3 py-2 text-right">{formatWeightGrams(l.netWeightMg)}</td>
                     <td className="px-3 py-2 text-right">{formatWeightGrams(l.polishMg)}</td>
-                    <td className="px-3 py-2 text-right">{formatPerGram(l.goldRatePaisePerKg)}</td>
+                    <td className="px-3 py-2 text-right">{inv.rateStatus === "pending" ? <span className="text-stone-500">Fixed when paid</span> : formatPerGram(l.goldRatePaisePerKg)}</td>
                     <td className="px-3 py-2 text-right">{formatPerGram(l.labourRatePaisePerKg)}</td>
                   </tr>
                 ))}
@@ -229,10 +259,10 @@ export default function InvoicePage({ id }: { id: string }) {
             </table>
           </div>
 
-          <Breakdown r={calc} descriptions={inv.lines.map((l) => l.description)} />
+          {inv.rateStatus === "pending" ? <PendingNote inv={inv} /> : <Breakdown r={calc} descriptions={inv.lines.map((l) => l.description)} />}
         </div>
       )}
-      {tab === "settlement" && <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} />}
+      {tab === "settlement" && (inv.rateStatus === "pending" ? <Alert kind="info">The settlement opens when the rate is fixed.</Alert> : <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} />)}
       {tab === "history" && <History id={inv.id} current={inv.revisionNo} onOpen={(rev) => (setTab("details"), load(rev))} />}
 
       {receiving && (
@@ -240,6 +270,24 @@ export default function InvoicePage({ id }: { id: string }) {
           invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, balanceDuePaise: inv.balanceDuePaise, customerId: inv.customerId }}
           onClose={() => setReceiving(false)}
           onSaved={(pid) => navigate(`/payments/${pid}`)}
+        />
+      )}
+      {receivingOnSale && (
+        <ReceiveOnSaleDialog
+          inv={inv}
+          today={today}
+          onClose={() => setReceivingOnSale(false)}
+        />
+      )}
+      {fixing && (
+        <FixRateDialog
+          inv={inv}
+          today={today}
+          onClose={() => setFixing(false)}
+          onDone={() => {
+            setFixing(false);
+            load();
+          }}
         />
       )}
       {voiding && (

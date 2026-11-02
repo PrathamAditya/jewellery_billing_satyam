@@ -105,6 +105,36 @@ export const invoiceRequestSchema = z.object({
 });
 export type InvoiceRequest = z.infer<typeof invoiceRequestSchema>;
 
+/** Spec 019c R1: a line of a sale whose rate is fixed later. No gold rate, discount, stone or combined total. */
+const pendingLineSchema = invoiceLineSchema.omit({ goldRatePaisePerKg: true, pricingMode: true, stoneWeightMg: true, stoneAmountPaise: true, totalAmountPaise: true, gstRateBps: true });
+export const pendingInvoiceRequestSchema = z.object({
+  id: z.string().uuid().optional(),
+  invoiceDate: z.string({ error: "Date is required" }).refine(isValidBusinessDate, "Date must look like 2026-11-01"),
+  /** Spec 019c R2: a saved customer is required. */
+  customerId: z.string({ error: "Choose the customer. A sale with the rate fixed later needs a saved customer." }).uuid("Choose the customer"),
+  customerName: invoiceRequestSchema.shape.customerName,
+  customerMobile: invoiceRequestSchema.shape.customerMobile,
+  customerAddress: invoiceRequestSchema.shape.customerAddress,
+  customerPan: invoiceRequestSchema.shape.customerPan,
+  taxMode: z.enum(["intra", "inter"], { error: "Choose same state or other state" }),
+  reverseCharge: z.boolean().optional().default(false),
+  remarks: invoiceRequestSchema.shape.remarks,
+  lines: z.array(pendingLineSchema).min(1, "Add at least one line").max(50, "An invoice can have at most 50 lines"),
+});
+export type PendingInvoiceRequest = z.infer<typeof pendingInvoiceRequestSchema>;
+
+/** Spec 019c R8: fixing the rate. `expectedRevision` is the revision the screen started from. */
+export const fixRateRequestSchema = z.object({
+  expectedRevision: z.number({ error: "expectedRevision is required" }).int().min(1),
+  rateDate: z.string().refine(isValidBusinessDate, "Rate date must look like 2026-11-01").optional(),
+  reason: z.string().trim().max(300).optional(),
+  typedRates: z
+    .array(z.object({ lineNo: z.number().int().min(1), goldRatePaisePerKg: z.number().int().min(1, "The rate must be more than 0") }))
+    .max(50)
+    .optional(),
+});
+export type FixRateRequest = z.infer<typeof fixRateRequestSchema>;
+
 export const voidInvoiceSchema = z.object({ reason: z.string().trim().min(1, "Please give a reason").max(300) });
 
 // ---- API shapes ----
@@ -140,7 +170,13 @@ export type InvoiceSummary = {
   /** Spec 015 R12: computed from live allocations. */
   receivedPaise: number;
   balanceDuePaise: number;
-  paymentStatus: "unpaid" | "part_paid" | "paid" | "voided";
+  paymentStatus: "unpaid" | "part_paid" | "paid" | "voided" | "pending_rate";
+  /** Spec 019c: "pending" until the rate is fixed. A pending sale has no payable amount (its payablePaise is 0 and is not shown). */
+  rateStatus: "fixed" | "pending";
+  rateFixedOn: string | null;
+  /** Spec 019c R13: for a pending sale, its chargeable weight (net plus polish, mg) and the money held against it. 0 for fixed sales. */
+  pendingWeightMg: number;
+  pendingHeldPaise: number;
 };
 
 export type InvoiceResponse = InvoiceSummary & {
