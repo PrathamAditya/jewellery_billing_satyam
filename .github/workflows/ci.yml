@@ -1,8 +1,10 @@
 name: CI
+# One check per wave, not one per spec. Spec PRs go into the wave branch (wave-N) and do not run CI.
+# The single run happens on the pull request from the wave branch into main (and by hand from the Actions tab).
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   check:
