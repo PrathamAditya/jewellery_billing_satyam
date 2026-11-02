@@ -42,6 +42,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 022 | Purchases (finished, raw gold and silver, karigar-made) | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
 | 019c | Credit sales with the rate fixed later (pending rate fixation) | Wave 2, built 2026-11-02 on `spec-019c-rate-fixation`, PR open, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
+| 052 | Data integrity checks (read-only, owner only, command line too) | Wave 3, built on branch `spec-052-integrity`, owner review pending |
 | 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |
 | 080 | Database adapter (D1-compatible over local SQLite) | Wave 4, built on branch `spec-080-db-adapter` (PR into `wave-4`), owner approval pending |
 | 081 | Local server entry (API and web app on 127.0.0.1) | Wave 4, built on branch `spec-081-local-server` (PR into `wave-4`), owner approval pending |
