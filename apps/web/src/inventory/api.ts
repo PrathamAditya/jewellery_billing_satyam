@@ -1,4 +1,8 @@
 import type {
+  ReconciliationCloseResponse,
+  ReconciliationDetailResponse,
+  ReconciliationListResponse,
+  ReconciliationReportResponse,
   BulkHistoryResponse,
   BulkItemDetailResponse,
   BulkItemListResponse,
@@ -19,6 +23,7 @@ import type {
   PurchaseSaveResponse,
   RawStockResponse,
 } from "@jewellery/shared";
+import { newId } from "@jewellery/shared";
 import { api } from "../api";
 
 /** Spec 020: inventory calls. Weights are whole milligrams. */
@@ -55,3 +60,15 @@ export const getPurchase = (id: string) => api<PurchaseSaveResponse>(`/api/inven
 export const createPurchase = (body: Record<string, unknown>) => api<PurchaseSaveResponse>("/api/inventory/purchases", { method: "POST", body });
 export const voidPurchase = (id: string, reason: string) => api<PurchaseSaveResponse>(`/api/inventory/purchases/${id}/void`, { method: "POST", body: { reason } });
 export const getRawStock = () => api<RawStockResponse>("/api/inventory/purchases/raw-stock");
+
+/** Spec 025: monthly stock reconciliation calls. */
+export const listReconciliations = () => api<ReconciliationListResponse>("/api/inventory/reconciliations");
+export const getReconciliation = (id: string) => api<ReconciliationDetailResponse>(`/api/inventory/reconciliations/${id}`);
+export const getReconciliationReport = (id: string) => api<ReconciliationReportResponse>(`/api/inventory/reconciliations/${id}/report`);
+export const openReconciliation = (body: { month: string; locationId: string | null }) =>
+  api<ReconciliationDetailResponse>("/api/inventory/reconciliations", { method: "POST", body: { id: newId(), ...body } });
+export const saveReconciliationCounts = (id: string, lines: { id: string; counted: unknown; note: string | null }[]) =>
+  api<ReconciliationDetailResponse>(`/api/inventory/reconciliations/${id}/counts`, { method: "PUT", body: { lines } });
+export const addReconciliationLine = (id: string, inventoryItemId: string) =>
+  api<ReconciliationDetailResponse>(`/api/inventory/reconciliations/${id}/lines`, { method: "POST", body: { id: newId(), inventoryItemId } });
+export const closeReconciliation = (id: string) => api<ReconciliationCloseResponse>(`/api/inventory/reconciliations/${id}/close`, { method: "POST", body: {} });
