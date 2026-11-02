@@ -89,6 +89,10 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/ledger/summary", permission: "ledger.view" },
   { method: "GET", path: "/api/ledger/outstanding", permission: "ledger.view" },
 
+  // Spec 051: read-only audit history (owner only by default).
+  { method: "GET", path: "/api/audit", permission: "audit.view" },
+  { method: "GET", path: "/api/audit/options", permission: "audit.view" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

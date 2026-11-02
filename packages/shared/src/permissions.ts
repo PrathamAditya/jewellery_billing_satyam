@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   "backups.view", "backups.manage",
   "reports.view",
   "audit.view",
+  "cash.close",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -26,7 +27,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
     name: "manager",
     label: "Manager",
     system: false,
-    permissions: PERMISSIONS.filter((p) => !["users.manage", "settings.manage", "backups.manage"].includes(p)),
+    permissions: PERMISSIONS.filter((p) => !["users.manage", "settings.manage", "backups.manage", "audit.view"].includes(p)),
   },
   {
     name: "staff",
@@ -47,7 +48,7 @@ export const DEFAULT_ROLES: { name: string; label: string; permissions: Permissi
     name: "viewer",
     label: "View only",
     system: false,
-    permissions: PERMISSIONS.filter((p) => p.endsWith(".view")).concat(["invoices.print"]) as Permission[],
+    permissions: PERMISSIONS.filter((p) => p.endsWith(".view") && p !== "audit.view").concat(["invoices.print"]) as Permission[],
   },
 ];
 
