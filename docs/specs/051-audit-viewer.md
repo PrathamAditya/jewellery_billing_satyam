@@ -26,7 +26,7 @@ The owner can read the history of every change in the system: who did what, to w
 - A10. The page has no edit, delete, void or save controls, on PC or phone.
 
 ## 3. Data and API
-- **Migration: none** for the table. The role data change is part of migration `0022` (see section 8).
+- **Migration: none** for the table. The role data change is part of migration `0023` (see section 8).
 - `GET /api/audit?from=&to=&actor=&entity=&action=&cursor=` (permission `audit.view`): `{ items, nextCursor }`. Each item: `id`, `at` (ISO UTC), `actor`, `actorName`, `action`, `entity`, `entityId`, `detail` (parsed JSON or null). `cursor` is an offset: the next page starts at the next 20.
 - `GET /api/audit/options` (permission `audit.view`): `{ entities, actions, actors: [{ id, label }] }`, the distinct values in the log.
 - Shared types: `packages/shared/src/audit.ts`.
@@ -51,7 +51,7 @@ The owner can read the history of every change in the system: who did what, to w
   - Date range uses India days (A3, section 5 example); actor, entity and action filters, alone and combined.
   - Options list the entities, actions and actors in the log.
   - Bad date and reversed range are refused (A5).
-  - Owner can read; staff gets 403 with `permission: audit.view` (A6, A7). Manager and view-only are checked in the commit that adds migration 0022.
+  - Owner can read; staff gets 403 with `permission: audit.view` (A6, A7). Manager and view-only are checked in the commit that adds migration 0023.
   - No write route exists (A8); UPDATE and DELETE on audit_log fail (A9); rows written by other features (a customer save) appear.
 - Browser (`e2e/auditViewer.mjs`): the owner opens the page from the top bar, sees rows, filters by action, filters by a date range with and without rows, opens a row's detail, sees no edit controls, and on a 390 px phone the page does not scroll sideways.
 
@@ -65,7 +65,7 @@ Exporting the log, reading the log for a single customer on the customer page, r
 
 ## 9. Acceptance checklist
 - [x] A1 to A5 implemented and tested in `apps/api/test/auditViewer.test.ts`
-- [x] A6 owner and staff tested; manager and view-only checked once migration 0022 is in place
+- [x] A6 owner and staff tested; manager and view-only checked once migration 0023 is in place
 - [x] A8 and A9 tested (no write route, database refuses edit and delete)
 - [x] Browser test `e2e/auditViewer.mjs` added to `e2e/run-all.mjs`
 - [ ] Owner review
