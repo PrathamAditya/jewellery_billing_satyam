@@ -14,7 +14,7 @@ The downloadable version runs on the owner's PC as one local Node process: the s
 - L2. The server listens on `127.0.0.1` only. The address is not configurable. A request whose `Host` header is not `127.0.0.1:<port>` or `localhost:<port>` gets 403 (DNS-rebinding guard).
 - L3. The port comes from `JB_PORT`. Default `8765` (Q122). A value that is not a whole number from 1 to 65535 stops the start with a message.
 - L4. On start the process prints the address to open (`http://127.0.0.1:<port>`) and the data folder. Ctrl+C (SIGINT) and SIGTERM close the HTTP server and the database file, then exit 0.
-- L5. The server refuses to start (with a message to run `npm run local:migrate`) when the database has migration files not yet recorded, and refuses to start when `apps/web/dist/index.html` is missing (run `npm run build`).
+- L5. (Superseded by 082, M14 and M17: the server now runs the migration runner before it serves, and an empty folder is migrated, not refused.) The server refuses to start when the migration runner fails, and refuses to start when `apps/web/dist/index.html` is missing (run `npm run build`).
 
 **Web app**
 - L6. Files are served with a content type from the extension (HTML, JS, CSS, JSON, images, fonts). `index.html` is `no-cache`. Files under `assets/` (content-hashed by Vite) are cached for a year.
@@ -103,7 +103,7 @@ Fixture needed on a fresh database (Q127): `e2e/invoices.mjs` expects the silver
 - [x] `npm run typecheck` clean after the last change.
 - [x] Browser suite `BASE_URL=http://127.0.0.1:8810 node e2e/run-all.mjs` against the local server, on a fresh database with the fixture rate (Q127): all 18 files, 289 PASS, exit 0.
 - [ ] Owner approves this spec and the defaults for Q122 to Q127.
-- [ ] Spec 082 replaces `local:migrate` (L16).
+- [x] Spec 082 replaces `local:migrate` (L16): the runner is in `apps/api/src/local/migrations.ts`, and `local:migrate` and `local:owner` call it.
 - [ ] Spec 083 checks that the server runs under Electron's bundled Node (Q120).
 
 Status line: built on branch `spec-081-local-server` (Wave 4, PR into `wave-4`), owner approval pending.

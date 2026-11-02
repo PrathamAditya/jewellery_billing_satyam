@@ -1,11 +1,11 @@
-import { resolveDataDir, openLocalDatabase } from "./database";
-import { migrateLocalDatabase, pendingMigrations } from "./migrate";
+import { resolveDataDir, openLocalDatabase, databaseFile } from "./database";
+import { describeMigrations, runMigrations } from "./migrations";
 import { setLocalOwnerPassword } from "./owner";
 
 /**
- * Spec 081 scripts: `npm run local:migrate` and `npm run local:owner`.
- * Migrations are a temporary step (spec 082 replaces it with the real runner). The owner password comes only from
- * the OWNER_PASSWORD environment variable, never from a file or an argument.
+ * Spec 081 scripts, updated by spec 082: `npm run local:migrate` and `npm run local:owner`.
+ * Both run the same migration runner as the server (with a backup before any upgrade). The owner password comes only
+ * from the OWNER_PASSWORD environment variable, never from a file or an argument.
  */
 async function main() {
   const command = process.argv[2];
@@ -14,8 +14,8 @@ async function main() {
   if (command === "migrate") {
     const db = openLocalDatabase(dataDir);
     try {
-      const applied = await migrateLocalDatabase(db);
-      console.log(applied.length ? `Applied ${applied.length} migration(s) to ${dataDir}: ${applied.join(", ")}` : `No new migrations. Database: ${dataDir}`);
+      const report = await runMigrations(db, { databasePath: databaseFile(dataDir) });
+      for (const line of describeMigrations(report, dataDir)) console.log(line);
     } finally {
       db.close();
     }
@@ -27,7 +27,7 @@ async function main() {
     if (!password) throw new Error("Set OWNER_PASSWORD in the environment (at least 10 characters).");
     const db = openLocalDatabase(dataDir);
     try {
-      if ((await pendingMigrations(db)).length > 0) throw new Error("Run npm run local:migrate first.");
+      await runMigrations(db, { databasePath: databaseFile(dataDir) });
       await setLocalOwnerPassword(db, password);
       console.log(`Owner password set on the local database in ${dataDir}. Username: owner. All earlier sessions were ended.`);
     } finally {
