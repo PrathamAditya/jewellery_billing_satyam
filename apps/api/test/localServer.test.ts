@@ -6,7 +6,8 @@ import { request as httpRequest } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startLocalServer, type LocalServer } from "../src/local/server";
 import { openLocalDatabase } from "../src/local/database";
-import { migrateLocalDatabase } from "../src/local/migrate";
+import { runMigrations } from "../src/local/migrations";
+import { databaseFile } from "../src/local/database";
 import { setLocalOwnerPassword } from "../src/local/owner";
 
 /**
@@ -27,7 +28,7 @@ beforeAll(async () => {
   writeFileSync(join(webDir, "assets", "app.js"), "console.log('app');");
 
   const db = openLocalDatabase(dataDir);
-  await migrateLocalDatabase(db);
+  await runMigrations(db, { databasePath: databaseFile(dataDir) });
   await setLocalOwnerPassword(db, PASSWORD);
   db.close();
 
@@ -157,12 +158,20 @@ describe("local server (spec 081)", () => {
   });
 });
 
-describe("local server refuses an unmigrated database", () => {
-  it("does not start on an empty data folder", async () => {
+describe("local server runs the migration runner at start-up (spec 082)", () => {
+  // Spec 081 refused to start on an unmigrated folder. Spec 082 replaces that: the server migrates it first, and only
+  // refuses when the runner fails (tested in localMigrations.test.ts).
+  it("creates and migrates an empty data folder, then serves", async () => {
     const empty = mkdtempSync(join(tmpdir(), "jb-local-empty-"));
+    let fresh: LocalServer | undefined;
     try {
-      await expect(startLocalServer({ dataDir: join(empty, "data"), webDir, port: 0 })).rejects.toThrow(/local:migrate/);
+      fresh = await startLocalServer({ dataDir: join(empty, "data"), webDir, port: 0 });
+      expect(fresh.migrations.applied.length).toBeGreaterThan(0);
+      expect(fresh.migrations.backup).toBeNull();
+      const res = await fetch(`${fresh.url}/api/health`);
+      expect(res.status).toBe(200);
     } finally {
+      await fresh?.close();
       rmSync(empty, { recursive: true, force: true });
     }
   });

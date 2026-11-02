@@ -1,4 +1,5 @@
 import { resolveDataDir } from "./database";
+import { describeMigrations } from "./migrations";
 import { startLocalServer } from "./server";
 
 /**
@@ -18,6 +19,10 @@ async function main() {
   const dataDir = resolveDataDir(process.env);
   const port = parsePort(process.env.JB_PORT);
   const server = await startLocalServer({ dataDir, port });
+  // Spec 082: say what the upgrade did before start-up, when it did anything.
+  if (server.migrations.applied.length > 0 || server.migrations.adopted.length > 0) {
+    for (const line of describeMigrations(server.migrations, dataDir)) console.log(line);
+  }
   console.log(`Jewellery billing is running at ${server.url}`);
   console.log(`Open that address in Chrome. Data folder: ${dataDir}`);
   console.log("Press Ctrl+C to stop.");
@@ -40,6 +45,7 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
+  // Spec 082: the server does not start. The message names the reason and the backup path, if one was made.
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });

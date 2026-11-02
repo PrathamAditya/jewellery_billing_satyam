@@ -5,13 +5,14 @@ import { serve } from "@hono/node-server";
 import type { ServerType } from "@hono/node-server";
 import { createApp } from "../index";
 import type { SqliteDatabase } from "../db/sqlite";
-import { openLocalDatabase } from "./database";
-import { pendingMigrations } from "./migrate";
+import { databaseFile, openLocalDatabase } from "./database";
+import { runMigrations, type MigrationReport } from "./migrations";
 import { makeWebHandler, webAppReady } from "./static";
 
 /**
  * Spec 081: the API and the built web app as one local Node process, on 127.0.0.1 only.
  * The API is the same `createApp()` the Cloudflare Worker runs; the database is the spec 080 adapter.
+ * Spec 082: the migration runner runs before anything is served. If it fails, the server does not start.
  */
 export const DEFAULT_WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "web", "dist");
 export const LOCAL_HOST = "127.0.0.1";
@@ -20,6 +21,8 @@ export type LocalServerOptions = {
   dataDir: string;
   /** The folder with the built web app (index.html). Default: apps/web/dist. */
   webDir?: string;
+  /** The folder with the migration files. Default: apps/api/migrations (tests use a copy). */
+  migrationsDir?: string;
   /** 0 picks a free port (tests). The real entry uses JB_PORT, default 8765. */
   port: number;
 };
@@ -27,6 +30,8 @@ export type LocalServerOptions = {
 export type LocalServer = {
   url: string;
   port: number;
+  /** What the migration runner did at start-up (spec 082). */
+  migrations: MigrationReport;
   close: () => Promise<void>;
 };
 
@@ -37,10 +42,13 @@ export async function startLocalServer(options: LocalServerOptions): Promise<Loc
   }
 
   const db: SqliteDatabase = openLocalDatabase(options.dataDir);
-  const pending = await pendingMigrations(db);
-  if (pending.length > 0) {
+  let migrations: MigrationReport;
+  try {
+    // Spec 082: upgrade (with a backup first) before serving. A MigrationError carries the reason and the backup path.
+    migrations = await runMigrations(db, { databasePath: databaseFile(options.dataDir), migrationsDir: options.migrationsDir });
+  } catch (error) {
     db.close();
-    throw new Error(`The database has ${pending.length} migration(s) not applied. Run npm run local:migrate first.`);
+    throw error;
   }
 
   const api = createApp();
@@ -79,6 +87,7 @@ export async function startLocalServer(options: LocalServerOptions): Promise<Loc
   return {
     url: `http://${LOCAL_HOST}:${boundPort}`,
     port: boundPort,
+    migrations,
     close: () =>
       new Promise<void>((resolve) => {
         server.close(() => {
