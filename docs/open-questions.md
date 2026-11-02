@@ -249,3 +249,8 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q117. Data folder.** `DEFAULT: Documents/JewelleryBilling, changed at setup if wanted`. Is that location acceptable?
 - **Q118. Local backup.** `DEFAULT: a copy after the last save of each day to a folder the owner picks, keeping the last 30 copies`. Is that enough, and which folder should it default to?
 - **Q119. Support.** `DEFAULT: email, plus a remote session started by the developer only with the owner's permission`. How should customers get help once the software is installed?
+
+## U. Wave 4 questions for spec 080, default used until you answer
+
+- **Q120. SQLite inside the desktop app.** `DEFAULT: use Node's built-in node:sqlite. If it does not load inside Electron's bundled Node, spec 083 switches the same adapter (docs/specs/080-db-adapter.md) to better-sqlite3`. Do you accept a fallback package in the desktop build if the built-in one fails there?
+- **Q121. Which test backend runs in CI.** `DEFAULT: npm test runs on SQLite (DB_BACKEND=sqlite); the D1 (Miniflare) suite runs with DB_BACKEND=d1 and is not yet a CI step`. Should CI run both suites, so the cloud D1 path keeps being tested? The default leaves CI unchanged in spec 080.
