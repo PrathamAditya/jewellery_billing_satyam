@@ -24,6 +24,15 @@ export type SettlementLine = {
   receiptNo: string | null;
 };
 
+/** Spec 019d R17: a credit note applied to this bill, counted as settled money. */
+export type SettlementCreditLine = {
+  applicationId: string;
+  creditNoteId: string;
+  creditNoteNo: string;
+  date: string;
+  amountPaise: number;
+};
+
 export type SettlementResponse = {
   invoice: { id: string; invoiceNo: string; invoiceDate: string; customerId: string | null; customerName: string; voided: boolean };
   payablePaise: number;
@@ -35,4 +44,6 @@ export type SettlementResponse = {
   autoNote: string[];
   remarks: string | null;
   lines: SettlementLine[];
+  /** Spec 019d R17: live credit applications. They are part of `receivedPaise`. */
+  creditLines: SettlementCreditLine[];
 };

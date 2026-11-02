@@ -29,6 +29,8 @@ export default function LedgerTab({ customerId, customerName }: { customerId: st
         <dl className="flex gap-6 flex-wrap">
           <div><dt className="text-sm text-stone-500">Owes</dt><dd className="font-semibold text-base">{formatMoney(l.outstandingPaise)}</dd></div>
           <div><dt className="text-sm text-stone-500">Advance held</dt><dd className="font-semibold text-base">{formatMoney(l.advanceHeldPaise)}</dd></div>
+          {/* Spec 019d R18: credit notes not yet applied or paid back. */}
+          <div><dt className="text-sm text-stone-500">Credit held</dt><dd className="font-semibold text-base">{formatMoney(l.creditHeldPaise)}</dd></div>
         </dl>
         <div className="flex gap-2 flex-wrap items-end">
           <Field label="Show from">
@@ -52,6 +54,7 @@ export default function LedgerTab({ customerId, customerName }: { customerId: st
               <th className="px-3 py-2 font-medium text-right">Credit</th>
               <th className="px-3 py-2 font-medium text-right">Owes after</th>
               <th className="px-3 py-2 font-medium text-right">Advance after</th>
+              <th className="px-3 py-2 font-medium text-right">Credit after</th>
             </tr>
           </thead>
           <tbody>
@@ -65,6 +68,7 @@ export default function LedgerTab({ customerId, customerName }: { customerId: st
                 <td className="px-3 py-2 text-right">{e.creditPaise ? formatMoney(e.creditPaise) : ""}</td>
                 <td className="px-3 py-2 text-right">{formatMoney(e.outstandingAfterPaise)}</td>
                 <td className="px-3 py-2 text-right">{formatMoney(e.advanceAfterPaise)}</td>
+                <td className="px-3 py-2 text-right">{formatMoney(e.creditAfterPaise)}</td>
               </tr>
             ))}
             {l.entries.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-stone-500">Nothing recorded for this customer yet.</td></tr>}

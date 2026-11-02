@@ -30,6 +30,7 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 017 | Settlement | Built, owner review pending |
 | 019 | Customer ledger and opening balances | Built, owner review pending |
 | 019b | Cheque tracking (Received, Deposited, Cleared, Bounced) | Wave 2, built on PR #29, owner review pending |
+| 019d | Returns, exchanges and credit notes | Wave 2, built on branch `spec-019d-credit-notes`, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
 | 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |
 

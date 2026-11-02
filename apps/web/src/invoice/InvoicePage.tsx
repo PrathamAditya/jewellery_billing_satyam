@@ -9,6 +9,7 @@ import Breakdown from "./Breakdown";
 import { getInvoice, getInvoiceHistory, voidInvoice } from "./api";
 import ReceiveDialog from "../payments/ReceiveDialog";
 import SettlementTab from "../settlement/SettlementTab";
+import CreditNoteDialog from "../creditNotes/CreditNoteDialog";
 import { formatMoney as fm } from "@jewellery/shared";
 import { useAuth } from "../auth";
 
@@ -89,6 +90,7 @@ export default function InvoicePage({ id }: { id: string }) {
   const [tab, setTab] = useState<"details" | "settlement" | "history">("details");
   const [voiding, setVoiding] = useState(false);
   const [receiving, setReceiving] = useState(false);
+  const [crediting, setCrediting] = useState(false);
 
   const load = useCallback(
     (revision?: number) => {
@@ -152,6 +154,11 @@ export default function InvoicePage({ id }: { id: string }) {
               {can("invoices.edit") && (
               <button className={btnPrimary} onClick={() => navigate(`/invoices/${inv.id}/edit`)}>
                 Edit
+              </button>
+              )}
+              {can("invoices.edit") && (
+              <button className={btnSecondary} onClick={() => setCrediting(true)}>
+                Credit note
               </button>
               )}
               {can("invoices.void") && (
@@ -235,6 +242,9 @@ export default function InvoicePage({ id }: { id: string }) {
       {tab === "settlement" && <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} />}
       {tab === "history" && <History id={inv.id} current={inv.revisionNo} onOpen={(rev) => (setTab("details"), load(rev))} />}
 
+      {crediting && (
+        <CreditNoteDialog invoice={inv} onClose={() => setCrediting(false)} />
+      )}
       {receiving && (
         <ReceiveDialog
           invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, balanceDuePaise: inv.balanceDuePaise, customerId: inv.customerId }}

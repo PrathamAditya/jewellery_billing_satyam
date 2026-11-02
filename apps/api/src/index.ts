@@ -13,6 +13,7 @@ import { settlementRoutes } from "./settlement/routes";
 import { ledgerRoutes, openingRoutes } from "./ledger/routes";
 import { rateRoutes } from "./rates/routes";
 import { settingsRoutes } from "./settings/routes";
+import { creditNoteRoutes, creditReversalRoutes } from "./creditNotes/routes";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -57,6 +58,8 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/old-gold", oldGoldRoutes);
   app.route("/api/invoices", settlementRoutes);
   app.route("/api/opening-balances", openingRoutes);
+  app.route("/api/credit-notes", creditNoteRoutes);
+  app.route("/api/credit-notes", creditReversalRoutes);
   app.route("/api/", ledgerRoutes);
   app.get("/api/customers/:id/advances", async (c) => c.json({ items: await customerAdvances(c.env.DB, c.req.param("id")) }));
 
