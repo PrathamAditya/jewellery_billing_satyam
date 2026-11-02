@@ -73,7 +73,8 @@ await page.click('button:has-text("Save movement")');
 ok(await seen(page.locator("text=Adjusted recorded. 5 pcs in stock now.")), "an adjustment of -2 with a reason leaves 5");
 
 // ---- history: oldest first with the balance after each row ----
-const rows = page.locator("section table tbody tr");
+// Scoped to the movements table: the By place table (spec 021b) is a table in another section.
+const rows = page.locator('section:has(h2:has-text("Movements")) table tbody tr');
 await seen(page.locator(`td:has-text("Counted short ${uniq}")`));
 const kinds = await rows.locator("td:nth-child(2)").allTextContents();
 const balances = await rows.locator("td:nth-child(4)").allTextContents();

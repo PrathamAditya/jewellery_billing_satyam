@@ -47,6 +47,8 @@ type ItemRow = {
   hsn: string;
   labour_note: string | null;
   location: string | null;
+  location_id: string;
+  location_name: string;
   status: InventoryStatus;
   voided_at: string | null;
   void_reason: string | null;
@@ -54,7 +56,14 @@ type ItemRow = {
 
 type TypeRow = { id: string; name: string; item_code: string; active: number };
 
-const ITEM_SELECT = `SELECT i.*, t.name AS type_name FROM inventory_items i JOIN inventory_item_types t ON t.id = i.type_id`;
+const ITEM_SELECT = `SELECT i.*, t.name AS type_name, l.name AS location_name
+  FROM inventory_items i
+  JOIN inventory_item_types t ON t.id = i.type_id
+  JOIN stock_locations l ON l.id = i.location_id`;
+
+/** Spec 021b L1: one stock place by id. */
+export const loadLocation = (db: D1Database, id: string) =>
+  db.prepare("SELECT id, name, active FROM stock_locations WHERE id = ?1").bind(id).first<{ id: string; name: string; active: number }>();
 
 export const loadItem = (db: D1Database, id: string) => db.prepare(`${ITEM_SELECT} WHERE i.id = ?1`).bind(id).first<ItemRow>();
 
@@ -73,6 +82,8 @@ const toItem = (r: ItemRow): InventoryItemResponse => ({
   hsn: r.hsn,
   labourNote: r.labour_note,
   location: r.location,
+  locationId: r.location_id,
+  locationName: r.location_name,
   status: r.status,
   statusLabel: INVENTORY_STATUS_LABEL[r.status],
   createdAt: r.created_at,
@@ -202,7 +213,8 @@ function sameItemContent(row: ItemRow, f: ReturnType<typeof inventoryItemCreateS
     row.net_weight_mg === f.netWeightMg &&
     row.hsn === f.hsn &&
     row.labour_note === f.labourNote &&
-    row.location === f.location
+    row.location === f.location &&
+    row.location_id === f.locationId
   );
 }
 
@@ -221,6 +233,10 @@ inventoryRoutes.post("/items", async (c) => {
   const type = await db.prepare("SELECT id, name, item_code, active FROM inventory_item_types WHERE id = ?1").bind(f.typeId).first<TypeRow>();
   if (!type) return c.json({ error: "validation", issues: [{ field: "typeId", message: "Choose the item type from the list" }] }, 400);
   if (type.active !== 1) return c.json({ error: "type_inactive", message: `${type.name} is no longer used for new items` }, 409);
+  // Spec 021b I1, L4: the item is kept at a place that exists and is active.
+  const place = await loadLocation(db, f.locationId);
+  if (!place) return c.json({ error: "validation", issues: [{ field: "locationId", message: "Choose the place from the list" }] }, 400);
+  if (!place.active) return c.json({ error: "location_inactive", message: `${place.name} is not active. Choose another place.` }, 409);
 
   let uNo: string;
   if (f.uNo) {
@@ -246,10 +262,10 @@ inventoryRoutes.post("/items", async (c) => {
         .prepare(
           `INSERT INTO inventory_items
              (id, created_at, created_by, updated_at, updated_by, u_no, item_code, serial, type_id, pieces, metal, purity,
-              gross_weight_mg, net_weight_mg, hsn, labour_note, location, status)
-           VALUES (?1, ?2, ?3, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'in_stock')`,
+              gross_weight_mg, net_weight_mg, hsn, labour_note, location, location_id, status)
+           VALUES (?1, ?2, ?3, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'in_stock')`,
         )
-        .bind(id, now, user.id, uNo, type.item_code, serial, f.typeId, f.pieces, f.metal, f.purity, f.grossWeightMg, f.netWeightMg, f.hsn, f.labourNote, f.location),
+        .bind(id, now, user.id, uNo, type.item_code, serial, f.typeId, f.pieces, f.metal, f.purity, f.grossWeightMg, f.netWeightMg, f.hsn, f.labourNote, f.location, f.locationId),
       db
         .prepare(
           `INSERT INTO inventory_item_history (id, item_id, from_status, to_status, at, actor, reason, created_at, created_by)

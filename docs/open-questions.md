@@ -119,7 +119,7 @@ Each item says what to look for. One real example of each is enough, two if they
 - **Q41.** Purchase: from whom does the shop buy (wholesaler, karigar, old gold)? Are purchase bills recorded now? What should the software keep (supplier, bill number, weight, rate, GST)?
 - **Q42.** Karigar and job work: how is gold given to a karigar and received back tracked today (weight in, weight out, wastage, labour)? One page of the register would settle this.
 - **Q43.** Refining and testing: is it done in the shop or sent out, and should it be in the first release? (The roadmap marks it "later".)
-- **Q44.** Locations: do items sit in one counter, several counters, a safe?
+- **Q44.** Locations: do items sit in one counter, several counters, a safe? Default used until you answer: the six places in Q165 (spec 021b).
 
 ## H. Customers, accounts, people
 
@@ -268,3 +268,9 @@ The agent building Wave 1 adds every default or interpretation it uses here (ID,
 - **Q162. Returns and stock.** `DEFAULT: a return credit note (spec 019d) does not put goods back in stock by itself. The owner changes the item with the spec 020 status change and a reason, so the history shows it.` Should a credit note for returned goods restock automatically?
 - **Q163. Voiding gives stock back.** `DEFAULT: a void gives back each item the invoice still holds (sold on this invoice) and each bulk quantity. An item the owner has since moved on (returned, or sold on another invoice) is left alone, and the void is not refused for it.` Is that right?
 - **Q164. Editing an invoice.** `DEFAULT: only the difference moves stock. A kept item does not move, a removed item goes back to in stock, an added item is sold, and a bulk item moves by the change in its quantity. Each change has its own history or movement row with the reason.` Is that right, or should an edit that changes stock be refused and done by a void and a new invoice?
+
+- **Q165. Stock places at start.** `DEFAULT: six places, seeded: Showroom (the default, cannot be made inactive), Display, Locker, Karigar, Testing centre, Refining centre. The owner adds, renames or makes inactive the others.` Are these the places you use, and is anything missing (for example a safe or a second counter)?
+- **Q166. Transfer reason and who.** `DEFAULT: a reason is optional (up to 300 characters); anyone with inventory.edit (owner and manager) can make a transfer.` Should a transfer always need a reason, and should staff be able to move stock?
+- **Q167. Bulk sale on an invoice.** `DEFAULT: an invoice sale takes from the Showroom balance until a place can be chosen on the invoice line. A sale Showroom cannot cover is refused, even when another place holds enough.` Is that right, or should the invoice line ask which place the goods come from?
+- **Q168. Items that are not in stock.** `DEFAULT: only an item that is in stock and not voided can be transferred. Sold, reserved, on memo, returned, written off and voided items do not move; a sold item keeps the place where it was sold.` Should a reserved or returned item be movable?
+- **Q169. Karigar place.** `DEFAULT: the Karigar location is a place name only for now. There is no karigar record or balance; spec 023 (karigar jobs) adds them. A place that still holds stock cannot be made inactive (added while building 021b, not asked before).` Is that right?

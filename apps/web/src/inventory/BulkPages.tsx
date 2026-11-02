@@ -4,17 +4,21 @@ import {
   BULK_MOVEMENT_LABEL,
   BULK_UNITS,
   BULK_UNIT_LABEL,
+  DEFAULT_LOCATION_ID,
   newId,
   type BulkHistoryRow,
   type BulkItemResponse,
+  type BulkLocationBalance,
   type BulkMovementKind,
+  type StockLocation,
 } from "@jewellery/shared";
 import { ApiError } from "../api";
 import { useAuth } from "../auth";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass, pcOnly } from "../customers/ui";
 import { niceDate } from "../rates/api";
 import { navigate } from "../router";
-import { createBulk, getBulk, getBulkHistory, listBulk, recordBulkMovement } from "./api";
+import { createBulk, getBulk, getBulkHistory, listBulk, listLocations, recordBulkMovement } from "./api";
+import { TransferDialog } from "./LocationPages";
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
@@ -139,12 +143,17 @@ export function BulkItemPage({ id }: { id: string }) {
   const [ok, setOk] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   const [open, setOpen] = useState(false);
+  const [byLocation, setByLocation] = useState<BulkLocationBalance[]>([]);
+  const [places, setPlaces] = useState<StockLocation[]>([]);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   async function load() {
     try {
-      const [i, h] = await Promise.all([getBulk(id), getBulkHistory(id)]);
+      const [i, h, p] = await Promise.all([getBulk(id), getBulkHistory(id), listLocations()]);
       setItem(i.item);
+      setByLocation(i.byLocation);
       setRows(h.items);
+      setPlaces(p.items);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true);
       else setErr(errorText(e, "Could not load the item. Check the connection and try again."));
@@ -157,6 +166,9 @@ export function BulkItemPage({ id }: { id: string }) {
 
   if (missing) return <main className="p-6 text-stone-600">This bulk item was not found.</main>;
   if (!item) return <main className="p-6 text-stone-500">{err ?? "Loading..."}</main>;
+  const placeName = (locationId: string) => places.find((p) => p.id === locationId)?.name ?? "";
+  const balances = Object.fromEntries(byLocation.map((b) => [b.locationId, b.quantity]));
+  const fromDefault = byLocation.find((b) => b.quantity > 0)?.locationId ?? DEFAULT_LOCATION_ID;
 
   return (
     <main className="p-3 sm:p-6 max-w-3xl mx-auto w-full space-y-4">
@@ -174,10 +186,37 @@ export function BulkItemPage({ id }: { id: string }) {
           </div>
         </div>
         {can("inventory.edit") && (
-          <button className={`${btnPrimary} ${pcOnly}`} onClick={() => setOpen(true)}>
-            Record movement
-          </button>
+          <div className={`flex gap-2 flex-wrap ${pcOnly}`}>
+            <button className={btnSecondary} onClick={() => setTransferOpen(true)}>
+              Transfer
+            </button>
+            <button className={btnPrimary} onClick={() => setOpen(true)}>
+              Record movement
+            </button>
+          </div>
         )}
+      </section>
+
+      <section className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+        <h2 className="font-semibold px-4 pt-4">By place</h2>
+        <table className="w-full text-sm mt-2">
+          <thead className="text-left text-stone-500 border-b border-stone-200">
+            <tr>
+              <th className="px-3 py-2">Place</th>
+              <th className="px-3 py-2 text-right">Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {byLocation.map((b) => (
+              <tr key={b.locationId} className="border-t border-stone-100">
+                <td className="px-3 py-2">{b.locationName}</td>
+                <td className="px-3 py-2 text-right" data-testid={`bulk-at-${b.locationName}`}>
+                  {b.quantity}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
@@ -189,6 +228,7 @@ export function BulkItemPage({ id }: { id: string }) {
               <th className="px-3 py-2">Kind</th>
               <th className="px-3 py-2 text-right">Change</th>
               <th className="px-3 py-2 text-right">Balance</th>
+              <th className="px-3 py-2">Place</th>
               <th className="px-3 py-2">By</th>
               <th className="px-3 py-2">Reason</th>
             </tr>
@@ -200,22 +240,41 @@ export function BulkItemPage({ id }: { id: string }) {
                 <td className="px-3 py-2">{BULK_MOVEMENT_LABEL[r.kind]}</td>
                 <td className="px-3 py-2 text-right">{r.quantityChange > 0 ? `+${r.quantityChange}` : r.quantityChange}</td>
                 <td className="px-3 py-2 text-right">{r.balanceAfter}</td>
+                <td className="px-3 py-2">{placeName(r.locationId)}</td>
                 <td className="px-3 py-2">{r.actor}</td>
                 <td className="px-3 py-2">{r.reason ?? ""}</td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-stone-500">No movements yet.</td>
+                <td colSpan={7} className="px-3 py-6 text-center text-stone-500">No movements yet.</td>
               </tr>
             )}
           </tbody>
         </table>
       </section>
 
+      {transferOpen && (
+        <TransferDialog
+          kind="bulk"
+          bulk={{ id: item.id, name: item.name, unit: item.unit }}
+          fromLocationId={fromDefault}
+          places={places}
+          balances={balances}
+          onClose={() => setTransferOpen(false)}
+          onSaved={async (msg) => {
+            setTransferOpen(false);
+            setErr(null);
+            setOk(msg);
+            await load();
+          }}
+        />
+      )}
+
       {open && (
         <MovementDialog
           item={item}
+          places={places}
           onClose={() => setOpen(false)}
           onSaved={async (msg) => {
             setOpen(false);
@@ -229,10 +288,21 @@ export function BulkItemPage({ id }: { id: string }) {
   );
 }
 
-function MovementDialog({ item, onClose, onSaved }: { item: BulkItemResponse; onClose: () => void; onSaved: (msg: string) => void | Promise<void> }) {
+function MovementDialog({
+  item,
+  places,
+  onClose,
+  onSaved,
+}: {
+  item: BulkItemResponse;
+  places: StockLocation[];
+  onClose: () => void;
+  onSaved: (msg: string) => void | Promise<void>;
+}) {
   const [kind, setKind] = useState<BulkMovementKind>("sold");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
+  const [locationId, setLocationId] = useState(DEFAULT_LOCATION_ID);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [clientId] = useState(() => newId());
@@ -247,7 +317,7 @@ function MovementDialog({ item, onClose, onSaved }: { item: BulkItemResponse; on
     setBusy(true);
     setErr(null);
     try {
-      const r = await recordBulkMovement(item.id, { id: clientId, kind, quantity: n, reason: reason.trim() || null });
+      const r = await recordBulkMovement(item.id, { id: clientId, kind, quantity: n, reason: reason.trim() || null, locationId });
       await onSaved(`${BULK_MOVEMENT_LABEL[kind]} recorded. ${r.quantity} ${BULK_UNIT_LABEL[item.unit]} in stock now.`);
     } catch (e2) {
       setErr(errorText(e2, "Could not record the movement. Try again."));
@@ -267,6 +337,17 @@ function MovementDialog({ item, onClose, onSaved }: { item: BulkItemResponse; on
                 {BULK_MOVEMENT_LABEL[k]}
               </option>
             ))}
+          </select>
+        </Field>
+        <Field label="Place">
+          <select className={inputClass} value={locationId} onChange={(e) => setLocationId(e.target.value)} aria-label="Movement place">
+            {places
+              .filter((p) => p.active)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
           </select>
         </Field>
         <Field label={kind === "adjusted" ? "Quantity (use - to take out)" : `Quantity (${BULK_UNIT_LABEL[item.unit]})`}>

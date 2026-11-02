@@ -16,6 +16,7 @@ import { settingsRoutes } from "./settings/routes";
 import { creditNoteRoutes, creditReversalRoutes } from "./creditNotes/routes";
 import { inventoryRoutes } from "./inventory/routes";
 import { bulkRoutes } from "./inventory/bulk";
+import { locationRoutes } from "./inventory/locations";
 
 /** `now` is injectable so tests can move the clock (sessions expire, rate limits reset). */
 export function createApp(opts: { now?: () => Date } = {}) {
@@ -64,6 +65,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.route("/api/credit-notes", creditReversalRoutes);
   app.route("/api/inventory/bulk", bulkRoutes);
   app.route("/api/inventory", inventoryRoutes);
+  app.route("/api/inventory", locationRoutes);
   app.route("/api/", ledgerRoutes);
   app.get("/api/customers/:id/advances", async (c) => c.json({ items: await customerAdvances(c.env.DB, c.req.param("id")) }));
 

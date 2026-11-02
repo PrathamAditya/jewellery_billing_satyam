@@ -37,14 +37,14 @@ await page.selectOption('select[aria-label="Item type"]', { label: "Ring (RING)"
 await page.selectOption('select[aria-label="Purity"]', "22K916");
 await page.fill('input[aria-label="Gross weight"]', "12.500");
 await page.fill('input[aria-label="Net weight"]', "12.000");
-await page.fill('input[aria-label="Location"]', `Case ${uniq}`);
+await page.selectOption('select[aria-label="Location"]', { label: "Display" });
 await page.fill('input[aria-label="Labour note"]', "Making per gram");
 await page.click('button:has-text("Save item")');
 await page.waitForSelector("h1:has-text('Ring')");
 const heading = (await page.textContent("h1")).trim();
 const uNo = heading.split(" ")[0];
 ok(/^[A-Z0-9]{4}\d{2} Ring$/.test(heading), `a new ring is saved with a U No. (${uNo})`);
-ok(await seen(page.locator(`text=Case ${uniq}`).first()), "the item page shows its location");
+ok(await seen(page.locator("text=Display").first()), "the item page shows its location (Display, chosen from the list)");
 ok(await seen(page.locator("text=Created").first()), "the history starts with the Created row");
 
 // ---- a typed U No. that is already in use is refused on the form ----

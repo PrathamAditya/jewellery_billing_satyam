@@ -54,6 +54,7 @@ export default function InventoryListPage() {
         <h1 className="text-xl font-semibold">Inventory</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <a href="#/inventory/bulk" className="text-sm underline">Bulk items</a>
+          <a href="#/inventory/locations" className="text-sm underline">Locations</a>
           {can("inventory.edit") && (
             <a href="#/inventory/types" className={`text-sm underline ${pcOnly}`}>Item types</a>
           )}
@@ -105,7 +106,7 @@ export default function InventoryListPage() {
                 <td className="px-3 py-2 text-right">{i.pieces}</td>
                 <td className="px-3 py-2">{purityLabel(i.purity)}</td>
                 <td className="px-3 py-2 text-right">{formatWeightGrams(i.netWeightMg)} g</td>
-                <td className="px-3 py-2 max-md:hidden">{i.location ?? ""}</td>
+                <td className="px-3 py-2 max-md:hidden">{i.locationName}</td>
                 <td className="px-3 py-2">{i.voided ? <span className="text-red-700">Voided</span> : i.statusLabel}</td>
               </tr>
             ))}

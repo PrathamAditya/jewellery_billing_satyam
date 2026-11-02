@@ -6,18 +6,22 @@ import {
   newId,
   parseWeightGrams,
   PURITIES,
+  DEFAULT_LOCATION_ID,
   type InventoryHistoryRow,
   type InventoryItemResponse,
   type InventoryItemType,
   type InventoryStatus,
+  type StockLocation,
+  type StockTransfer,
 } from "@jewellery/shared";
 import { ApiError } from "../api";
 import { useAuth } from "../auth";
 import { Alert, Field, btnPrimary, btnSecondary, inputClass, pcOnly } from "../customers/ui";
 import { niceDate } from "../rates/api";
 import { navigate } from "../router";
-import { changeItemStatus, createItem, getItem, getItemHistory, listTypes, voidItem } from "./api";
+import { changeItemStatus, createItem, getItem, getItemHistory, listLocations, listTransfers, listTypes, voidItem } from "./api";
 import { purityLabel } from "./labels";
+import { TransferDialog } from "./LocationPages";
 
 type Issue = { field: string; message: string };
 const fieldIssues = (e: unknown): Issue[] => (e instanceof ApiError && Array.isArray((e.body as { issues?: Issue[] }).issues) ? (e.body as { issues: Issue[] }).issues : []);
@@ -35,12 +39,17 @@ export function InventoryItemPage({ id }: { id: string }) {
   const [reason, setReason] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [places, setPlaces] = useState<StockLocation[]>([]);
+  const [moves, setMoves] = useState<StockTransfer[]>([]);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   async function load() {
     try {
-      const [i, h] = await Promise.all([getItem(id), getItemHistory(id)]);
+      const [i, h, p, t] = await Promise.all([getItem(id), getItemHistory(id), listLocations(), listTransfers(`?itemId=${id}`)]);
       setItem(i.item);
       setHistory(h.items);
+      setPlaces(p.items);
+      setMoves(t.items);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true);
       else setErr(errorText(e, "Could not load the item. Check the connection and try again."));
@@ -113,7 +122,7 @@ export function InventoryItemPage({ id }: { id: string }) {
         <Detail label="Gross weight" value={`${formatWeightGrams(item.grossWeightMg)} g`} />
         <Detail label="Net weight" value={`${formatWeightGrams(item.netWeightMg)} g`} />
         <Detail label="HSN" value={item.hsn} />
-        <Detail label="Location" value={item.location ?? "Not set"} />
+        <Detail label="Location" value={item.location ? `${item.locationName} (${item.location})` : item.locationName} />
         <Detail label="Labour note" value={item.labourNote ?? "None"} />
         <Detail label="Created" value={niceDate(item.createdAt.slice(0, 10))} />
       </section>
@@ -168,6 +177,62 @@ export function InventoryItemPage({ id }: { id: string }) {
         </table>
       </section>
 
+      <section className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+        <div className="flex items-center justify-between gap-2 px-4 pt-4 flex-wrap">
+          <h2 className="font-semibold">Location history</h2>
+          {canEdit && item.status === "in_stock" && (
+            <button className={`${btnPrimary} ${pcOnly}`} onClick={() => setTransferOpen(true)}>
+              Transfer
+            </button>
+          )}
+        </div>
+        <table className="w-full text-sm mt-2">
+          <thead className="text-left text-stone-500 border-b border-stone-200">
+            <tr>
+              <th className="px-3 py-2">When</th>
+              <th className="px-3 py-2">From</th>
+              <th className="px-3 py-2">To</th>
+              <th className="px-3 py-2">By</th>
+              <th className="px-3 py-2">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {moves.map((m) => (
+              <tr key={m.id} className="border-t border-stone-100">
+                <td className="px-3 py-2 whitespace-nowrap">{niceDate(m.at.slice(0, 10))}</td>
+                <td className="px-3 py-2">{m.fromLocationName}</td>
+                <td className="px-3 py-2">{m.toLocationName}</td>
+                <td className="px-3 py-2">{m.actor}</td>
+                <td className="px-3 py-2">{m.reason ?? ""}</td>
+              </tr>
+            ))}
+            {moves.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-center text-stone-500">
+                  Not moved since it was entered.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+
+      {transferOpen && (
+        <TransferDialog
+          kind="item"
+          itemId={item.id}
+          fromLocationId={item.locationId}
+          places={places}
+          onClose={() => setTransferOpen(false)}
+          onSaved={async (msg) => {
+            setTransferOpen(false);
+            setErr(null);
+            setOk(msg);
+            await load();
+          }}
+        />
+      )}
+
       {canEdit && (item.status === "in_stock" || item.status === "written_off") && (
         <form onSubmit={onVoid} className={`bg-white border border-stone-200 rounded-xl p-4 space-y-3 ${pcOnly}`}>
           <h2 className="font-semibold">Void this item</h2>
@@ -196,7 +261,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 /** Spec 020 section 4: the New item form (PC only; the phone sees a note). */
 export function NewInventoryItemPage() {
   const [types, setTypes] = useState<InventoryItemType[]>([]);
-  const [form, setForm] = useState({ typeId: "", pieces: "1", metal: "gold", purity: "22K916", gross: "", net: "", hsn: "7113", labourNote: "", location: "", uNo: "" });
+  const [form, setForm] = useState({ typeId: "", pieces: "1", metal: "gold", purity: "22K916", gross: "", net: "", hsn: "7113", labourNote: "", locationId: DEFAULT_LOCATION_ID, uNo: "" });
+  const [places, setPlaces] = useState<StockLocation[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -208,6 +274,7 @@ export function NewInventoryItemPage() {
       setTypes(active);
       setForm((f) => ({ ...f, typeId: f.typeId || active[0]?.id || "" }));
     });
+    listLocations().then((r) => setPlaces(r.items.filter((p) => p.active)));
   }, []);
 
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -241,7 +308,7 @@ export function NewInventoryItemPage() {
         netWeightMg: net.ok ? net.mg : 0,
         hsn: form.hsn,
         labourNote: form.labourNote.trim() || null,
-        location: form.location.trim() || null,
+        locationId: form.locationId,
       });
       navigate(`/inventory/items/${r.item.id}`);
     } catch (err) {
@@ -307,8 +374,14 @@ export function NewInventoryItemPage() {
           <Field label="Net weight (g)" hint="Like 12.000" error={errors.netWeightMg}>
             <input className={inputClass} inputMode="decimal" value={form.net} onChange={set("net")} aria-label="Net weight" />
           </Field>
-          <Field label="Location" hint="Free text for now">
-            <input className={inputClass} value={form.location} onChange={set("location")} maxLength={60} aria-label="Location" />
+          <Field label="Location" hint="Where the item sits">
+            <select className={inputClass} value={form.locationId} onChange={set("locationId")} aria-label="Location">
+              {places.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Labour note">
             <input className={inputClass} value={form.labourNote} onChange={set("labourNote")} maxLength={200} aria-label="Labour note" />

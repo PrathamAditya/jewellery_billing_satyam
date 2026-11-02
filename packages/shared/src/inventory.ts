@@ -26,6 +26,9 @@ export const PIECES_MAX = 10;
 export const LOCATION_MAX = 60;
 export const LABOUR_NOTE_MAX = 200;
 export const REASON_MAX = 300;
+/** Spec 021b L1, L3: the seeded Showroom place is the default for every stock movement. */
+export const DEFAULT_LOCATION_ID = "loc-showroom";
+export const LOCATION_NAME_MAX = 60;
 
 /** The U No. made from its code and serial: ("RING", 1) -> "RING01". */
 export const formatUNo = (itemCode: string, serial: number) => `${itemCode}${String(serial).padStart(2, "0")}`;
@@ -71,6 +74,12 @@ export const inventoryItemCreateSchema = z
     hsn: z.enum(INVENTORY_HSNS, { error: "Choose 7113 or 9988" }).default("7113"),
     labourNote: z.string().trim().max(LABOUR_NOTE_MAX, "Labour note is too long (200 characters at most)").optional().nullable().transform((v) => v || null),
     location: z.string().trim().max(LOCATION_MAX, "Location is too long (60 characters at most)").optional().nullable().transform((v) => v || null),
+    /** Spec 021b I1: the stock place. Missing means Showroom. */
+    locationId: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((v) => v || DEFAULT_LOCATION_ID),
   })
   .superRefine((v, ctx) => {
     if (v.netWeightMg > v.grossWeightMg) ctx.addIssue({ code: "custom", path: ["netWeightMg"], message: "Net weight cannot be more than gross weight" });
@@ -109,7 +118,11 @@ export type InventoryItemResponse = {
   netWeightMg: number;
   hsn: string;
   labourNote: string | null;
+  /** The free text note from spec 020 (optional, no longer asked on the screen). */
   location: string | null;
+  /** Spec 021b I1: the stock place and its name. */
+  locationId: string;
+  locationName: string;
   status: InventoryStatus;
   statusLabel: string;
   createdAt: string;
@@ -132,3 +145,84 @@ export type InventoryItemListResponse = { items: InventoryItemResponse[]; nextCu
 export type InventoryItemSaveResponse = { item: InventoryItemResponse };
 export type InventoryHistoryResponse = { items: InventoryHistoryRow[] };
 export type InventoryTypesResponse = { items: InventoryItemType[] };
+
+// ---- stock locations and transfers (spec 021b) ----
+
+/** Spec 021b L1, L2: a place is added with a name, unique and not case-sensitive. */
+export const stockLocationCreateSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string({ error: "Name is required" }).trim().min(1, "Name is required").max(LOCATION_NAME_MAX, "Name is too long (60 characters at most)"),
+});
+export type StockLocationCreate = z.infer<typeof stockLocationCreateSchema>;
+
+/** Spec 021b L2: rename or make inactive. Never delete. */
+export const stockLocationUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(LOCATION_NAME_MAX, "Name is too long (60 characters at most)").optional(),
+    active: z.boolean().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.active !== undefined, "Nothing to change");
+export type StockLocationUpdate = z.infer<typeof stockLocationUpdateSchema>;
+
+/** Spec 021b T1 to T5: a transfer of one individual item, or a quantity of one bulk item. */
+export const TRANSFER_KINDS = ["item", "bulk"] as const;
+export type TransferKind = (typeof TRANSFER_KINDS)[number];
+export const stockTransferSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    kind: z.enum(TRANSFER_KINDS, { error: "Choose item or bulk item" }),
+    inventoryItemId: z.string().optional().nullable().transform((v) => v || null),
+    bulkItemId: z.string().optional().nullable().transform((v) => v || null),
+    quantity: z.number({ error: "Enter the quantity" }).int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(10_000_000, "Quantity is too large").optional().nullable(),
+    fromLocationId: z.string({ error: "Choose the place it is moving from" }).min(1, "Choose the place it is moving from"),
+    toLocationId: z.string({ error: "Choose the place it is moving to" }).min(1, "Choose the place it is moving to"),
+    reason: z
+      .string()
+      .trim()
+      .max(REASON_MAX, "Reason is too long (300 characters at most)")
+      .optional()
+      .nullable()
+      .transform((v) => v || null),
+  })
+  .superRefine((v, ctx) => {
+    if (v.fromLocationId === v.toLocationId) ctx.addIssue({ code: "custom", path: ["toLocationId"], message: "Choose a different place to move to" });
+    if (v.kind === "item") {
+      if (!v.inventoryItemId) ctx.addIssue({ code: "custom", path: ["inventoryItemId"], message: "Choose the item" });
+      if (v.bulkItemId) ctx.addIssue({ code: "custom", path: ["bulkItemId"], message: "An item transfer has no bulk item" });
+      if (v.quantity !== undefined && v.quantity !== null && v.quantity !== 1) ctx.addIssue({ code: "custom", path: ["quantity"], message: "An item moves as one piece" });
+    } else {
+      if (!v.bulkItemId) ctx.addIssue({ code: "custom", path: ["bulkItemId"], message: "Choose the bulk item" });
+      if (v.inventoryItemId) ctx.addIssue({ code: "custom", path: ["inventoryItemId"], message: "A bulk transfer has no U No." });
+      if (v.quantity === undefined || v.quantity === null) ctx.addIssue({ code: "custom", path: ["quantity"], message: "Enter the quantity" });
+    }
+  });
+export type StockTransferInput = z.infer<typeof stockTransferSchema>;
+
+export type StockLocation = { id: string; name: string; active: boolean; isDefault: boolean };
+export type StockLocationListResponse = { items: StockLocation[] };
+export type StockLocationSaveResponse = { location: StockLocation };
+
+export type StockTransfer = {
+  id: string;
+  kind: TransferKind;
+  inventoryItemId: string | null;
+  uNo: string | null;
+  bulkItemId: string | null;
+  bulkItemName: string | null;
+  quantity: number;
+  fromLocationId: string;
+  fromLocationName: string;
+  toLocationId: string;
+  toLocationName: string;
+  at: string;
+  actor: string;
+  reason: string | null;
+};
+export type StockTransferSaveResponse = { transfer: StockTransfer };
+export type StockTransferListResponse = { items: StockTransfer[]; nextCursor: string | null };
+
+export type LocationStockResponse = {
+  location: StockLocation;
+  items: { id: string; uNo: string; typeName: string; status: InventoryStatus; statusLabel: string }[];
+  bulk: { bulkItemId: string; name: string; unit: string; quantity: number }[];
+};

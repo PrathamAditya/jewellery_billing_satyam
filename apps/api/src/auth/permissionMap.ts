@@ -107,6 +107,14 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/inventory/bulk/:id/history", permission: "inventory.view" },
   { method: "POST", path: "/api/inventory/bulk/:id/movements", permission: "inventory.edit" },
 
+  // Spec 021b: stock locations, the stock at each place, and transfers between places.
+  { method: "GET", path: "/api/inventory/locations", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/locations", permission: "inventory.edit" },
+  { method: "PATCH", path: "/api/inventory/locations/:id", permission: "inventory.edit" },
+  { method: "GET", path: "/api/inventory/locations/:id/stock", permission: "inventory.view" },
+  { method: "GET", path: "/api/inventory/transfers", permission: "inventory.view" },
+  { method: "POST", path: "/api/inventory/transfers", permission: "inventory.edit" },
+
   { method: "GET", path: "/api/users", permission: "users.manage" },
   { method: "POST", path: "/api/users", permission: "users.manage" },
   { method: "PATCH", path: "/api/users/:id", permission: "users.manage" },

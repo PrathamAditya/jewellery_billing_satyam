@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { REASON_MAX } from "./inventory";
+import { DEFAULT_LOCATION_ID, REASON_MAX } from "./inventory";
 
 /** Spec 020b B1, Q157: units for bulk items. */
 export const BULK_UNITS = ["pcs", "pairs", "sets", "packets"] as const;
@@ -22,6 +22,12 @@ export const bulkItemCreateSchema = z.object({
     .min(0, "Opening quantity cannot be negative")
     .max(10_000_000, "Opening quantity is too large")
     .default(0),
+  /** Spec 021b B1: the place the opening quantity goes to. Missing means Showroom. */
+  locationId: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((v) => v || DEFAULT_LOCATION_ID),
 });
 export type BulkItemCreate = z.infer<typeof bulkItemCreateSchema>;
 
@@ -38,6 +44,12 @@ export const bulkMovementSchema = z
       .optional()
       .nullable()
       .transform((v) => v || null),
+    /** Spec 021b B1: the place of the movement. Missing means Showroom. */
+    locationId: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((v) => v || DEFAULT_LOCATION_ID),
   })
   .superRefine((v, ctx) => {
     if (v.quantity === 0) ctx.addIssue({ code: "custom", path: ["quantity"], message: "Quantity cannot be 0" });
@@ -54,9 +66,12 @@ export function movementChange(kind: BulkMovementKind, quantity: number): number
 }
 
 export type BulkItemResponse = { id: string; name: string; unit: BulkUnit; quantity: number; createdAt: string };
-export type BulkMovementResponse = { id: string; kind: BulkMovementKind; quantityChange: number; at: string; actor: string; reason: string | null };
+export type BulkMovementResponse = { id: string; kind: BulkMovementKind; quantityChange: number; at: string; actor: string; reason: string | null; locationId: string };
+/** Spec 021b B2: the balance at one active place. */
+export type BulkLocationBalance = { locationId: string; locationName: string; quantity: number };
 export type BulkHistoryRow = BulkMovementResponse & { balanceAfter: number };
 export type BulkItemListResponse = { items: BulkItemResponse[] };
 export type BulkItemSaveResponse = { item: BulkItemResponse };
+export type BulkItemDetailResponse = { item: BulkItemResponse; byLocation: BulkLocationBalance[] };
 export type BulkMovementSaveResponse = { movement: BulkMovementResponse; quantity: number };
 export type BulkHistoryResponse = { items: BulkHistoryRow[] };
