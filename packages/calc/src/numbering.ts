@@ -1,4 +1,4 @@
-export const NUMBER_SERIES = ["INV", "PAY", "OGP", "ORD", "CN"] as const;
+export const NUMBER_SERIES = ["INV", "PAY", "OGP", "ORD", "CN", "PUR"] as const;
 export type NumberSeries = (typeof NUMBER_SERIES)[number];
 
 /** Financial year (1 April to 31 March) of a business date, e.g. "2026-04-01" -> "2026-27". */

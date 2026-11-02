@@ -30,7 +30,16 @@ No code is written for a feature before its spec is Approved. All Wave 1 specs w
 | 017 | Settlement | Built, owner review pending |
 | 019 | Customer ledger and opening balances | Built, owner review pending |
 | 019b | Cheque tracking (Received, Deposited, Cleared, Bounced) | Wave 2, built on PR #29, owner review pending |
+| 051 | Audit history viewer (read-only, owner only) | Wave 2, built on branch `spec-051-032-audit-cash`, owner review pending |
+| 032 | Daily cash closing (expected cash, count, difference, correction notes) | Wave 2, built on branch `spec-051-032-audit-cash`, owner review pending |
 | 019d | Returns, exchanges and credit notes | Wave 2, built on branch `spec-019d-credit-notes`, owner review pending |
+| 030 | Dashboard (Home screen, read-only) | Wave 2, built 2026-11-02 on `spec-030-031-dashboard-reports`, owner review pending |
+| 031 | Reports in Excel and PDF (sales, payments, outstanding, GST by rate) | Wave 2, built 2026-11-02 on `spec-030-031-dashboard-reports`, owner review pending |
+| 020 | Inventory items with individual U No. | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
+| 020b | Bulk quantity items (Tilli and similar) | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
+| 021 | Stock movements and automatic stock reduction on invoices | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
+| 021b | Stock locations and transfers | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
+| 022 | Purchases (finished, raw gold and silver, karigar-made) | Wave 2, built on branch `spec-020-021-inventory`, owner review pending |
 | 019c | Credit sales with the rate fixed later (pending rate fixation) | Wave 2, built 2026-11-02 on `spec-019c-rate-fixation`, PR open, owner review pending |
 | 014 | Printing (invoice, settlement, receipts) | Wave 1, built 2026-11-02 (PR open), waiting for the owner's printer check |
 | 050 | Backups and restore | Wave 3 (moved from Wave 1 on 2026-11-02), approved, not built |

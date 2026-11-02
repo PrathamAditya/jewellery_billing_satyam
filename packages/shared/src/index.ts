@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export { newId } from "./id";
-export { indiaDate } from "./dates";
+export { financialYearRange, indiaDate } from "./dates";
 export * from "./customer";
 export * from "./rates";
 export * from "./weight";
@@ -16,6 +16,9 @@ export * from "./settlement";
 export * from "./ledger";
 export * from "./print";
 export * from "./settings";
+export * from "./inventory";
+export * from "./bulkItems";
+export * from "./purchases";
 
 export const healthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
@@ -54,3 +57,7 @@ export const userResponseSchema = z.object({
 });
 export type UserResponse = z.infer<typeof userResponseSchema>;
 export * from "./creditNotes";
+export * from "./dashboard";
+export * from "./reports";
+export * from "./audit";
+export * from "./cashClosing";

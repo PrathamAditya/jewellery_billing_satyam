@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { calculateInvoice, type TaxMode } from "@jewellery/calc";
-import { blankDiscounts, discountTextsFrom, newId, parseDiscountTexts, type ApplicableRatesResponse, type CustomerResponse, type DiscountTexts, type InvoiceResponse } from "@jewellery/shared";
-import { ApiError } from "../api";
+import { blankDiscounts, discountTextsFrom, newId, parseDiscountTexts, type ApplicableRatesResponse, type BulkItemResponse, type CustomerResponse, type DiscountTexts, type InvoiceResponse } from "@jewellery/shared";
+import { ApiError, api } from "../api";
 import CustomerPicker from "../customers/CustomerPicker";
 import { Alert, Field, btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { getApplicable } from "../rates/api";
@@ -36,6 +36,8 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
   const [rateLater, setRateLater] = useState(false);
   // Spec 012c R4: the three discount rows. Empty means no discount.
   const [discounts, setDiscounts] = useState<DiscountTexts>(invoice ? discountTextsFrom(invoice.discounts) : blankDiscounts());
+  // Spec 021: the bulk items for the optional Stock cell of each line.
+  const [bulkItems, setBulkItems] = useState<BulkItemResponse[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [rowErrors, setRowErrors] = useState<Record<number, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -50,6 +52,11 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         setDate((d) => d || a.date);
       })
       .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    api<{ items: BulkItemResponse[] }>("/api/inventory/bulk")
+      .then((r) => setBulkItems(r.items))
+      .catch(() => setBulkItems([]));
   }, []);
   useEffect(() => {
     if (!date) return;
@@ -85,6 +92,8 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
     setFieldErrors({});
     setRowErrors({});
     if (rateLater) {
+      // Spec 021 S4: a sale whose rate is fixed later takes no stock. Its Stock cells are not shown, so say so here.
+      if (rows.some((r) => r.stockKind !== "none")) return setFormError("A sale whose rate is fixed later takes no stock yet. Switch to Fixed now and clear the Stock cells first.");
       if (!pendingAllOk) return setFormError("Fix the highlighted boxes on the lines first.");
       if (!customerId) return setFormError("Pick the saved customer. A sale whose rate is fixed later is kept against the customer.");
     } else {
@@ -124,6 +133,12 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         }
         setFieldErrors(f);
         setRowErrors(r);
+      } else if (e instanceof ApiError && (e.body.error === "item_not_in_stock" || e.body.error === "insufficient_quantity")) {
+        // Spec 021 S5, S7: the stock on one line is not there. The line is marked and named.
+        const lineNo = (e.body as { lineNo?: number }).lineNo ?? 1;
+        const row = touchedRows[lineNo - 1]?.i ?? 0;
+        setRowErrors({ [row]: [e.message] });
+        setFormError(`Line ${lineNo}: ${e.message}`);
       } else if (e instanceof ApiError && e.body.error === "calculation") {
         const errors = (e.body as unknown as { errors: { line: number | null; message: string }[] }).errors;
         const r: Record<number, string[]> = {};
@@ -222,7 +237,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         {today && date && date !== today && <Alert kind="info">This is not today's date. The invoice number comes from this date's financial year.</Alert>}
         {!rateLater && rates && date && Object.values(rates).every((r) => !r) && <Alert kind="info">No rates are saved yet for this date. Type the gold rate on each line.</Alert>}
         {rateLater && <Alert kind="info">Rate pending: the gold rate is not typed now. It is fixed when the customer pays, using that day's rate. The sale needs a saved customer.</Alert>}
-        <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} rates={rates} showPurity pendingRate={rateLater} />
+        <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} rates={rates} showPurity pendingRate={rateLater} bulkItems={bulkItems} />
         {err("lines") && <Alert>{err("lines")}</Alert>}
         {rateLater ? (
           <p className="text-xs text-stone-500">Gross defaults to net when left blank. Rates are typed per gram. Labour is typed now and fixed with the sale.</p>

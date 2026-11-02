@@ -28,6 +28,11 @@ export type LineText = {
   stoneWeight: string;
   stoneAmount: string;
   total: string;
+  /** Spec 021: the optional stock of the line. "none" (default), one individual item by U No., or one bulk item with a quantity. */
+  stockKind: "none" | "item" | "bulk";
+  stockUNo: string;
+  bulkItemId: string;
+  bulkQty: string;
 };
 
 export const blankLine = (purity: Purity = "other"): LineText => ({
@@ -44,13 +49,20 @@ export const blankLine = (purity: Purity = "other"): LineText => ({
   stoneWeight: "",
   stoneAmount: "",
   total: "",
+  stockKind: "none",
+  stockUNo: "",
+  bulkItemId: "",
+  bulkQty: "",
 });
 
 /** The client's real invoice (docs/client-invoice-reference.md), for comparing with the paper bill. */
 export const BABA_EXAMPLE: LineText = { ...blankLine("silver"), description: "Silver Ornament", gross: "9.800", net: "9.800", gold: "285.72" };
 
+/** Spec 021: the stock link of a line, as the server takes it (null when none). */
+export type StockFields = { stockUNo: string | null; bulkItemId: string | null; bulkQuantity: number | null };
+
 export type Parsed = {
-  input: (InvoiceLineInput & { purity: Purity }) | null;
+  input: (InvoiceLineInput & { purity: Purity } & StockFields) | null;
   fieldErrors: Partial<Record<keyof LineText, string>>;
 };
 
@@ -97,6 +109,21 @@ export function parseLine(t: LineText): Parsed {
     else totalAmountPaise = tot.value;
   }
 
+  // Spec 021 S2, S1: one individual item by U No., or one bulk item with a quantity of 1 or more.
+  const stock: StockFields = { stockUNo: null, bulkItemId: null, bulkQuantity: null };
+  if (t.stockKind === "item") {
+    const u = t.stockUNo.trim().toUpperCase();
+    if (!u) fieldErrors.stockUNo = "Type the U No., like RING01";
+    else stock.stockUNo = u;
+  }
+  if (t.stockKind === "bulk") {
+    const q = t.bulkQty.trim();
+    if (!t.bulkItemId) fieldErrors.bulkItemId = "Choose the bulk item";
+    if (!/^\d+$/.test(q) || Number(q) < 1) fieldErrors.bulkQty = "Enter a whole number, 1 or more";
+    else stock.bulkQuantity = Number(q);
+    if (t.bulkItemId) stock.bulkItemId = t.bulkItemId;
+  }
+
   if (Object.keys(fieldErrors).length) return { input: null, fieldErrors };
   const netMg = (net as { mg: number }).mg;
   return {
@@ -115,6 +142,7 @@ export function parseLine(t: LineText): Parsed {
       stoneWeightMg: separate ? stoneWeightMg : undefined,
       stoneAmountPaise: separate ? stoneAmountPaise : undefined,
       totalAmountPaise: combined ? totalAmountPaise : undefined,
+      ...stock,
     },
   };
 }
@@ -130,7 +158,8 @@ export const isTouched = (t: LineText) =>
   t.stoneWeight.trim() !== "" ||
   t.stoneAmount.trim() !== "" ||
   t.total.trim() !== "" ||
-  t.pricing !== "weight";
+  t.pricing !== "weight" ||
+  t.stockKind !== "none";
 
 /** A saved line back into the text boxes, for editing. Exact in both directions. */
 export const lineTextFromSaved = (l: InvoiceLineResponse): LineText => {
@@ -149,6 +178,10 @@ export const lineTextFromSaved = (l: InvoiceLineResponse): LineText => {
     stoneWeight: pricing === "separate" && l.stoneWeightMg ? formatWeightGrams(l.stoneWeightMg) : "",
     stoneAmount: pricing === "separate" ? paiseToRupeeText(l.stoneAmountPaise ?? 0) : "",
     total: pricing === "combined" ? paiseToRupeeText(l.totalAmountPaise ?? 0) : "",
+    stockKind: l.bulkItemId ? "bulk" : l.stockUNo ? "item" : "none",
+    stockUNo: l.stockUNo ?? "",
+    bulkItemId: l.bulkItemId ?? "",
+    bulkQty: l.bulkQuantity ? String(l.bulkQuantity) : "",
   };
 };
 

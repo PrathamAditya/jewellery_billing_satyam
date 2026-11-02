@@ -31,6 +31,7 @@ describe("formatDocumentNumber", () => {
     expect(formatDocumentNumber("INV", "2026-27", 2, true)).toBe("INV-2026-27-0002");
     expect(formatDocumentNumber("PAY", "2026-27", 1)).toBe("PAY-0001");
     expect(formatDocumentNumber("OGP", "2026-27", 1)).toBe("OGP-0001");
+    expect(formatDocumentNumber("PUR", "2026-27", 1)).toBe("PUR-0001");
   });
 
   it.each([0, -1, 1.5, Number.NaN])("throws for %s", (n) => {
