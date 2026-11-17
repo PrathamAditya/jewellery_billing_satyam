@@ -50,7 +50,7 @@ Chrome is needed for `npm run e2e` (`CHROME_PATH` to override, default `/usr/bin
 
 ## Where things are decided
 - Locked decisions: `docs/decisions.md`. Owner's words: `docs/owner-answers-2026-11-01.md`, `docs/requirements.md`.
-- Printed formats: `docs/reference-formats.md` and the PDFs in `docs/reference/`.
+- Printed formats: `docs/reference-formats.md` and the owner's sample PDFs (not in this repository).
 - Questions with defaults: `docs/open-questions.md` (Wave 1 defaults are summarised in `docs/wave1-plan.md`).
 - Roadmap and the 1 December 2026 testing start: `docs/roadmap.md`.
 

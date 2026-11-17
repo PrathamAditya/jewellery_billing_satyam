@@ -40,7 +40,7 @@ Tables `old_gold_purchases`, `old_gold_lines`, `old_gold_payouts` (`id`, `ogp_id
 - The customer is later voided: the receipt and its payment stay.
 
 ## 6. Test cases
-**A. The owner's sample** (`docs/reference/old-gold-purchase-receipt-a5.pdf`): gross 25.00 g, less 2.02 g, net 22.98 g, purity 75.26%, rate ₹14,800 per gram (1,480,000,000 per kg): amount 25,596,227 paise (₹2,55,962.27), round-off -27, final 25,596,200 (₹2,55,962.00). With treatment `advance` and order `ORD-0001`: payment `PAY-0002` style, mode `old_gold`, amount 25,596,200, remaining 25,596,200, status `Advance Created`.
+**A. The owner's sample** (the owner's old gold receipt sample (not in this repository)): gross 25.00 g, less 2.02 g, net 22.98 g, purity 75.26%, rate ₹14,800 per gram (1,480,000,000 per kg): amount 25,596,227 paise (₹2,55,962.27), round-off -27, final 25,596,200 (₹2,55,962.00). With treatment `advance` and order `ORD-0001`: payment `PAY-0002` style, mode `old_gold`, amount 25,596,200, remaining 25,596,200, status `Advance Created`.
 
 **B. Two rows:** row 1: 22K, net 10.000 g, 91.60%, ₹6,000.50 per gram (600,050,000 per kg) = 5,496,458; row 2: 24K, net 5.250 g, 99.90%, ₹6,500 per gram (650,000,000 per kg) = 3,409,088. Original 8,905,546 (₹89,055.46), round-off -46, final 8,905,500 (₹89,055.00). Round-up check: an original of 8,905,550 gives round-off +50, final 8,905,600.
 

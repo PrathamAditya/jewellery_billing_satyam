@@ -1,6 +1,6 @@
 # Reference formats (the existing system's printed documents)
 
-Source: four PDFs the owner shared on 2026-11-01, copied to `docs/reference/`. They are the output of the owner's current HTML billing system, filled with test data (customer "SATYAM", mobile and PAN "123", account name "ABC JEWELLER"). Nothing real is in them. They are the reference for specs 014 (invoice print), 015 (payment receipt), 017 (settlement page) and 018 (old gold receipt). The owner's instruction is to preserve these calculations and layouts.
+Source: four PDFs the owner shared on 2026-11-01, kept outside this repository, not committed. They are the output of the owner's current HTML billing system, filled with test data (customer "SATYAM", mobile and PAN "123", account name "ABC JEWELLER"). Nothing real is in them. They are the reference for specs 014 (invoice print), 015 (payment receipt), 017 (settlement page) and 018 (old gold receipt). The owner's instruction is to preserve these calculations and layouts.
 
 | File | What it is | Page |
 |------|------------|------|
