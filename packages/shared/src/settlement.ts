@@ -9,6 +9,8 @@ export const advanceAllocationsSchema = z.object({
     .array(z.object({ paymentId: z.string().uuid(), amountPaise: z.number().int().min(1, "Amount must be more than 0") }))
     .min(1, "Choose at least one advance")
     .max(20),
+  /** Feedback point 9: the advances belong to another customer. Must be said on purpose; the owner's permission is needed. */
+  allowOtherCustomer: z.boolean().optional(),
 });
 
 /** Spec 017 R2: one line per allocation to the invoice, oldest first. */
@@ -22,6 +24,8 @@ export type SettlementLine = {
   amountPaise: number;
   paymentRemainingPaise: number;
   receiptNo: string | null;
+  /** Feedback point 9: the name of the customer whose money this is, when it is not this invoice's customer. */
+  fromCustomer: string | null;
 };
 
 /** Spec 019d R17: a credit note applied to this bill, counted as settled money. */

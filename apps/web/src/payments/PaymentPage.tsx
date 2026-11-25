@@ -15,7 +15,8 @@ export default function PaymentPage({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [voiding, setVoiding] = useState(false);
-  const [bouncing, setBouncing] = useState(false);
+  // The payment mode (row) a cheque move is about: one receipt can hold more than one cheque.
+  const [bouncing, setBouncing] = useState<string | null>(null);
   const [reverseId, setReverseId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -48,12 +49,12 @@ export default function PaymentPage({ id }: { id: string }) {
   }
 
   /** Spec 019b C2, C4: deposited, cleared, or bounced (a bounce reverses the payment; the server checks who may do it). */
-  async function doMove(status: "deposited" | "cleared" | "bounced", bounceReason?: string) {
+  async function doMove(lineId: string, status: "deposited" | "cleared" | "bounced", bounceReason?: string) {
     setReasonError(null);
     if (status === "bounced" && !bounceReason) return setReasonError("Please give the reason for the bounce");
     try {
-      setP(await moveCheque(id, status, bounceReason));
-      setBouncing(false);
+      setP(await moveCheque(lineId, status, bounceReason));
+      setBouncing(null);
       setReason("");
       setNotice(
         status === "bounced"
@@ -73,7 +74,7 @@ export default function PaymentPage({ id }: { id: string }) {
       <a href="#/payments" className="text-sm text-stone-600 underline">All payments</a>
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">{p.receiptNo ?? "Payment at sale"}{p.voided && <span className="ml-3 text-sm text-red-700 border border-red-200 rounded px-1.5 py-0.5 align-middle">voided</span>}</h1>
+          <h1 className="text-2xl font-semibold">{p.receiptNo ?? (p.kind === "old_gold" ? "Old gold used on an invoice" : "Payment at sale")}{p.voided && <span className="ml-3 text-sm text-red-700 border border-red-200 rounded px-1.5 py-0.5 align-middle">voided</span>}</h1>
           <p className="text-stone-500 text-sm">{niceDate(p.receiptDate)} · {p.payer.name} · {KIND_LABEL[p.kind]}</p>
           {p.voided && <p className="text-red-700 text-sm">Voided: {p.voidReason}</p>}
         </div>
@@ -94,44 +95,77 @@ export default function PaymentPage({ id }: { id: string }) {
       <dl className="bg-white border border-stone-200 rounded-xl px-4 py-2 grid sm:grid-cols-2 gap-x-6">
         <div className="py-1.5"><dt className="text-sm text-stone-500">Amount</dt><dd className="font-medium">{formatMoney(p.amountPaise)}</dd></div>
         <div className="py-1.5"><dt className="text-sm text-stone-500">Left as advance</dt><dd className="font-medium">{formatMoney(p.remainingPaise)}</dd></div>
-        <div className="py-1.5"><dt className="text-sm text-stone-500">Mode</dt><dd>{MODE_LABEL[p.mode]}{p.reference ? ` · ${p.reference}` : ""}</dd></div>
+        <div className="py-1.5">
+          <dt className="text-sm text-stone-500">{p.modeLines.length > 1 ? "Modes" : "Mode"}</dt>
+          <dd>
+            {p.modeLines.length > 1
+              ? p.modeLines.map((l) => `${MODE_LABEL[l.mode]} ${formatMoney(l.amountPaise)}`).join(" + ")
+              : `${MODE_LABEL[p.mode]}${p.reference ? ` · ${p.reference}` : ""}`}
+          </dd>
+        </div>
         <div className="py-1.5"><dt className="text-sm text-stone-500">In words</dt><dd>{amountInWords(p.amountPaise)}</dd></div>
         <div className="py-1.5"><dt className="text-sm text-stone-500">Remarks</dt><dd>{p.remarks || "-"}</dd></div>
       </dl>
 
-      {p.cheque && (
-        <section className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-3" aria-label="Cheque">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div>
-              <h2 className="font-semibold">Cheque: {CHEQUE_STATUS_LABEL[p.cheque.status]}</h2>
-              <p className="text-sm text-stone-600">
-                {[p.cheque.bank, p.cheque.drawer && `from ${p.cheque.drawer}`, p.cheque.date && `dated ${niceDate(p.cheque.date)}`].filter(Boolean).join(" · ") || "No cheque details recorded"}
-              </p>
-            </div>
-            {!p.voided && (
-              <div className={`flex gap-2 flex-wrap ${pcOnly}`}>
-                {p.cheque.status === "received" && can("payments.create") && (
-                  <button className={btnSecondary} onClick={() => void doMove("deposited")}>Mark deposited</button>
-                )}
-                {p.cheque.status === "deposited" && can("payments.create") && (
-                  <button className={btnSecondary} onClick={() => void doMove("cleared")}>Mark cleared</button>
-                )}
-                {can("payments.void") && (
-                  <button className={btnSecondary} onClick={() => { setBouncing(true); setReason(""); setReasonError(null); }}>Mark bounced</button>
-                )}
-              </div>
-            )}
+      {p.modeLines.length > 1 && (
+        <section className="flex flex-col gap-2" aria-label="Payment modes">
+          <h2 className="font-semibold">Payment modes on this receipt</h2>
+          <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-100 text-left text-stone-600">
+                <tr><th className="px-3 py-2 font-medium">Mode</th><th className="px-3 py-2 font-medium">Reference</th><th className="px-3 py-2 font-medium text-right">Amount</th><th className="px-3 py-2 font-medium text-right">Left as advance</th></tr>
+              </thead>
+              <tbody>
+                {p.modeLines.map((l) => (
+                  <tr key={l.id} className="border-t border-stone-100">
+                    <td className="px-3 py-2">{MODE_LABEL[l.mode]}{l.voided && <span className="ml-2 text-xs text-red-700 border border-red-200 rounded px-1">voided</span>}</td>
+                    <td className="px-3 py-2">{l.reference || "-"}</td>
+                    <td className="px-3 py-2 text-right">{formatMoney(l.amountPaise)}</td>
+                    <td className="px-3 py-2 text-right">{formatMoney(l.remainingPaise)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <ol className="text-sm flex flex-col gap-1">
-            {p.cheque.events.map((e, i) => (
-              <li key={i}>
-                <span className="font-medium">{CHEQUE_STATUS_LABEL[e.status]}</span> · {when(e.at)}
-                {e.reason ? <span className="text-stone-600"> — {e.reason}</span> : null}
-              </li>
-            ))}
-          </ol>
         </section>
       )}
+
+      {p.modeLines.filter((l) => l.cheque).map((l) => {
+        const cheque = l.cheque!;
+        return (
+          <section key={l.id} className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-3" aria-label="Cheque">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div>
+                <h2 className="font-semibold">Cheque: {CHEQUE_STATUS_LABEL[cheque.status]}{p.modeLines.length > 1 ? ` (${formatMoney(l.amountPaise)}${l.reference ? `, ${l.reference}` : ""})` : ""}</h2>
+                <p className="text-sm text-stone-600">
+                  {[cheque.bank, cheque.drawer && `from ${cheque.drawer}`, cheque.date && `dated ${niceDate(cheque.date)}`].filter(Boolean).join(" · ") || "No cheque details recorded"}
+                </p>
+              </div>
+              {!l.voided && (
+                <div className={`flex gap-2 flex-wrap ${pcOnly}`}>
+                  {cheque.status === "received" && can("payments.create") && (
+                    <button className={btnSecondary} onClick={() => void doMove(l.id, "deposited")}>Mark deposited</button>
+                  )}
+                  {cheque.status === "deposited" && can("payments.create") && (
+                    <button className={btnSecondary} onClick={() => void doMove(l.id, "cleared")}>Mark cleared</button>
+                  )}
+                  {can("payments.void") && (
+                    <button className={btnSecondary} onClick={() => { setBouncing(l.id); setReason(""); setReasonError(null); }}>Mark bounced</button>
+                  )}
+                </div>
+              )}
+            </div>
+            <ol className="text-sm flex flex-col gap-1">
+              {cheque.events.map((e, k) => (
+                <li key={k}>
+                  <span className="font-medium">{CHEQUE_STATUS_LABEL[e.status]}</span> · {when(e.at)}
+                  {e.reason ? <span className="text-stone-600"> — {e.reason}</span> : null}
+                </li>
+              ))}
+            </ol>
+          </section>
+        );
+      })}
 
       <section className="flex flex-col gap-2">
         <h2 className="font-semibold">Applied to</h2>
@@ -163,14 +197,14 @@ export default function PaymentPage({ id }: { id: string }) {
       </section>
 
       {bouncing && (
-        <Modal title="Mark this cheque bounced?" onClose={() => setBouncing(false)}>
+        <Modal title="Mark this cheque bounced?" onClose={() => setBouncing(null)}>
           <p className="text-sm text-stone-600">
             The payment is voided and everything applied to invoices goes back to them, so the customer owes it again. The record and its history stay.
           </p>
           <Field label="Reason *" error={reasonError ?? undefined}><input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></Field>
           <div className="flex gap-2 justify-end">
-            <button className={btnSecondary} onClick={() => setBouncing(false)}>Cancel</button>
-            <button className={btnPrimary} onClick={() => void doMove("bounced", reason.trim())}>Mark bounced</button>
+            <button className={btnSecondary} onClick={() => setBouncing(null)}>Cancel</button>
+            <button className={btnPrimary} onClick={() => void doMove(bouncing, "bounced", reason.trim())}>Mark bounced</button>
           </div>
         </Modal>
       )}

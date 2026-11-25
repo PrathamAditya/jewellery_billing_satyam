@@ -12,7 +12,7 @@ Live IBJA rates fetched from the internet are a separate spec (011b). They will 
 ## 2. Rules
 
 **What is stored**
-- R1. Three rate kinds: `gold_24k995`, `gold_22k916`, `silver`. No other kinds in this spec (see O9).
+- R1. Three rate kinds: `gold_24k995`, `gold_22k916`, `silver`. No other kinds in this spec (see O9). **Feedback point 1 (2026-11-25):** typing the 24K rate fills the 22K box with 24K x 916 / 995 (`gold22From24PaisePerKg`, whole numbers, rounded to a milli-rupee per gram so it can be typed back exactly) until the owner types a 22K rate; it is still saved as a normal 22K rate and can be changed. The formula is a default to confirm (Q210).
 - R2. One rate per kind per business date (India date). The business date is `YYYY-MM-DD`.
 - R3. Every rate is stored as whole paise **per 1 kg** (`price_paise_per_kg`), for gold and silver alike. The owner may type it **per kg or per gram** (a switch on each row). Typing is in rupees, commas and a rupee sign allowed (`1,20,00,000` or `₹ 12,000`). Per kg allows up to 2 decimals. Per gram allows up to 3 decimals, which is always an exact number of paise per kg (`150.123` per gram is `₹1,50,123` per kg). The conversion uses whole-number arithmetic with no floats, and more decimals than allowed are rejected, never rounded.
 - R4. A price must be greater than 0 and at most ₹10,00,00,000 per kg (₹1,00,000 per gram). Anything else is rejected with a clear message.

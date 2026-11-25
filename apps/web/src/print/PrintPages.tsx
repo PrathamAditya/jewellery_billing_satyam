@@ -5,7 +5,7 @@ import { btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { navigate } from "../router";
 import BusinessBanner from "../settings/BusinessBanner";
 import { InvoiceSheets } from "./InvoicePrint";
-import { OldGoldReceipt, PaymentReceipt, ReceiptSheet } from "./ReceiptPrint";
+import { OldGoldSheets, PaymentReceipt, ReceiptSheet } from "./ReceiptPrint";
 import { CreditNoteSheet } from "./CreditNotePrint";
 import type { Header } from "./common";
 import "./fonts";
@@ -100,6 +100,9 @@ function PaymentPrintPage({ id }: { id: string }) {
   if (data.p.kind === "at_sale") {
     return <Message text="This payment was taken at the time of sale. It has no receipt of its own; it is printed on the settlement page of the invoice." backTo={`/payments/${id}`} />;
   }
+  if (!data.p.receiptNo) {
+    return <Message text="This old gold was used straight on an invoice, so there is no payment receipt. Print the old gold receipt, and see the invoice's settlement page." backTo={`/payments/${id}`} />;
+  }
   const copies = copyOrder(data.header.texts.copyLabels, choice);
   return (
     <>
@@ -139,7 +142,7 @@ function OldGoldPrintPage({ id }: { id: string }) {
     <>
       <Toolbar backTo={`/old-gold/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={() => window.print()} hint="A4 paper, scale 100%, margins none. Two copies share one sheet, cut along the dashed line." />
       <div className="print-stage">
-        <ReceiptSheet labels={copies} render={(label) => <OldGoldReceipt r={data.r} header={data.header} copyLabel={label} />} />
+        <OldGoldSheets r={data.r} header={data.header} labels={copies} />
       </div>
     </>
   );

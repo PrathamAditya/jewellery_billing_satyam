@@ -89,7 +89,21 @@ export default function InvoicePage({ id }: { id: string }) {
   const { can } = useAuth();
   const [inv, setInv] = useState<InvoiceResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"details" | "settlement" | "history">("details");
+  // Feedback point 13: coming back from a form that was opened from the settlement page lands on the settlement page again.
+  const [tab, setTab] = useState<"details" | "settlement" | "history">(() => {
+    try {
+      return sessionStorage.getItem(`invoiceTab:${id}`) === "settlement" ? "settlement" : "details";
+    } catch {
+      return "details";
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(`invoiceTab:${id}`);
+    } catch {
+      /* only a convenience */
+    }
+  }, [id]);
   const [voiding, setVoiding] = useState(false);
   const [receiving, setReceiving] = useState(false);
   const [crediting, setCrediting] = useState(false);
@@ -288,7 +302,7 @@ export default function InvoicePage({ id }: { id: string }) {
           {inv.rateStatus === "pending" ? <PendingNote inv={inv} /> : <Breakdown r={calc} descriptions={inv.lines.map((l) => l.description)} />}
         </div>
       )}
-      {tab === "settlement" && (inv.rateStatus === "pending" ? <Alert kind="info">The settlement opens when the rate is fixed.</Alert> : <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} />)}
+      {tab === "settlement" && (inv.rateStatus === "pending" ? <Alert kind="info">The settlement opens when the rate is fixed.</Alert> : <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} onChanged={() => load()} />)}
       {tab === "history" && <History id={inv.id} current={inv.revisionNo} onOpen={(rev) => (setTab("details"), load(rev))} />}
 
       {crediting && (

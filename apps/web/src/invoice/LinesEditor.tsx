@@ -1,7 +1,8 @@
-import { polishWeightMg } from "@jewellery/calc";
-import { PURITIES, PURITY_RATE_KIND, formatWeightGrams, paisePerKgToInput, parseWeightGrams, type ApplicableRatesResponse, type BulkItemResponse, type Purity } from "@jewellery/shared";
+import { labourExGstPaisePerKg, polishWeightMg } from "@jewellery/calc";
+import { useState } from "react";
+import { PURITIES, PURITY_RATE_KIND, formatPerGram, formatWeightGrams, paisePerKgToInput, parseRateInput, parseWeightGrams, type ApplicableRatesResponse, type BulkItemResponse, type Purity } from "@jewellery/shared";
 import { btnSecondary, inputClass } from "../customers/ui";
-import { blankLine, isTouched, parseLine, parsePendingLine, type LineText } from "./lines";
+import { blankLine, copyRateBoxes, hasRateBoxes, isTouched, parseLine, parsePendingLine, type LineText } from "./lines";
 
 type Props = {
   rows: LineText[];
@@ -21,12 +22,46 @@ type Props = {
 type BoxKey = "description" | "gross" | "net" | "polish" | "gold" | "labour" | "stoneWeight" | "stoneAmount" | "total";
 
 /** The lines grid shared by the Calculator (spec 012) and the invoice form (spec 013). */
-export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, showPurity = false, pendingRate = false, bulkItems }: Props) {
-  if (pendingRate) return <PendingLines rows={rows} onChange={onChange} rowErrors={rowErrors} />;
+export default function LinesEditor(props: Props) {
+  // The pending-rate grid and the full grid are separate components, so switching between them never changes the hooks of one.
+  if (props.pendingRate) return <PendingLines rows={props.rows} onChange={props.onChange} rowErrors={props.rowErrors ?? {}} />;
+  return <FullLines {...props} />;
+}
+
+function FullLines({ rows, onChange, rowErrors = {}, rates, showPurity = false, bulkItems }: Props) {
   const setField = (i: number, k: keyof LineText, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const setHsn = (i: number, hsn: string) => onChange(rows.map((r, j) => (j === i ? { ...r, hsn, gst: hsn === "9988" ? "5" : "3" } : r)));
   const setPricing = (i: number, pricing: LineText["pricing"]) => onChange(rows.map((r, j) => (j === i ? { ...r, pricing } : r)));
+  const [copyNote, setCopyNote] = useState<string | null>(null);
   const showStock = bulkItems !== undefined;
+
+  // Feedback point 4: the bill type sets the HSN (and so the GST rate) of every line at once. A line can still be changed on its own.
+  const hsnSet = new Set(rows.map((r) => r.hsn));
+  const billType: "sale" | "job" | "mixed" = hsnSet.size > 1 ? "mixed" : hsnSet.has("9988") ? "job" : "sale";
+  const setBillType = (t: "sale" | "job") => onChange(rows.map((r) => ({ ...r, hsn: t === "job" ? "9988" : "7113", gst: t === "job" ? "5" : "3" })));
+  // Feedback point 7: one switch for the whole bill. It moves with row 1 so every row is read the same way.
+  const labourInclGst = rows.every((r) => r.labourInclGst);
+  const setLabourInclGst = (on: boolean) => onChange(rows.map((r) => ({ ...r, labourInclGst: on })));
+
+  // Feedback point 5: copy the rate, labour and polish of line 1 to the other lines, or to one line. Lines stay editable afterwards.
+  function copyFromFirst(only?: number) {
+    const first = rows[0]!;
+    if (!hasRateBoxes(first)) return setCopyNote("Line 1 has no rate, labour or polish typed yet, so there is nothing to copy.");
+    if (rows.length < 2) return setCopyNote("There is only one line.");
+    let n = 0;
+    const next = rows.map((r, j) => {
+      if (j === 0 || (only !== undefined && only !== j) || r.pricing === "combined") return r;
+      n++;
+      return copyRateBoxes(first, r);
+    });
+    onChange(next);
+    setCopyNote(n ? `Copied the rate, labour and polish of line 1 to ${only !== undefined ? `line ${only + 1}` : `${n} other line${n > 1 ? "s" : ""}`}. You can still change any line.` : "Combined-total lines have no rate, so nothing was copied.");
+  }
+  const addLine = () => {
+    const last = rows[rows.length - 1]!;
+    // A new line follows the bill: the same HSN and the same labour switch as the line above it.
+    onChange([...rows, { ...blankLine(showPurity ? "22K916" : "other"), hsn: last.hsn, gst: last.gst, labourInclGst: last.labourInclGst }]);
+  };
   const setStockKind = (i: number, stockKind: LineText["stockKind"]) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, stockKind, stockUNo: stockKind === "item" ? r.stockUNo : "", bulkItemId: stockKind === "bulk" ? r.bulkItemId : "", bulkQty: stockKind === "bulk" ? r.bulkQty : "" } : r)));
 
@@ -48,14 +83,29 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
     const err = isTouched(rows[i]!) ? parseLine(rows[i]!).fieldErrors[k] : undefined;
     return (
       <div className="flex flex-col gap-0.5">
-        <input
-          className={`${inputClass} ${width} ${err ? "border-red-400" : ""}`}
-          value={rows[i]![k]}
-          onChange={(e) => setField(i, k, e.target.value)}
-          aria-label={`${label} line ${i + 1}`}
-          placeholder={placeholder}
-          inputMode={k === "description" ? "text" : "decimal"}
-        />
+        {k === "description" ? (
+          // Feedback point 6: a roomy box for the description (it can run to several lines), not a thin one-line field.
+          <textarea
+            className={`${inputClass} min-h-[4.5rem] resize-y`}
+            // An explicit width: inside a table cell the base w-full would shrink the box to its smallest size.
+            style={{ width: "16rem", minWidth: "16rem" }}
+            rows={3}
+            maxLength={200}
+            value={rows[i]![k]}
+            onChange={(e) => setField(i, k, e.target.value)}
+            aria-label={`${label} line ${i + 1}`}
+            placeholder={placeholder}
+          />
+        ) : (
+          <input
+            className={`${inputClass} ${width} ${err ? "border-red-400" : ""}`}
+            value={rows[i]![k]}
+            onChange={(e) => setField(i, k, e.target.value)}
+            aria-label={`${label} line ${i + 1}`}
+            placeholder={placeholder}
+            inputMode="decimal"
+          />
+        )}
         {err && <span className="text-xs text-red-700 max-w-32">{err}</span>}
       </div>
     );
@@ -65,6 +115,29 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
   const headers = ["Description", ...(showPurity ? ["Purity"] : []), "Pricing", "HSN", "Gross g", "Net g", "Polish %", "Gold rate / g", "Labour rate / g", "Stone g", "Stone ₹", "Total ₹", "GST %", ...(showStock ? ["Stock (optional)"] : []), ""];
   return (
     <div className="overflow-x-auto">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pb-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Bill type</span>
+          <div className="flex" role="group" aria-label="Bill type">
+            {(["sale", "job"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setBillType(t)}
+                aria-pressed={billType === t}
+                className={`px-3 py-2 border first:rounded-l-lg last:rounded-r-lg -ml-px first:ml-0 ${billType === t ? "bg-stone-900 text-white border-stone-900" : "bg-white border-stone-300"}`}
+              >
+                {t === "sale" ? "Jewellery sale · HSN 7113 · 3%" : "Job work · HSN 9988 · 5%"}
+              </button>
+            ))}
+          </div>
+          {billType === "mixed" && <span className="text-stone-600">Mixed: each line has its own HSN.</span>}
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={labourInclGst} onChange={(e) => setLabourInclGst(e.target.checked)} aria-label="Labour rates include GST" />
+          Labour rates I type include GST
+        </label>
+      </div>
       <table className="text-sm">
         <thead className="text-left text-stone-600">
           <tr>
@@ -81,7 +154,7 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
             const separate = r.pricing === "separate";
             return (
               <tr key={i} className="align-top">
-                <td className="pr-2 pb-2">{box(i, "description", "Description", "Silver Ornament", "w-44")}</td>
+                <td className="pr-2 pb-2">{box(i, "description", "Description", "Silver Ornament", "w-64")}</td>
                 {showPurity && (
                   <td className="pr-2 pb-2">
                     <select className={`${inputClass} w-28`} value={r.purity} onChange={(e) => setPurity(i, e.target.value as Purity)} aria-label={`Purity line ${i + 1}`}>
@@ -123,7 +196,20 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
                   )}
                 </td>
                 <td className="pr-2 pb-2">{combined ? dash : box(i, "gold", "Gold rate", "285.72", "w-28")}</td>
-                <td className="pr-2 pb-2">{combined ? dash : box(i, "labour", "Labour rate", "0", "w-28")}</td>
+                <td className="pr-2 pb-2">
+                  {combined ? (
+                    dash
+                  ) : (
+                    <div className="flex flex-col gap-0.5">
+                      {box(i, "labour", "Labour rate", "0", "w-28")}
+                      {r.labourInclGst &&
+                        (() => {
+                          const l = r.labour.trim() ? parseRateInput(r.labour, "gram") : null;
+                          return l?.ok ? <span className="text-xs text-stone-500">= {formatPerGram(labourExGstPaisePerKg(l.paisePerKg, r.hsn === "9988" ? 500 : 300))} without GST</span> : null;
+                        })()}
+                    </div>
+                  )}
+                </td>
                 <td className="pr-2 pb-2">{separate ? box(i, "stoneWeight", "Stone g", "0.300", "w-24") : dash}</td>
                 <td className="pr-2 pb-2">{separate ? box(i, "stoneAmount", "Stone amount", "12,500", "w-28") : dash}</td>
                 <td className="pr-2 pb-2">{combined ? box(i, "total", "Total amount", "50,000", "w-28") : dash}</td>
@@ -146,6 +232,11 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
                 )}
                 <td className="pb-2">
                   <div className="flex flex-col gap-1">
+                    {i > 0 && !combined && (
+                      <button className="px-2 py-1 text-xs text-stone-600 underline text-left" onClick={() => copyFromFirst(i)} aria-label={`Copy rate, labour and polish from line 1 to line ${i + 1}`}>
+                        Same as line 1
+                      </button>
+                    )}
                     <button
                       className="px-2 py-2 text-sm text-stone-600 hover:text-red-700 disabled:opacity-30"
                       disabled={rows.length === 1}
@@ -166,9 +257,17 @@ export default function LinesEditor({ rows, onChange, rowErrors = {}, rates, sho
           })}
         </tbody>
       </table>
-      <button className={`${btnSecondary} mt-1`} onClick={() => onChange([...rows, blankLine(showPurity ? "22K916" : "other")])} disabled={rows.length >= 50}>
-        Add line
-      </button>
+      <div className="flex flex-wrap items-center gap-2 mt-1">
+        <button className={btnSecondary} onClick={addLine} disabled={rows.length >= 50}>
+          Add line
+        </button>
+        {rows.length > 1 && (
+          <button className={btnSecondary} onClick={() => copyFromFirst()} aria-label="Copy rate, labour and polish from line 1 to all lines">
+            Copy rate, labour and polish from line 1
+          </button>
+        )}
+        {copyNote && <span role="status" className="text-sm text-stone-600">{copyNote}</span>}
+      </div>
     </div>
   );
 }

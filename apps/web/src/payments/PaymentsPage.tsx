@@ -74,13 +74,13 @@ export default function PaymentsPage() {
             {items.map((p) => (
               <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50 cursor-pointer" onClick={() => navigate(`/payments/${p.id}`)}>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <a href={`#/payments/${p.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{p.receiptNo ?? "At sale"}</a>
+                  <a href={`#/payments/${p.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{p.receiptNo ?? (p.kind === "old_gold" ? "Old gold adjusted" : "At sale")}</a>
                   {p.voided && <span className="ml-2 text-xs text-red-700 border border-red-200 rounded px-1">voided</span>}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">{niceDate(p.receiptDate)}</td>
                 <td className="px-3 py-2">{p.payerName}</td>
                 <td className="px-3 py-2">
-                  {MODE_LABEL[p.mode]}
+                  {p.modes.map((m) => MODE_LABEL[m]).join(" + ")}
                   {p.chequeStatus && <span className="text-stone-500"> · {CHEQUE_STATUS_LABEL[p.chequeStatus]}</span>}
                 </td>
                 <td className="px-3 py-2">{KIND_LABEL[p.kind]}</td>

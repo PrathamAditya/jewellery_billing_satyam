@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { MODE_LABEL, formatMoney, parseRateInput, type CustomerResponse, type InvoiceSummary, type PaymentWarning } from "@jewellery/shared";
+import { MAX_MODES_PER_RECEIPT, MODE_LABEL, formatMoney, parseRateInput, type CustomerResponse, type InvoiceSummary } from "@jewellery/shared";
 import { ApiError } from "../api";
 import CustomerPicker from "../customers/CustomerPicker";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass } from "../customers/ui";
 import { getApplicable } from "../rates/api";
+import { getLedger } from "../ledger/api";
 import { getSettings } from "../settings/api";
 import { searchInvoices } from "../invoice/api";
 import { createPayment } from "./api";
@@ -20,6 +21,16 @@ type Props = {
   onSaved: (paymentId: string) => void;
 };
 
+type Mode = "cash" | "upi" | "card" | "cheque" | "bank_transfer";
+const MODES: Mode[] = ["upi", "cash", "card", "cheque", "bank_transfer"];
+/** Feedback point 3: one more payment mode on the same receipt. */
+type ExtraLine = { mode: Mode; amountText: string; reference: string; chequeBank: string; chequeDate: string; chequeDrawer: string };
+const blankExtra = (mode: Mode = "cash"): ExtraLine => ({ mode, amountText: "", reference: "", chequeBank: "", chequeDate: "", chequeDrawer: "" });
+const rupeesOf = (t: string) => {
+  const p = t.trim() ? parseRateInput(t, "kg") : null; // whole rupees with up to 2 decimals
+  return p?.ok ? p.paisePerKg : null;
+};
+
 /** Spec 015 section 5: receive a payment, advance or against invoices, with a preview of where the money goes. */
 export default function ReceiveDialog({ customer: fixed, invoice, order, onClose, onSaved }: Props) {
   const [today, setToday] = useState("");
@@ -27,7 +38,10 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
   const customerId = fixed?.id ?? invoice?.customerId ?? picked?.id ?? null;
   const customerName = fixed?.name ?? picked?.name ?? "";
   const [date, setDate] = useState("");
-  const [mode, setMode] = useState<"cash" | "upi" | "card" | "cheque" | "bank_transfer">("upi");
+  const [mode, setMode] = useState<Mode>("upi");
+  const [extras, setExtras] = useState<ExtraLine[]>([]);
+  // Feedback points 14 and 15: what the customer owes and what the shop already holds for them, shown before the money is typed.
+  const [money, setMoney] = useState<{ outstandingPaise: number; advanceHeldPaise: number } | null>(null);
   const [reference, setReference] = useState("");
   const [amountText, setAmountText] = useState("");
   const [purpose, setPurpose] = useState<"advance" | "against_invoices" | "at_sale" | "opening_advance">(invoice ? "at_sale" : "advance");
@@ -37,7 +51,7 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
   const [chequeDate, setChequeDate] = useState("");
   const [chequeDrawer, setChequeDrawer] = useState("");
   // Spec 019b C9: a duplicate cheque number is saved, but the owner is told before leaving the dialog.
-  const [notice, setNotice] = useState<{ id: string; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ id: string; text: string; receiptNo?: string | null } | null>(null);
   const [open, setOpen] = useState<InvoiceSummary[]>([]);
   const [manual, setManual] = useState(false);
   const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
@@ -57,19 +71,33 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
   }, []);
 
   useEffect(() => {
-    if (!customerId || purpose !== "against_invoices") {
+    if (!customerId) {
+      setMoney(null);
+      return;
+    }
+    let alive = true;
+    // A person without the ledger permission simply does not see the figures.
+    getLedger(customerId).then((l) => alive && setMoney({ outstandingPaise: l.outstandingPaise, advanceHeldPaise: l.advanceHeldPaise })).catch(() => alive && setMoney(null));
+    return () => {
+      alive = false;
+    };
+  }, [customerId]);
+
+  useEffect(() => {
+    if (!customerId) {
       setOpen([]);
       return;
     }
     searchInvoices("", { customerId, status: "active" })
       .then((r) => setOpen(r.items.filter((i) => i.balanceDuePaise > 0).sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate) || a.invoiceNo.localeCompare(b.invoiceNo))))
       .catch(() => setOpen([]));
-  }, [customerId, purpose]);
+  }, [customerId]);
 
-  const amountPaise = useMemo(() => {
-    const parsed = parseRateInput(amountText, "kg"); // whole rupees with up to 2 decimals
-    return parsed.ok ? parsed.paisePerKg : null;
-  }, [amountText]);
+  /** The first mode's amount, each further mode's amount (null when not a valid amount), and the receipt's total. */
+  const firstPaise = useMemo(() => rupeesOf(amountText), [amountText]);
+  const extraPaise = useMemo(() => extras.map((x) => rupeesOf(x.amountText)), [extras]);
+  const amountPaise = useMemo(() => (firstPaise === null || extraPaise.some((x) => x === null) ? null : firstPaise + extraPaise.reduce<number>((n, x) => n + (x ?? 0), 0)), [firstPaise, extraPaise]);
+  const setExtra = (i: number, patch: Partial<ExtraLine>) => setExtras((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   /** The same first-in, first-out rule as the server (spec 015 R3), shown before saving. */
   const plan = useMemo(() => {
@@ -88,17 +116,29 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
     return { rows, leftover: left };
   }, [purpose, amountPaise, open, manual, manualAmounts]);
 
-  const cashWarning = mode === "cash" && limit !== null && amountPaise !== null && amountPaise >= limit;
+  // The cash limit is about all the cash on this receipt.
+  const cashPaise = (mode === "cash" ? (firstPaise ?? 0) : 0) + extras.reduce((n, x, i) => n + (x.mode === "cash" ? (extraPaise[i] ?? 0) : 0), 0);
+  const cashWarning = limit !== null && cashPaise > 0 && cashPaise >= limit;
 
   async function submit() {
     setError(null);
     setFieldError(null);
     if (!customerId && purpose !== "at_sale") return setFieldError("Choose the customer");
+    if (firstPaise === null || firstPaise <= 0) return setFieldError("Enter the amount in rupees, like 14,500");
+    for (const [i, x] of extras.entries()) if (extraPaise[i] === null || extraPaise[i]! <= 0) return setFieldError(`Enter the amount of payment mode ${i + 2} in rupees, or remove it`);
     if (amountPaise === null) return setFieldError("Enter the amount in rupees, like 14,500");
     if (!date) return setFieldError("Choose the date");
     if (cashWarning && !warnConfirmed) return setError("Please confirm the cash amount first (tick the box below).");
     if (purpose === "opening_advance" && !oldRef.trim()) return setFieldError("Enter the receipt number from the old booklet");
-    const body: Record<string, unknown> = { id, date, mode, reference: reference || undefined, amountPaise, purpose, customerId: customerId ?? undefined };
+    const body: Record<string, unknown> = { id, date, mode, reference: reference || undefined, amountPaise: firstPaise, purpose, customerId: customerId ?? undefined };
+    if (extras.length) {
+      body.extraModes = extras.map((x, i) => ({
+        mode: x.mode,
+        reference: x.reference.trim() || undefined,
+        amountPaise: extraPaise[i],
+        ...(x.mode === "cheque" ? { chequeBank: x.chequeBank.trim() || undefined, chequeDate: x.chequeDate || undefined, chequeDrawer: x.chequeDrawer.trim() || undefined } : {}),
+      }));
+    }
     if (order && purpose === "advance") body.orderId = order.id;
     if (purpose === "opening_advance") {
       body.oldReference = oldRef.trim();
@@ -118,7 +158,7 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
       const res = await createPayment(body);
       const dup = res.warnings.find((w) => w.code === "duplicate_cheque_number");
       if (dup && dup.code === "duplicate_cheque_number") {
-        setNotice({ id: res.payment.id, text: `Saved. Another live cheque already uses the number ${dup.reference}. Check that it is not the same cheque.` });
+        setNotice({ id: res.payment.id, text: `Saved. Another live cheque already uses the number ${dup.reference}. Check that it is not the same cheque.`, receiptNo: res.payment.receiptNo });
       } else {
         onSaved(res.payment.id);
       }
@@ -149,6 +189,21 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
         )}
         {(fixed || invoice) && customerName && <p className="text-sm">Customer: <strong>{customerName}</strong></p>}
 
+        {customerId && money && (
+          <div className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm flex flex-col gap-1" aria-label="What the customer owes and holds">
+            <div className="flex flex-wrap gap-x-6 gap-y-1">
+              <span>Outstanding: <strong>{formatMoney(money.outstandingPaise)}</strong>{open.length > 0 ? ` on ${open.length} invoice${open.length > 1 ? "s" : ""}` : ""}</span>
+              <span>Advance already held: <strong>{formatMoney(money.advanceHeldPaise)}</strong></span>
+              {invoice && <span>This invoice owes: <strong>{formatMoney(invoice.balanceDuePaise)}</strong></span>}
+            </div>
+            {(purpose === "advance" || purpose === "opening_advance") && amountPaise !== null && amountPaise > 0 && (
+              <div>Advance after this receipt: <strong>{formatMoney(money.advanceHeldPaise + amountPaise)}</strong> (previous {formatMoney(money.advanceHeldPaise)} + this {formatMoney(amountPaise)})</div>
+            )}
+            {purpose === "against_invoices" && amountPaise !== null && amountPaise > 0 && (
+              <div>Outstanding after this receipt: <strong>{formatMoney(Math.max(0, money.outstandingPaise - amountPaise))}</strong>{amountPaise > money.outstandingPaise ? ` (${formatMoney(amountPaise - money.outstandingPaise)} more than owed is kept as advance)` : ""}</div>
+            )}
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Amount (₹) *" error={fieldError ?? undefined}>
             <input className={inputClass} value={amountText} onChange={(e) => setAmountText(e.target.value)} inputMode="decimal" placeholder="e.g. 14,500" autoFocus />
@@ -157,8 +212,8 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
             <input className={inputClass} type="date" value={date} max={today || undefined} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field label="Mode">
-            <select className={inputClass} value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-              {(["upi", "cash", "card", "cheque", "bank_transfer"] as const).map((m) => (
+            <select className={inputClass} value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+              {MODES.map((m) => (
                 <option key={m} value={m}>{MODE_LABEL[m]}</option>
               ))}
             </select>
@@ -166,6 +221,45 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
           <Field label="Reference (UPI number, cheque number)">
             <input className={inputClass} value={reference} onChange={(e) => setReference(e.target.value)} maxLength={60} />
           </Field>
+        </div>
+
+        {/* Feedback point 3: the customer paid by more than one mode (for example cash and UPI): one receipt, one line per mode. */}
+        {extras.map((x, i) => (
+          <div key={i} className="flex flex-col gap-3 border border-stone-200 rounded-lg p-3" role="group" aria-label={`Payment mode ${i + 2}`}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label={`Amount ${i + 2} (₹) *`}>
+                <input className={inputClass} value={x.amountText} onChange={(e) => setExtra(i, { amountText: e.target.value })} inputMode="decimal" placeholder="e.g. 9,500" aria-label={`Amount of payment mode ${i + 2}`} />
+              </Field>
+              <Field label={`Mode ${i + 2}`}>
+                <select className={inputClass} value={x.mode} onChange={(e) => setExtra(i, { mode: e.target.value as Mode })} aria-label={`Payment mode ${i + 2}`}>
+                  {MODES.map((m) => (
+                    <option key={m} value={m}>{MODE_LABEL[m]}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={`Reference ${i + 2}`}>
+                <input className={inputClass} value={x.reference} onChange={(e) => setExtra(i, { reference: e.target.value })} maxLength={60} aria-label={`Reference of payment mode ${i + 2}`} />
+              </Field>
+            </div>
+            {x.mode === "cheque" && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Cheque bank"><input className={inputClass} value={x.chequeBank} onChange={(e) => setExtra(i, { chequeBank: e.target.value })} maxLength={100} aria-label={`Cheque bank of payment mode ${i + 2}`} /></Field>
+                <Field label="Cheque date"><input className={inputClass} type="date" value={x.chequeDate} onChange={(e) => setExtra(i, { chequeDate: e.target.value })} aria-label={`Cheque date of payment mode ${i + 2}`} /></Field>
+                <Field label="Name on the cheque"><input className={inputClass} value={x.chequeDrawer} onChange={(e) => setExtra(i, { chequeDrawer: e.target.value })} maxLength={100} aria-label={`Cheque name of payment mode ${i + 2}`} /></Field>
+              </div>
+            )}
+            <div><button type="button" className="text-sm underline text-stone-600" onClick={() => setExtras((xs) => xs.filter((_, j) => j !== i))}>Remove this payment mode</button></div>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-center gap-3">
+          {extras.length + 1 < MAX_MODES_PER_RECEIPT && (
+            <button type="button" className={btnSecondary} onClick={() => setExtras((xs) => [...xs, blankExtra(mode === "cash" ? "upi" : "cash")])}>
+              Add another payment mode
+            </button>
+          )}
+          {extras.length > 0 && amountPaise !== null && (
+            <span className="text-sm" role="status">Total received on this receipt: <strong>{formatMoney(amountPaise)}</strong></span>
+          )}
         </div>
 
         {mode === "cheque" && (
@@ -233,7 +327,7 @@ export default function ReceiveDialog({ customer: fixed, invoice, order, onClose
 
         {cashWarning && (
           <Alert kind="info">
-            <p>Cash of {formatMoney(amountPaise!)} is at or above the cash limit of {formatMoney(limit!)}. You can still save it.</p>
+            <p>Cash of {formatMoney(cashPaise)} is at or above the cash limit of {formatMoney(limit!)}. You can still save it.</p>
             <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={warnConfirmed} onChange={(e) => setWarnConfirmed(e.target.checked)} /> I have checked this cash amount</label>
           </Alert>
         )}

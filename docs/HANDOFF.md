@@ -59,3 +59,6 @@ Small verified steps, everything tested with real worked examples from his docum
 
 ## When you finish Wave 1
 Update this file (state table, deploy list, known gaps), list every default you used in `docs/open-questions.md`, and give the owner the deploy steps in the pull request description (new migrations in order, new Cloudflare resources, new environment settings, how to test on the live site).
+
+## Update 2026-11-25: the showroom's second feedback list
+Fifteen points were checked against the system and built on branch `fix-satyam-feedback-2`: see `docs/feedback-round-2.md` (what each point was, what changed, where, how it is tested) and `docs/open-questions.md` section AB (Q210 to Q217, the defaults used). New migration `0032_receipt_modes.sql` (one nullable column and a swapped index, no existing row changes) must be applied with `npm run db:migrate:remote -w @jewellery/api` before `npm run deploy`. Nothing was deployed or applied live. Receipts with several modes are several payment rows sharing one receipt number (spec 015 R1); invoice and old gold prints lay rows out by height (spec 014 R7).

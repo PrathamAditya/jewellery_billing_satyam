@@ -1,5 +1,5 @@
-import { Fragment } from "react";
-import { amountInWords, formatMoney, formatRoundOffPrint, formatWeightPrint, metalLine, paginate, type InvoiceResponse, type SettlementResponse } from "@jewellery/shared";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { amountInWords, formatMoney, formatRoundOffPrint, formatWeightPrint, metalLine, paginateByUnits, rowUnits, type InvoiceResponse, type SettlementResponse } from "@jewellery/shared";
 import { Brand, Field, money, type Header } from "./common";
 
 /** The calculation stored with the invoice (spec 012 R14). Only the fields printed here. */
@@ -24,19 +24,35 @@ export type InvoiceSheetsProps = { invoice: InvoiceResponse; settlement: Settlem
  */
 export function InvoiceSheets({ invoice, settlement, header, copyLabel }: InvoiceSheetsProps) {
   const calc = invoice.calc as StoredCalc;
-  const pages = paginate(invoice.lines);
+  // Feedback point 8: rows go on pages by their height. The starting room is a guess; after the page is laid out, any page whose
+  // content does not fit gives up one unit and the rows are placed again, until nothing is cut off or overlaps the footer.
+  const [caps, setCaps] = useState({ cont: 12, last: 9 });
+  const pages = paginateByUnits(invoice.lines, (l) => rowUnits(l.description), caps.cont, caps.last);
   const last = pages.length - 1;
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const mains = root.current?.querySelectorAll<HTMLElement>("[data-front-main]");
+    if (!mains) return;
+    let tooFullLast = false;
+    let tooFullCont = false;
+    mains.forEach((m) => {
+      if (m.scrollHeight > m.clientHeight + 1) (m.dataset.frontLast === "1" ? (tooFullLast = true) : (tooFullCont = true));
+    });
+    if (tooFullLast || tooFullCont) {
+      setCaps((c) => ({ cont: tooFullCont ? Math.max(1, c.cont - 1) : c.cont, last: tooFullLast ? Math.max(1, c.last - 1) : c.last }));
+    }
+  }, [caps, invoice, header, settlement]);
   // Spec 019c Q95: a sale whose rate is not fixed has no amounts to print, and no settlement page.
   const pending = invoice.rateStatus === "pending";
   return (
-    <>
+    <div ref={root} style={{ display: "contents" }}>
       {pages.map((rows, i) => (
         <Fragment key={i}>
           <FrontPage invoice={invoice} calc={calc} header={header} copyLabel={copyLabel} rows={rows} pageNo={i + 1} isLast={i === last} pending={pending} />
           {i === last && !pending ? <SettlementPage invoice={invoice} calc={calc} header={header} settlement={settlement} /> : <div className="page" />}
         </Fragment>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -49,6 +65,8 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
     <div className="page">
       {invoice.voidedAt && <div className="void-stamp">VOID</div>}
       <div className="watermark" />
+      <div className="front-col">
+      <div className="front-main" data-front-main data-front-last={isLast ? "1" : "0"}>
       <div className="flex justify-between items-start">
         <Brand header={header} />
         <div className="text-right">
@@ -102,7 +120,7 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
           {rows.map((l) => (
             <tr key={l.lineNo}>
               <td>{l.lineNo}</td>
-              <td><div className="value">{l.description || "Item"}</div><div className="label">{metalLine(l.purity, l.hsn)}</div></td>
+              <td><div className="value" style={{ whiteSpace: "pre-line" }}>{l.description || "Item"}</div><div className="label">{metalLine(l.purity, l.hsn)}</div></td>
               <td>{l.hsn}</td>
               <td>{l.purity}</td>
               <td className="r">{formatWeightPrint(l.grossWeightMg)}</td>
@@ -163,7 +181,8 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
         <div className="mt-4 text-[8pt] italic" style={{ color: "#7a6a5f" }}>Continued on the next page.</div>
       )}
 
-      <div className="absolute left-[12mm] right-[12mm] bottom-[10mm]">
+      </div>
+      <div className="front-foot">
         {isLast && (
           <p className="text-[7.5pt] mb-2">Settlement details are printed on the reverse side. Quote invoice number {invoice.invoiceNo} for all future payments.</p>
         )}
@@ -183,6 +202,7 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
           <span>This is a computer-generated tax invoice.</span>
           <span className="label" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -217,7 +237,7 @@ function SettlementPage({ invoice, calc, header, settlement }: { invoice: Invoic
         <tbody>
           {lines.map((l) => (
             <tr key={l.allocationId}>
-              <td>{niceDate(l.date)}</td><td>{l.mode}</td><td>{l.reference}</td><td>{l.type}</td><td className="r">{money(l.amountPaise)}</td>
+              <td>{niceDate(l.date)}</td><td>{l.mode}</td><td>{l.reference}{l.fromCustomer ? ` (of ${l.fromCustomer})` : ""}</td><td>{l.type}</td><td className="r">{money(l.amountPaise)}</td>
             </tr>
           ))}
           {lines.length === 0 && <tr><td colSpan={5}>Nothing received yet</td></tr>}

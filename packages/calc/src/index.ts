@@ -16,6 +16,8 @@ export type {
   LineResult,
   TaxMode,
 } from "./invoice";
+export { labourExGstPaisePerKg, solveForPayable } from "./reverse";
+export type { SolveOutcome } from "./reverse";
 export { calculateOldGold, OLD_GOLD_LIMITS } from "./oldGold";
 export type { OldGoldRowInput, OldGoldResult, OldGoldOutcome } from "./oldGold";
 export { calculateCreditNote, CREDIT_NOTE_LIMITS } from "./creditNote";

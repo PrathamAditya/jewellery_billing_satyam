@@ -67,6 +67,8 @@ export type OrderListResponse = { items: OrderSummary[]; nextCursor: string | nu
 
 export type CustomerAdvanceRow = {
   paymentId: string;
+  /** The payment mode of this row. A receipt paid in several modes is several rows with the same receipt number. */
+  mode?: string;
   receiptNo: string | null;
   orderNo: string | null;
   receiptDate: string;

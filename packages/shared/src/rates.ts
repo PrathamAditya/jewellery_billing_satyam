@@ -88,6 +88,18 @@ export function paisePerKgToInput(paisePerKg: number, unit: RateUnit): string {
   return trim(Math.floor(milli / 1000), String(milli % 1000).padStart(3, "0"));
 }
 
+/**
+ * 22K916 rate worked out from the 24K995 rate: rate x 916 / 995 (Satyam feedback, point 1).
+ * Whole numbers only, rounded half up to a whole milli-rupee per gram (a multiple of 100 paise per kg),
+ * so the answer can be typed back into a per gram box exactly. It is only a starting value: the owner can change it.
+ */
+export function gold22From24PaisePerKg(paisePerKg24: number): number {
+  const num = BigInt(paisePerKg24) * 916n;
+  const den = 995n * 100n;
+  const units = (num + den / 2n) / den; // half up, in units of 100 paise per kg
+  return Number(units) * 100;
+}
+
 /** True when `next` differs from `previous` by more than the allowed percentage (R12), using whole numbers. */
 export function isLargeChange(previousPaise: number, nextPaise: number): boolean {
   return Math.abs(nextPaise - previousPaise) * 100 > previousPaise * LARGE_CHANGE_PERCENT;

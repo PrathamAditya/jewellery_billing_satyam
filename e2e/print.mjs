@@ -129,8 +129,14 @@ ok(pagesOf(fBoth) === 4, `both copies (the default): 4 pages, shop then customer
 await openPrint(`/print/invoice/${long.body.id}`, long.body.invoiceNo);
 await page.selectOption("select", "first");
 const fLong = await saveAsPdf("print-invoice-20-lines");
-ok(pagesOf(fLong) === 4, `20 lines: front, blank back, front, settlement back (got ${pagesOf(fLong)})`);
-ok(textOf(fLong).includes("Bangle 20"), "the 20th line is printed on the second page");
+// Spec 014 R7 changed on 2026-11-25 (feedback point 8): rows go on pages by their height, so how many sheets 20 lines need depends on
+// the footer (bank, terms). What must hold: whole sheets (a front and a back each), at least two fronts, every line printed once,
+// nothing cut off, and the settlement on the back of the last sheet.
+const longText = textOf(fLong);
+ok(pagesOf(fLong) >= 4 && pagesOf(fLong) % 2 === 0, `20 lines: two or more fronts, each with a back (got ${pagesOf(fLong)} pages)`);
+ok(Array.from({ length: 20 }, (_, i) => (longText.match(new RegExp(`Bangle ${i + 1}(?!\\d)`, "g")) ?? []).length).every((n) => n === 1), "every one of the 20 lines is printed exactly once");
+ok(longText.indexOf("Settlement and Payment Record") > longText.indexOf("Bangle 20"), "the settlement is the back of the last sheet, after the 20th line");
+ok(!(await page.evaluate(() => [...document.querySelectorAll("[data-front-main]")].some((m) => m.scrollHeight > m.clientHeight + 1))), "no sheet has content cut off");
 
 await openPrint(`/print/invoice/${voided.body.id}`, voided.body.invoiceNo);
 await page.selectOption("select", "first");

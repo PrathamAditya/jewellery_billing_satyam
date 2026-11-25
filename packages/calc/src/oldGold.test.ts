@@ -37,9 +37,10 @@ describe("calculateOldGold (spec 018 R3, R4)", () => {
     expect(calculateOldGold(rows as never)).toEqual({ ok: false, error });
   });
 
-  it("a receipt is at most 10 rows", () => {
+  it("a receipt is at most 50 rows (raised from 10: feedback point 12)", () => {
     const row = { netMg: 1_000, purityBps: 9_160, rateKgPaise: 600_000_000 };
-    expect(calculateOldGold(Array.from({ length: 11 }, () => row)).ok).toBe(false);
-    expect(calculateOldGold(Array.from({ length: 10 }, () => row)).ok).toBe(true);
+    expect(calculateOldGold(Array.from({ length: 51 }, () => row))).toEqual({ ok: false, error: "A receipt can have at most 50 rows" });
+    expect(calculateOldGold(Array.from({ length: 50 }, () => row)).ok).toBe(true);
+    expect(calculateOldGold(Array.from({ length: 11 }, () => row)).ok).toBe(true); // 11 used to be refused
   });
 });

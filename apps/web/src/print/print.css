@@ -22,6 +22,16 @@
   overflow: hidden;
 }
 
+/* The tax invoice front: the content takes the room it needs, and the footer follows it instead of floating on top of it (feedback point 8). */
+.front-col { height: 100%; display: flex; flex-direction: column; }
+.front-main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.front-foot { flex: none; padding-top: 3mm; }
+
+/* An A5 receipt block: content first, the footer follows it (feedback points 10 and 12). The padding of .receipt-a5 is 7mm 9mm. */
+.receipt-col { height: 100%; display: flex; flex-direction: column; }
+.receipt-main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.receipt-foot { flex: none; padding-top: 2mm; }
+
 /* An A5 landscape receipt block. Two blocks make one A4 sheet. */
 .receipt-a5 {
   width: 210mm;

@@ -3,6 +3,7 @@ import {
   RATE_UNIT_MG,
   formatPerGram,
   formatPerKg,
+  gold22From24PaisePerKg,
   groupIndian,
   isLargeChange,
   isValidBusinessDate,
@@ -120,5 +121,25 @@ describe("paisePerKgToInput", () => {
         expect(parseRateInput(paisePerKgToInput(p, unit), unit)).toEqual({ ok: true, paisePerKg: p });
       }
     }
+  });
+});
+
+describe("gold22From24PaisePerKg (feedback point 1: 22K from 24K)", () => {
+  // Expected values worked out separately as 24K x 916 / 995, rounded to 3 decimals per gram.
+  const cases: [string, string, string][] = [
+    ["a round 24K rate", "12,000", "11047.236"], // 11047.2361...
+    ["a typical 24K rate", "7,500", "6904.523"], // 6904.5226...
+    ["a rate that rounds up", "9,999", "9205.11"], // 9205.1095... -> 9205.110
+    ["a small rate", "100", "92.06"], // 92.0603...
+  ];
+  it.each(cases)("%s: 24K %s per gram gives 22K %s per gram", (_n, typed, expected) => {
+    const p24 = parseRateInput(typed, "gram");
+    if (!p24.ok) throw new Error("bad fixture");
+    const p22 = gold22From24PaisePerKg(p24.paisePerKg);
+    expect(p22 % 100).toBe(0); // always typeable per gram with 3 decimals
+    expect(paisePerKgToInput(p22, "gram")).toBe(expected);
+  });
+  it("is exact for the 995 to 916 ratio on a multiple of 995", () => {
+    expect(gold22From24PaisePerKg(995_000_000)).toBe(916_000_000);
   });
 });

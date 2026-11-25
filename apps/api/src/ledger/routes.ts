@@ -104,20 +104,38 @@ export async function ledgerOf(db: D1Database, customerId: string, from: string 
     events.push({ date: o.as_of_date, ts: o.created_at, order: 0, type: "Opening balance", reference: o.reference, description: "Opening balance (from the old system)", out: o.amount_paise, adv: 0 });
     if (o.voided_at) events.push({ date: ist(o.voided_at), ts: o.voided_at, order: 5, type: "Opening balance voided", reference: o.reference, description: "Opening balance voided", out: -o.amount_paise, adv: 0 });
   }
-  const payments = (await db.prepare("SELECT id, receipt_no, receipt_date, created_at, amount_paise, mode, voided_at, void_reason FROM payments WHERE customer_id = ?1").bind(customerId).all<{ id: string; receipt_no: string | null; receipt_date: string; created_at: string; amount_paise: number; mode: string; voided_at: string | null; void_reason: string | null }>()).results;
+  // Old gold used straight on an invoice has no PAY- number (feedback point 2); the ledger then names it by its old gold number.
+  const payments = (await db.prepare("SELECT p.id, COALESCE(p.receipt_no, (SELECT o.receipt_no FROM old_gold_purchases o WHERE o.id = p.source_ogp_id)) AS receipt_no, p.receipt_date, p.created_at, p.amount_paise, p.mode, p.voided_at, p.void_reason FROM payments p WHERE p.customer_id = ?1").bind(customerId).all<{ id: string; receipt_no: string | null; receipt_date: string; created_at: string; amount_paise: number; mode: string; voided_at: string | null; void_reason: string | null }>()).results;
   const pname = (p: { receipt_no: string | null }) => p.receipt_no ?? "payment at sale";
   for (const p of payments) {
     events.push({ date: p.receipt_date, ts: p.created_at, order: 1, type: "Received", reference: p.receipt_no, description: `Received ${pname(p)} (${p.mode})`, out: 0, adv: p.amount_paise });
     if (p.voided_at) events.push({ date: ist(p.voided_at), ts: p.voided_at, order: 5, type: "Payment voided", reference: p.receipt_no, description: `${pname(p)} voided`, out: 0, adv: -p.amount_paise });
   }
   const allocs = (await db.prepare(
-    `SELECT a.id, a.amount_paise, a.invoice_id, a.opening_balance_id, a.created_at, a.reversed_at, p.receipt_no, i.invoice_no
+    `SELECT a.id, a.amount_paise, a.invoice_id, a.opening_balance_id, a.created_at, a.reversed_at, COALESCE(p.receipt_no, (SELECT o.receipt_no FROM old_gold_purchases o WHERE o.id = p.source_ogp_id)) AS receipt_no, i.invoice_no, i.customer_id AS invoice_customer_id, i.customer_name AS invoice_customer_name
      FROM payment_allocations a JOIN payments p ON p.id = a.payment_id LEFT JOIN invoices i ON i.id = a.invoice_id WHERE p.customer_id = ?1`,
-  ).bind(customerId).all<{ id: string; amount_paise: number; invoice_id: string | null; opening_balance_id: string | null; created_at: string; reversed_at: string | null; receipt_no: string | null; invoice_no: string | null }>()).results;
+  ).bind(customerId).all<{ id: string; amount_paise: number; invoice_id: string | null; opening_balance_id: string | null; created_at: string; reversed_at: string | null; receipt_no: string | null; invoice_no: string | null; invoice_customer_id: string | null; invoice_customer_name: string | null }>()).results;
   for (const a of allocs) {
     const target = a.invoice_no ?? (a.opening_balance_id ? "opening balance" : "invoice");
+    // Feedback point 9: this customer's advance used on another customer's invoice. It lowers this customer's advance only; what they owe is not touched.
+    const toOther = a.invoice_id !== null && a.invoice_customer_id !== null && a.invoice_customer_id !== customerId;
+    if (toOther) {
+      events.push({ date: ist(a.created_at), ts: a.created_at, order: 2, type: "Advance given to another customer", reference: a.receipt_no, description: `${a.receipt_no ?? "Payment"} used on invoice ${a.invoice_no} of ${a.invoice_customer_name}`, out: 0, adv: -a.amount_paise });
+      if (a.reversed_at) events.push({ date: ist(a.reversed_at), ts: a.reversed_at, order: 4, type: "Allocation reversed", reference: a.receipt_no, description: `${a.receipt_no ?? "Payment"} from invoice ${a.invoice_no} of ${a.invoice_customer_name} reversed`, out: 0, adv: a.amount_paise });
+      continue;
+    }
     events.push({ date: ist(a.created_at), ts: a.created_at, order: 2, type: `Applied to ${a.invoice_no ? "invoice" : "balance"}`, reference: a.receipt_no, description: `${a.receipt_no ?? "Payment"} applied to ${target}`, out: -a.amount_paise, adv: -a.amount_paise });
     if (a.reversed_at) events.push({ date: ist(a.reversed_at), ts: a.reversed_at, order: 4, type: "Allocation reversed", reference: a.receipt_no, description: `${a.receipt_no ?? "Payment"} from ${target} reversed`, out: a.amount_paise, adv: a.amount_paise });
+  }
+  // Feedback point 9: another customer's advance used on this customer's invoice. It lowers what this customer owes; this customer's advance is not touched.
+  const borrowed = (await db.prepare(
+    `SELECT a.id, a.amount_paise, a.created_at, a.reversed_at, p.receipt_no, p.payer_name, i.invoice_no
+     FROM payment_allocations a JOIN payments p ON p.id = a.payment_id JOIN invoices i ON i.id = a.invoice_id
+     WHERE i.customer_id = ?1 AND p.customer_id IS NOT NULL AND p.customer_id <> ?1`,
+  ).bind(customerId).all<{ id: string; amount_paise: number; created_at: string; reversed_at: string | null; receipt_no: string | null; payer_name: string; invoice_no: string }>()).results;
+  for (const a of borrowed) {
+    events.push({ date: ist(a.created_at), ts: a.created_at, order: 2, type: "Advance of another customer applied", reference: a.receipt_no, description: `${a.receipt_no ?? "Payment"} of ${a.payer_name} applied to invoice ${a.invoice_no}`, out: -a.amount_paise, adv: 0 });
+    if (a.reversed_at) events.push({ date: ist(a.reversed_at), ts: a.reversed_at, order: 4, type: "Allocation reversed", reference: a.receipt_no, description: `${a.receipt_no ?? "Payment"} of ${a.payer_name} from invoice ${a.invoice_no} reversed`, out: a.amount_paise, adv: 0 });
   }
   const refunds = (await db.prepare(
     `SELECT r.amount_paise, r.refund_date, r.created_at, r.reversed_at, r.mode, p.receipt_no FROM payment_refunds r JOIN payments p ON p.id = r.payment_id WHERE p.customer_id = ?1`,
@@ -209,7 +227,8 @@ ledgerRoutes.get("/customers/:id/ledger", async (c) => {
 const TOTALS_SQL = `SELECT c.id AS customer_id, c.name AS customer_name,
   COALESCE((SELECT SUM(i.payable_paise) FROM invoices i WHERE i.customer_id = c.id AND i.voided_at IS NULL), 0)
   + COALESCE((SELECT SUM(o.amount_paise) FROM opening_balances o WHERE o.customer_id = c.id AND o.voided_at IS NULL), 0)
-  - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id WHERE p.customer_id = c.id AND a.reversed_at IS NULL), 0)
+  - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a JOIN invoices ai ON ai.id = a.invoice_id WHERE ai.customer_id = c.id AND a.reversed_at IS NULL), 0)
+  - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a JOIN opening_balances ao ON ao.id = a.opening_balance_id WHERE ao.customer_id = c.id AND a.reversed_at IS NULL), 0)
   - COALESCE((SELECT SUM(x.amount_paise) FROM credit_applications x JOIN credit_notes n ON n.id = x.credit_note_id WHERE n.customer_id = c.id AND x.reversed_at IS NULL), 0) AS outstanding,
   COALESCE((SELECT SUM(p.amount_paise - COALESCE((SELECT SUM(x.amount_paise) FROM payment_allocations x WHERE x.payment_id = p.id AND x.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0))
             FROM payments p WHERE p.customer_id = c.id AND p.voided_at IS NULL), 0) AS advance

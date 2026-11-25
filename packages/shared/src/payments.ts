@@ -28,6 +28,19 @@ export const KIND_LABEL: Record<PaymentKind, string> = {
   old_gold: "Old gold",
 };
 
+/** Feedback point 3: one more payment mode on the same receipt (the first mode is given by the main fields of the request). */
+export const paymentModeLineSchema = z.object({
+  mode: z.enum(CUSTOMER_PAYMENT_MODES, { error: "Choose a payment mode" }),
+  reference: z.string().trim().max(60, "Reference is too long (60 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+  amountPaise: z.number({ error: "Enter the amount" }).int("Amount must be whole paise").min(1, "Amount must be more than 0").max(MAX_PAYMENT_PAISE, "Amount is too large"),
+  chequeBank: z.string().trim().max(100, "Bank name is too long (100 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+  chequeDate: z.string().refine(isValidBusinessDate, "Cheque date must look like 2026-11-01").optional().nullable().transform((v) => (v ? v : null)),
+  chequeDrawer: z.string().trim().max(100, "Drawer name is too long (100 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+});
+export type PaymentModeLineRequest = z.infer<typeof paymentModeLineSchema>;
+/** One receipt can carry up to this many payment modes in total (the main one plus up to 5 more). */
+export const MAX_MODES_PER_RECEIPT = 6;
+
 export const paymentRequestSchema = z.object({
   id: z.string().uuid().optional(),
   date: z.string().refine(isValidBusinessDate, "Date must look like 2026-11-01"),
@@ -61,6 +74,8 @@ export const paymentRequestSchema = z.object({
   chequeBank: z.string().trim().max(100, "Bank name is too long (100 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
   chequeDate: z.string().refine(isValidBusinessDate, "Cheque date must look like 2026-11-01").optional().nullable().transform((v) => (v ? v : null)),
   chequeDrawer: z.string().trim().max(100, "Drawer name is too long (100 characters at most)").optional().nullable().transform((v) => (v ? v : null)),
+  /** Feedback point 3: more payment modes on the same receipt. The amounts of all modes add up to the receipt's total; `amountPaise` above is the first mode's amount only. */
+  extraModes: z.array(paymentModeLineSchema).max(MAX_MODES_PER_RECEIPT - 1, `A receipt can have at most ${MAX_MODES_PER_RECEIPT} payment modes`).optional().default([]),
 });
 export type PaymentRequest = z.infer<typeof paymentRequestSchema>;
 
@@ -93,6 +108,18 @@ export type PaymentAllocationResponse = {
   reversedAt: string | null;
 };
 
+/** One payment mode of a receipt. A receipt with one mode has one line. */
+export type PaymentModeLine = {
+  /** The id of this mode's own payment row: cheque moves and refunds use it. */
+  id: string;
+  mode: PaymentMode;
+  reference: string | null;
+  amountPaise: number;
+  remainingPaise: number;
+  voided: boolean;
+  cheque: ChequeResponse | null;
+};
+
 export type PaymentResponse = {
   id: string;
   kind: PaymentKind;
@@ -109,8 +136,10 @@ export type PaymentResponse = {
   voidReason: string | null;
   allocations: PaymentAllocationResponse[];
   advanceSummary: { previousRemainingPaise: number; thisRemainingPaise: number; totalAvailablePaise: number } | null;
-  /** Spec 019b: the cheque record for a cheque payment, null for other modes. */
+  /** Spec 019b: the cheque record for a cheque payment, null for other modes. For a receipt with several modes: the first mode's. */
   cheque: ChequeResponse | null;
+  /** Feedback point 3: every payment mode of this receipt, first mode first. `amountPaise`, `remainingPaise` and `allocations` above are totals over all of them. */
+  modeLines: PaymentModeLine[];
   header: Record<string, unknown> | null;
   createdAt: string;
   createdBy: string;
@@ -118,7 +147,7 @@ export type PaymentResponse = {
 
 export type PaymentWarning = { code: "cash_limit"; limitPaise: number } | { code: "duplicate_cheque_number"; reference: string };
 export type PaymentSaveResponse = { payment: PaymentResponse; warnings: PaymentWarning[] };
-export type PaymentSummary = { id: string; kind: PaymentKind; receiptNo: string | null; receiptDate: string; payerName: string; mode: PaymentMode; amountPaise: number; remainingPaise: number; voided: boolean; chequeStatus: ChequeStatus | null };
+export type PaymentSummary = { id: string; kind: PaymentKind; receiptNo: string | null; receiptDate: string; payerName: string; mode: PaymentMode; /** Feedback point 3: every mode of the receipt, first first (one entry for an ordinary receipt). */ modes: PaymentMode[]; amountPaise: number; remainingPaise: number; voided: boolean; chequeStatus: ChequeStatus | null };
 export type PaymentListResponse = { items: PaymentSummary[]; nextCursor: string | null };
 
 export type PaymentStatus = "unpaid" | "part_paid" | "paid" | "voided" | "pending_rate";

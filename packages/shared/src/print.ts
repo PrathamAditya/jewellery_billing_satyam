@@ -28,6 +28,54 @@ export function paginate<T>(rows: T[], perPage = INVOICE_LINES_PER_PAGE): T[][] 
   return pages;
 }
 
+/**
+ * Satyam feedback, point 8: a bill with many items (or long descriptions) must never run into the footer or be cut off.
+ * Rows go on pages by their height, not by a fixed count. A row's height is measured in "units": a one-line row is 1.
+ * Every page but the last holds up to `capCont` units. The last page also carries the totals and has less room: `capLast`.
+ */
+export function rowUnits(description: string, charsPerLine = 26): number {
+  const lines = (description || "Item")
+    .split("\n")
+    .reduce((n, part) => n + Math.max(1, Math.ceil(part.length / charsPerLine)), 0);
+  return 0.5 + 0.5 * Math.min(lines, 8); // a one-line row is 1 unit, two lines 1.5, three lines 2
+}
+
+export function paginateByUnits<T>(rows: T[], unitsOf: (row: T) => number, capCont: number, capLast: number): T[][] {
+  if (rows.length === 0) return [[]];
+  const pages: T[][] = [];
+  let cur: T[] = [];
+  let used = 0;
+  for (const r of rows) {
+    const u = unitsOf(r);
+    if (cur.length > 0 && used + u > capCont) {
+      pages.push(cur);
+      cur = [];
+      used = 0;
+    }
+    cur.push(r);
+    used += u;
+  }
+  pages.push(cur);
+
+  // The last page must also fit the totals. Move its trailing rows to a new last page when it is too full.
+  const last = pages[pages.length - 1]!;
+  if (last.reduce((n, r) => n + unitsOf(r), 0) > capLast) {
+    const tail: T[] = [];
+    let t = 0;
+    for (let i = last.length - 1; i >= 0; i--) {
+      const u = unitsOf(last[i]!);
+      if (tail.length > 0 && t + u > capLast) break;
+      tail.unshift(last[i]!);
+      t += u;
+    }
+    const head = last.slice(0, last.length - tail.length);
+    pages.pop();
+    if (head.length) pages.push(head);
+    pages.push(tail);
+  }
+  return pages;
+}
+
 /** Spec 014 R9 / R11: the metal line under an item, from its purity and HSN. */
 export function metalLine(purity: string, hsn: string): string {
   if (hsn === "9988") return "Job work";

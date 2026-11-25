@@ -30,18 +30,18 @@ await page.goto(`${B}/#/calculator`);
 await page.waitForSelector("h1:has-text('Invoice calculator')");
 const clear = async () => {
   await page.click('button:has-text("Clear")');
-  await page.waitForSelector('input[aria-label="Description line 1"]');
+  await page.waitForSelector('[aria-label="Description line 1"]');
 };
 
 // ---- example A: two lines, gold 1%, labour fixed 300, total fixed 1,000 ----
 await clear();
-await page.fill('input[aria-label="Description line 1"]', `Gold A ${uniq}`);
+await page.fill('[aria-label="Description line 1"]', `Gold A ${uniq}`);
 await page.fill('input[aria-label="Gross g line 1"]', "10.000");
 await page.fill('input[aria-label="Net g line 1"]', "10.000");
 await page.fill('input[aria-label="Gold rate line 1"]', "6000");
 await page.fill('input[aria-label="Labour rate line 1"]', "500");
 await page.click('button:has-text("Add line")');
-await page.fill('input[aria-label="Description line 2"]', `Gold B ${uniq}`);
+await page.fill('[aria-label="Description line 2"]', `Gold B ${uniq}`);
 await page.fill('input[aria-label="Gross g line 2"]', "5.000");
 await page.fill('input[aria-label="Net g line 2"]', "5.000");
 await page.fill('input[aria-label="Gold rate line 2"]', "6000");
@@ -64,7 +64,7 @@ await page.fill('input[aria-label="Gold discount amount"]', "1");
 
 // ---- example B: separate stone ----
 await clear();
-await page.fill('input[aria-label="Description line 1"]', `Stone ${uniq}`);
+await page.fill('[aria-label="Description line 1"]', `Stone ${uniq}`);
 await page.selectOption('select[aria-label="Pricing line 1"]', "separate");
 await page.fill('input[aria-label="Gross g line 1"]', "5.300");
 await page.fill('input[aria-label="Net g line 1"]', "5.000");
@@ -77,7 +77,7 @@ ok(t.includes("Payable ₹43,775.00"), "B: separate stone, payable ₹43,775.00 
 
 // ---- example C: combined total ----
 await clear();
-await page.fill('input[aria-label="Description line 1"]', `Combined ${uniq}`);
+await page.fill('[aria-label="Description line 1"]', `Combined ${uniq}`);
 await page.selectOption('select[aria-label="Pricing line 1"]', "combined");
 await page.fill('input[aria-label="Net g line 1"]', "6.000");
 await page.fill('input[aria-label="Total amount line 1"]', "50,000");

@@ -14,7 +14,7 @@ export type OldGoldResult = {
 };
 export type OldGoldOutcome = { ok: true; result: OldGoldResult } | { ok: false; error: string };
 
-export const OLD_GOLD_LIMITS = { maxRows: 10, maxPurityBps: 10000 } as const;
+export const OLD_GOLD_LIMITS = { maxRows: 50, maxPurityBps: 10000 } as const;
 
 export function calculateOldGold(rows: OldGoldRowInput[]): OldGoldOutcome {
   if (rows.length === 0) return { ok: false, error: "Add at least one old gold row" };

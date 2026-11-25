@@ -18,7 +18,7 @@ For every invoice, one place shows everything that settles it: payments received
   - for each at-sale or later payment there is no sentence (they show in the table).
   Amounts use the Indian format.
 - R6. **Remarks** (owner answers 26): a free-text box saved on `invoice_settlements(invoice_id, remarks, updated_at, updated_by)`, any text up to 1,000 characters, editable any time (each change stores the old value as a revision and an audit row). Remarks are never cleared by adding payments, reversing allocations or any reset of other fields. The printed page shows the fixed text, the automatic note and then the remarks.
-- R7. **Actions** from the settlement panel, all through existing endpoints and all recalculating the page:
+- R7. **Actions** from the settlement panel, all through existing endpoints and all recalculating the page (**feedback points 9 and 13, 2026-11-25:** "Use an advance" can use another customer's advance, owner only, with the box ticked on purpose: `allowOtherCustomer` on the request; both ledgers show it and the settlement says whose money it was. After a payment or an old gold receipt started from this page is saved, this page is shown again):
   - Receive payment (spec 015, `at_sale` or later, advance leftover rules apply).
   - **Use advance:** `POST /api/invoices/:id/advance-allocations` `{ allocations: [{ paymentId, amountPaise }] }`. Each payment must belong to the invoice's customer, be non-voided and have remaining at least the amount, and the total must not exceed the balance due. Several advances in one call are applied atomically. The panel lists the customer's available advances (order-linked first) with their remaining.
   - Add old gold receipt (spec 018).

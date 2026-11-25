@@ -8,6 +8,7 @@ import { getApplicable } from "../rates/api";
 import Breakdown from "./Breakdown";
 import DiscountsEditor from "./DiscountsEditor";
 import LinesEditor from "./LinesEditor";
+import ReversePanel from "./ReversePanel";
 import { createInvoice, createPendingInvoice, updateInvoice } from "./api";
 import { blankLine, isTouched, lineTextFromSaved, parseLine, parsePendingLine, type LineText } from "./lines";
 
@@ -181,7 +182,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
             <input className={inputClass} value={mobile} onChange={(e) => setMobile(e.target.value)} inputMode="tel" autoComplete="off" />
           </Field>
           <Field label="Address" error={err("customerAddress")}>
-            <input className={inputClass} value={address} onChange={(e) => setAddress(e.target.value)} autoComplete="off" />
+            <textarea className={`${inputClass} min-h-[5rem] resize-y`} rows={3} value={address} onChange={(e) => setAddress(e.target.value)} autoComplete="off" />
           </Field>
           <Field label="PAN" error={err("customerPan")}>
             <input className={`${inputClass} uppercase`} value={pan} onChange={(e) => setPan(e.target.value)} autoComplete="off" />
@@ -238,6 +239,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
         {!rateLater && rates && date && Object.values(rates).every((r) => !r) && <Alert kind="info">No rates are saved yet for this date. Type the gold rate on each line.</Alert>}
         {rateLater && <Alert kind="info">Rate pending: the gold rate is not typed now. It is fixed when the customer pays, using that day's rate. The sale needs a saved customer.</Alert>}
         <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} rates={rates} showPurity pendingRate={rateLater} bulkItems={bulkItems} />
+        {!rateLater && discountsOk && <ReversePanel rows={rows} onChange={setRows} taxMode={taxMode} discounts={discountParse.discounts} />}
         {err("lines") && <Alert>{err("lines")}</Alert>}
         {rateLater ? (
           <p className="text-xs text-stone-500">Gross defaults to net when left blank. Rates are typed per gram. Labour is typed now and fixed with the sale.</p>
@@ -254,7 +256,7 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
 
       <section className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-4">
         <Field label="Remarks (internal, never printed)" error={err("remarks")}>
-          <textarea className={inputClass} rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+          <textarea className={`${inputClass} min-h-[6rem] resize-y`} rows={4} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
         </Field>
         {editing && (
           <Field label="Reason for this change (optional)">

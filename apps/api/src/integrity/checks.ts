@@ -159,7 +159,7 @@ async function linksExist(db: D1Database): Promise<Problem[]> {
 /** I10: document numbers per series and year: unique, the trailing digits match the serial, and the counter is not behind. */
 const NUMBERED = [
   { series: "INV", sql: "SELECT id, invoice_no AS number, fy, serial FROM invoices", kind: "invoice", link: invoiceLink },
-  { series: "PAY", sql: "SELECT id, receipt_no AS number, fy, serial FROM payments WHERE receipt_no IS NOT NULL", kind: "payment", link: paymentLink },
+  { series: "PAY", sql: "SELECT id, receipt_no AS number, fy, serial FROM payments WHERE receipt_no IS NOT NULL AND lead_payment_id IS NULL", kind: "payment", link: paymentLink },
   { series: "OGP", sql: "SELECT id, receipt_no AS number, fy, serial FROM old_gold_purchases", kind: "old_gold", link: null },
   { series: "ORD", sql: "SELECT id, order_no AS number, fy, serial FROM orders", kind: "order", link: null },
   { series: "CN", sql: "SELECT id, cn_no AS number, fy, serial FROM credit_notes", kind: "credit_note", link: null },

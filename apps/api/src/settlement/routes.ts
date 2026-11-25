@@ -36,7 +36,7 @@ export async function settlementOf(db: D1Database, invoiceId: string): Promise<S
   const rows = (
     await db
       .prepare(
-        `SELECT a.id AS allocation_id, a.payment_id, a.amount_paise, p.kind, p.mode, p.reference, p.receipt_no, p.receipt_date, p.source_ogp_id,
+        `SELECT a.id AS allocation_id, a.payment_id, a.amount_paise, p.kind, p.mode, p.reference, p.receipt_no, p.receipt_date, p.source_ogp_id, p.customer_id AS pay_customer_id, p.payer_name,
                 p.amount_paise - COALESCE((SELECT SUM(x.amount_paise) FROM payment_allocations x WHERE x.payment_id = p.id AND x.reversed_at IS NULL), 0)
                   - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0) AS remaining,
                 o.receipt_no AS ogp_no
@@ -47,7 +47,7 @@ export async function settlementOf(db: D1Database, invoiceId: string): Promise<S
          ORDER BY p.receipt_date, a.created_at, a.id`,
       )
       .bind(invoiceId)
-      .all<{ allocation_id: string; payment_id: string; amount_paise: number; kind: PaymentKind; mode: PaymentMode; reference: string | null; receipt_no: string | null; receipt_date: string; source_ogp_id: string | null; remaining: number; ogp_no: string | null }>()
+      .all<{ allocation_id: string; payment_id: string; amount_paise: number; kind: PaymentKind; mode: PaymentMode; reference: string | null; receipt_no: string | null; receipt_date: string; source_ogp_id: string | null; pay_customer_id: string | null; payer_name: string; remaining: number; ogp_no: string | null }>()
   ).results;
 
   const lines: SettlementLine[] = rows.map((r) => ({
@@ -55,18 +55,25 @@ export async function settlementOf(db: D1Database, invoiceId: string): Promise<S
     paymentId: r.payment_id,
     date: r.receipt_date,
     mode: MODE_LABEL[r.mode],
-    reference: r.receipt_no ?? r.reference ?? "-",
+    // Old gold used straight on an invoice has no payment receipt (feedback point 2): its own old gold number is the reference.
+    reference: r.receipt_no ?? r.ogp_no ?? r.reference ?? "-",
     type: TYPE_LABEL[r.kind],
     amountPaise: r.amount_paise,
     paymentRemainingPaise: r.remaining,
     receiptNo: r.receipt_no,
+    fromCustomer: r.pay_customer_id !== null && r.pay_customer_id !== inv.customer_id ? r.payer_name : null,
   }));
 
   // Spec 017 R5: deterministic sentences for advance and old gold lines (not for at-sale or later payments).
   const autoNote: string[] = [];
   for (const r of rows) {
     const pay = r.receipt_no ?? "payment";
-    if (r.kind === "old_gold") {
+    if (r.pay_customer_id !== null && r.pay_customer_id !== inv.customer_id) {
+      // Feedback point 9: money of another customer. Said in plain words on the settlement page and the printed back.
+      autoNote.push(`Advance ${pay} of ${r.payer_name} used on this invoice: ${formatMoney(r.amount_paise)}. Remaining in ${pay}: ${formatMoney(r.remaining)}.`);
+    } else if (r.kind === "old_gold" && !r.receipt_no) {
+      autoNote.push(`Old gold ${r.ogp_no ?? ""} adjusted against this invoice: ${formatMoney(r.amount_paise)}.`.replace("  ", " "));
+    } else if (r.kind === "old_gold") {
       autoNote.push(`Old gold ${r.ogp_no ?? ""} adjusted through ${pay}: ${formatMoney(r.amount_paise)}. Remaining in ${pay}: ${formatMoney(r.remaining)}.`.replace("  ", " "));
     } else if (r.kind === "advance" || r.kind === "opening_advance") {
       autoNote.push(`Advance ${pay} used: ${formatMoney(r.amount_paise)}. Remaining in ${pay}: ${formatMoney(r.remaining)}.`);
@@ -166,10 +173,18 @@ settlementRoutes.post("/:id/advance-allocations", async (c) => {
   for (const a of requested) perPayment.set(a.paymentId, (perPayment.get(a.paymentId) ?? 0) + a.amountPaise);
   if (perPayment.size !== requested.length) return c.json({ error: "validation", message: "Each advance can be listed once" }, 400);
 
+  const fromOthers: { paymentId: string; customerId: string }[] = [];
   for (const [paymentId, amount] of perPayment) {
     const p = await db.prepare("SELECT customer_id, kind, voided_at, amount_paise FROM payments WHERE id = ?1").bind(paymentId).first<{ customer_id: string | null; kind: string; voided_at: string | null; amount_paise: number }>();
     if (!p) return c.json({ error: "payment_not_found", message: "One of the advances does not exist" }, 400);
-    if (p.customer_id !== inv.customer_id) return c.json({ error: "customer_mismatch", message: "That advance belongs to another customer" }, 400);
+    if (p.customer_id !== inv.customer_id) {
+      // Feedback point 9: using another customer's advance is allowed only when asked for on purpose, by someone who may do it,
+      // and only between two saved customers, so both ledgers can show it.
+      if (!parsed.data.allowOtherCustomer) return c.json({ error: "customer_mismatch", message: "That advance belongs to another customer" }, 400);
+      if (!user.permissions.includes("payments.void")) return c.json({ error: "forbidden", message: "Only the owner can use another customer's advance", permission: "payments.void" }, 403);
+      if (!inv.customer_id || !p.customer_id) return c.json({ error: "customer_required", message: "Both the invoice and the advance need a saved customer" }, 400);
+      fromOthers.push({ paymentId, customerId: p.customer_id });
+    }
     if (p.voided_at) return c.json({ error: "payment_voided", message: "That advance is voided" }, 409);
     if (!(USABLE_KINDS as readonly string[]).includes(p.kind)) return c.json({ error: "kind_not_usable", message: `${KIND_LABEL[p.kind as PaymentKind] ?? p.kind} money cannot be used on an invoice` }, 400);
     const remaining = p.amount_paise - (await db.prepare("SELECT COALESCE(SUM(amount_paise),0) AS n FROM payment_allocations WHERE payment_id = ?1 AND reversed_at IS NULL").bind(paymentId).first<{ n: number }>())!.n - (await refundedOf(db, paymentId));
@@ -186,7 +201,7 @@ settlementRoutes.post("/:id/advance-allocations", async (c) => {
           .prepare("INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)")
           .bind(newId(), a.paymentId, inv.id, a.amountPaise, now, user.id),
       ),
-      auditStatement(db, { actor: user.id, action: "advance_applied", entity: "invoice", entityId: inv.id, detail: { totalPaise: total, payments: requested.length } }),
+      auditStatement(db, { actor: user.id, action: "advance_applied", entity: "invoice", entityId: inv.id, detail: { totalPaise: total, payments: requested.length, ...(fromOthers.length ? { fromOtherCustomers: fromOthers } : {}) } }),
     ]);
   } catch (e) {
     const m = e instanceof Error ? e.message : "";

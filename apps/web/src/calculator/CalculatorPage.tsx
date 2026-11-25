@@ -5,6 +5,7 @@ import { Alert, btnSecondary } from "../customers/ui";
 import Breakdown from "../invoice/Breakdown";
 import DiscountsEditor from "../invoice/DiscountsEditor";
 import LinesEditor from "../invoice/LinesEditor";
+import ReversePanel from "../invoice/ReversePanel";
 import { BABA_EXAMPLE, blankLine, isTouched, parseLine, type LineText } from "../invoice/lines";
 
 export default function CalculatorPage() {
@@ -64,6 +65,7 @@ export default function CalculatorPage() {
 
         <div className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-4">
           <LinesEditor rows={rows} onChange={setRows} rowErrors={rowErrors} />
+          {discountsOk && <ReversePanel rows={rows} onChange={setRows} taxMode={taxMode} discounts={discountParse.discounts} />}
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium">Sale is</span>
             <div className="flex">

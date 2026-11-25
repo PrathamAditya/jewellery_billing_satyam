@@ -1,5 +1,5 @@
 import type { InvoiceLineInput, PricingMode } from "@jewellery/calc";
-import { polishWeightMg } from "@jewellery/calc";
+import { labourExGstPaisePerKg, polishWeightMg } from "@jewellery/calc";
 import {
   PURITY_RATE_KIND,
   formatWeightGrams,
@@ -23,6 +23,8 @@ export type LineText = {
   gold: string;
   labour: string;
   gst: string;
+  /** Feedback point 7: the labour rate typed on this row already includes GST. Never saved: the invoice stores the rate without GST. */
+  labourInclGst: boolean;
   /** Spec 012c R1: by weight (default), with a stone, or one combined total. */
   pricing: PricingMode;
   stoneWeight: string;
@@ -45,6 +47,7 @@ export const blankLine = (purity: Purity = "other"): LineText => ({
   gold: "",
   labour: "",
   gst: "3",
+  labourInclGst: false,
   pricing: "weight",
   stoneWeight: "",
   stoneAmount: "",
@@ -89,6 +92,8 @@ export function parseLine(t: LineText): Parsed {
     const labourIsZero = t.labour.trim() === "" || /^[₹\s,.0]*$/.test(t.labour);
     labour = labourIsZero ? { ok: true, paisePerKg: 0 } : parseRateInput(t.labour, "gram");
     if (!labour.ok) fieldErrors.labour = labour.message;
+    // Feedback point 7: a labour rate typed with GST included is turned into the rate without GST, which is what the engine and the saved invoice use.
+    else if (t.labourInclGst) labour = { ok: true, paisePerKg: labourExGstPaisePerKg(labour.paisePerKg, t.hsn.trim() === "9988" ? 500 : 300) };
   }
   let stoneWeightMg = 0;
   let stoneAmountPaise = 0;
@@ -174,6 +179,7 @@ export const lineTextFromSaved = (l: InvoiceLineResponse): LineText => {
     gold: pricing === "combined" ? "" : paisePerKgToInput(l.goldRatePaisePerKg, "gram"),
     labour: pricing === "combined" || !l.labourRatePaisePerKg ? "" : paisePerKgToInput(l.labourRatePaisePerKg, "gram"),
     gst: String(l.gstRateBps / 100),
+    labourInclGst: false,
     pricing,
     stoneWeight: pricing === "separate" && l.stoneWeightMg ? formatWeightGrams(l.stoneWeightMg) : "",
     stoneAmount: pricing === "separate" ? paiseToRupeeText(l.stoneAmountPaise ?? 0) : "",
@@ -218,3 +224,9 @@ export function parsePendingLine(t: LineText): PendingParsed {
     },
   };
 }
+
+/** Feedback point 5: the rate, labour and polish boxes of `from`, put on `to`. Everything else on `to` stays as it is. */
+export const copyRateBoxes = (from: LineText, to: LineText): LineText => ({ ...to, gold: from.gold, labour: from.labour, polish: from.polish, labourInclGst: from.labourInclGst });
+
+/** True when row 1 has at least one of rate, labour or polish typed, so copying it means something. */
+export const hasRateBoxes = (t: LineText) => t.gold.trim() !== "" || t.labour.trim() !== "" || t.polish.trim() !== "";

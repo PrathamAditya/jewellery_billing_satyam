@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { financialYearOf } from "@jewellery/calc";
 import {
+  MAX_PAYMENT_PAISE,
   indiaDate,
   newId,
   nameSearchKey,
@@ -63,6 +64,8 @@ type DbPayment = {
   cheque_bank: string | null;
   cheque_date: string | null;
   cheque_drawer: string | null;
+  /** Feedback point 3: set on the further payment rows of a receipt that has several modes. NULL on an ordinary payment and on the lead row. */
+  lead_payment_id: string | null;
 };
 
 type DbAllocation = {
@@ -189,6 +192,7 @@ function toResponse(p: DbPayment, allocs: DbAllocation[], refunded = 0, events: 
     })),
     advanceSummary: p.advance_summary_json ? (JSON.parse(p.advance_summary_json) as PaymentResponse["advanceSummary"]) : null,
     cheque,
+    modeLines: [{ id: p.id, mode: p.mode, reference: p.reference, amountPaise: p.amount_paise, remainingPaise: p.voided_at ? 0 : p.amount_paise - allocated, voided: p.voided_at !== null, cheque }],
     header: p.header_json ? (JSON.parse(p.header_json) as Record<string, unknown>) : null,
     createdAt: p.created_at,
     createdBy: p.created_by,
@@ -199,6 +203,41 @@ async function loadPayment(db: D1Database, id: string) {
   const row = await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>();
   if (!row) return null;
   return { row, allocs: await allocationsOf(db, id), refunded: await refundedOf(db, id), events: await chequeEventsOf(db, id) };
+}
+
+/**
+ * Feedback point 3: a receipt with several modes is several payment rows (the lead and the rows that point at it).
+ * Every row of the receipt, lead first, in the order the modes were typed. Any one of their ids finds the whole receipt.
+ */
+async function receiptRows(db: D1Database, anyId: string): Promise<DbPayment[]> {
+  const row = await db.prepare("SELECT id, lead_payment_id FROM payments WHERE id = ?1").bind(anyId).first<{ id: string; lead_payment_id: string | null }>();
+  if (!row) return [];
+  const leadId = row.lead_payment_id ?? row.id;
+  return (await db.prepare("SELECT * FROM payments WHERE id = ?1 OR lead_payment_id = ?1 ORDER BY CASE WHEN id = ?1 THEN 0 ELSE 1 END, rowid").bind(leadId).all<DbPayment>()).results;
+}
+
+/** One answer for the whole receipt: totals over its modes, the first mode's details, and every mode in `modeLines`. */
+function aggregate(parts: PaymentResponse[]): PaymentResponse {
+  const lead = parts[0]!;
+  if (parts.length === 1) return lead;
+  return {
+    ...lead,
+    amountPaise: parts.reduce((n, x) => n + x.amountPaise, 0),
+    remainingPaise: parts.reduce((n, x) => n + x.remainingPaise, 0),
+    // A receipt counts as voided only when every one of its modes is (one bounced cheque does not void the cash that came with it).
+    voided: parts.every((x) => x.voided),
+    allocations: parts.flatMap((x) => x.allocations),
+    modeLines: parts.flatMap((x) => x.modeLines),
+  };
+}
+
+/** The receipt that payment `anyId` belongs to, as the API answers for it. */
+async function respond(db: D1Database, anyId: string): Promise<PaymentResponse | null> {
+  const rows = await receiptRows(db, anyId);
+  if (rows.length === 0) return null;
+  const parts: PaymentResponse[] = [];
+  for (const r of rows) parts.push(toResponse(r, await allocationsOf(db, r.id), await refundedOf(db, r.id), await chequeEventsOf(db, r.id)));
+  return aggregate(parts);
 }
 
 /** The payment as it was asked for. A safe retry with the same id and content returns the first result (R4). */
@@ -218,6 +257,8 @@ const canonical = (b: PaymentRequest) =>
     chequeBank: b.chequeBank ?? null,
     chequeDate: b.chequeDate ?? null,
     chequeDrawer: b.chequeDrawer ?? null,
+    // Added only when there are more modes, so an ordinary receipt is stored exactly as before.
+    ...(b.extraModes.length ? { extraModes: b.extraModes.map((m) => ({ mode: m.mode, reference: m.reference ?? null, amountPaise: m.amountPaise, chequeBank: m.chequeBank ?? null, chequeDate: m.chequeDate ?? null, chequeDrawer: m.chequeDrawer ?? null })) } : {}),
   });
 
 type Plan = { kind: PaymentKind; allocations: { invoiceId?: string; openingBalanceId?: string; amountPaise: number }[]; customerId: string | null; payer: { name: string; mobile: string | null; pan: string | null; address: string | null }; orderId: string | null; /** Spec 019c R5: the pending sale this money is held against. */ pendingInvoiceId?: string };
@@ -339,34 +380,62 @@ paymentRoutes.post("/", async (c) => {
   const id = b.id ?? newId();
   const replay = classifyReplay(await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>(), (row) => row.input_json === canonical(b));
   if (replay.kind === "conflict") return c.json({ error: "id_conflict", message: "This id is already used by a different payment" }, 409);
-  if (replay.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(replay.row, await allocationsOf(db, id), await refundedOf(db, id), await chequeEventsOf(db, id)), warnings: [] });
+  if (replay.kind === "replay") return c.json<PaymentSaveResponse>({ payment: (await respond(db, id))!, warnings: [] });
 
-  const planned = await plan(db, b);
+  // Feedback point 3: the receipt's modes. The main fields are the first mode; `extraModes` are the others. The money is planned on the total.
+  const modeLines = [
+    { mode: b.mode, reference: b.purpose === "opening_advance" ? (b.oldReference ?? b.reference ?? null) : (b.reference ?? null), amountPaise: b.amountPaise, chequeBank: b.chequeBank ?? null, chequeDate: b.chequeDate ?? null, chequeDrawer: b.chequeDrawer ?? null },
+    ...b.extraModes.map((m) => ({ mode: m.mode, reference: m.reference ?? null, amountPaise: m.amountPaise, chequeBank: m.chequeBank ?? null, chequeDate: m.chequeDate ?? null, chequeDrawer: m.chequeDrawer ?? null })),
+  ];
+  const totalPaise = modeLines.reduce((n, m) => n + m.amountPaise, 0);
+  if (totalPaise > MAX_PAYMENT_PAISE) return c.json({ error: "validation", issues: [{ field: "amountPaise", message: "The total of all modes is too large" }] }, 400);
+
+  const planned = await plan(db, { ...b, amountPaise: totalPaise });
   if (!planned.ok) return c.json(planned.body, planned.status);
   const pl = planned.plan;
 
   const allocated = pl.allocations.reduce((s, a) => s + a.amountPaise, 0);
   // Spec 016 R3: opening advances from old booklets are not new receipts, so they get no PAY- number.
   const numbered = pl.kind !== "at_sale" && pl.kind !== "opening_advance";
-  const reference = b.purpose === "opening_advance" ? (b.oldReference ?? b.reference ?? null) : b.reference;
   const fy = numbered ? financialYearOf(b.date) : "";
   const previous = pl.customerId && pl.kind !== "at_sale" ? await advanceHeld(db, pl.customerId) : 0;
-  const thisRemaining = b.amountPaise - allocated;
+  const thisRemaining = totalPaise - allocated;
   const advanceSummary =
     pl.kind === "at_sale" ? null : { previousRemainingPaise: previous, thisRemainingPaise: thisRemaining, totalAvailablePaise: previous + thisRemaining };
 
   const settings = await settingsSnapshot(db);
   const warnings: PaymentWarning[] = [];
-  if (b.mode === "cash" && b.amountPaise >= settings.limits.cashWarningPaise) {
+  // The cash limit is about the cash handed over on this receipt, whichever mode it is typed on.
+  const cashPaise = modeLines.filter((m) => m.mode === "cash").reduce((n, m) => n + m.amountPaise, 0);
+  if (cashPaise > 0 && cashPaise >= settings.limits.cashWarningPaise) {
     warnings.push({ code: "cash_limit", limitPaise: settings.limits.cashWarningPaise });
   }
-  // Spec 019b C9: the same cheque number on another live cheque is a warning, never a block.
-  if (b.mode === "cheque" && b.reference) {
+  // Spec 019b C9: the same cheque number on another live cheque is a warning, never a block. Cheques on this same receipt count too.
+  const seenCheques = new Set<string>();
+  for (const m of modeLines) {
+    if (m.mode !== "cheque" || !m.reference) continue;
     const same = await db
-      .prepare("SELECT COUNT(*) AS n FROM payments WHERE mode = 'cheque' AND reference = ?1 AND voided_at IS NULL AND id <> ?2")
-      .bind(b.reference, id)
+      .prepare("SELECT COUNT(*) AS n FROM payments WHERE mode = 'cheque' AND reference = ?1 AND voided_at IS NULL AND id <> ?2 AND COALESCE(lead_payment_id, '') <> ?2")
+      .bind(m.reference, id)
       .first<{ n: number }>();
-    if ((same?.n ?? 0) > 0) warnings.push({ code: "duplicate_cheque_number", reference: b.reference });
+    if ((same?.n ?? 0) > 0 || seenCheques.has(m.reference)) {
+      if (!warnings.some((w) => w.code === "duplicate_cheque_number" && w.reference === m.reference)) warnings.push({ code: "duplicate_cheque_number", reference: m.reference });
+    }
+    seenCheques.add(m.reference);
+  }
+
+  // Share the allocations out over the modes in order: the first mode pays the first invoices, and so on, so no row is over-allocated.
+  const rowsOut = modeLines.map((m, i) => ({ ...m, rowId: i === 0 ? id : newId(), left: m.amountPaise, allocs: [] as { invoiceId?: string; openingBalanceId?: string; amountPaise: number }[] }));
+  let at = 0;
+  for (const a of pl.allocations) {
+    let need = a.amountPaise;
+    while (need > 0) {
+      while (rowsOut[at]!.left === 0) at++;
+      const take = Math.min(need, rowsOut[at]!.left);
+      rowsOut[at]!.allocs.push({ ...a, amountPaise: take });
+      rowsOut[at]!.left -= take;
+      need -= take;
+    }
   }
 
   const now = new Date().toISOString();
@@ -376,67 +445,81 @@ paymentRoutes.post("/", async (c) => {
       db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('PAY', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy),
     );
   }
-  statements.push(
-    db
-      .prepare(
-        `INSERT INTO payments (id, created_at, created_by, updated_at, updated_by, kind, receipt_no, fy, serial, receipt_date, customer_id,
-           payer_name, payer_mobile, payer_pan, payer_address, mode, reference, amount_paise, remarks, input_json, advance_summary_json, header_json, order_id)
-         VALUES (?1, ?2, ?3, ?2, ?3, ?4,
-           ${numbered ? printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)", ["?20", "?21", "?22"]) : "NULL"},
-           ?5, ${numbered ? `(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)` : "NULL"},
-           ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
-      )
-      .bind(
-        id, now, user.id, pl.kind, fy, b.date, pl.customerId, pl.payer.name, pl.payer.mobile, pl.payer.pan, pl.payer.address,
-        b.mode, reference, b.amountPaise, b.remarks, canonical(b), advanceSummary ? JSON.stringify(advanceSummary) : null,
-        JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo }),
-        pl.orderId, ...(numbered ? printedNumberValues(settings.numbering, "PAY", fy) : []),
-      ),
-  );
-  if (pl.pendingInvoiceId) {
-    // Spec 019c R5: the money is linked to the pending sale, and applied when its rate is fixed.
-    statements.push(db.prepare("UPDATE payments SET pending_invoice_id = ?2 WHERE id = ?1").bind(id, pl.pendingInvoiceId));
-  }
-  if (b.mode === "cheque") {
-    // Spec 019b C1, C8: the cheque details, and the first event: every cheque starts as 'received'.
+  const headerJson = JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo });
+  rowsOut.forEach((m, i) => {
+    if (i === 0) {
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO payments (id, created_at, created_by, updated_at, updated_by, kind, receipt_no, fy, serial, receipt_date, customer_id,
+               payer_name, payer_mobile, payer_pan, payer_address, mode, reference, amount_paise, remarks, input_json, advance_summary_json, header_json, order_id)
+             VALUES (?1, ?2, ?3, ?2, ?3, ?4,
+               ${numbered ? printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)", ["?20", "?21", "?22"]) : "NULL"},
+               ?5, ${numbered ? `(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?5)` : "NULL"},
+               ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
+          )
+          .bind(
+            id, now, user.id, pl.kind, fy, b.date, pl.customerId, pl.payer.name, pl.payer.mobile, pl.payer.pan, pl.payer.address,
+            m.mode, m.reference, m.amountPaise, b.remarks, canonical(b), advanceSummary ? JSON.stringify(advanceSummary) : null,
+            headerJson, pl.orderId, ...(numbered ? printedNumberValues(settings.numbering, "PAY", fy) : []),
+          ),
+      );
+    } else {
+      // A further mode of the same receipt: it repeats the lead's receipt number and points at the lead.
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO payments (id, created_at, created_by, updated_at, updated_by, kind, receipt_no, fy, serial, receipt_date, customer_id,
+               payer_name, payer_mobile, payer_pan, payer_address, mode, reference, amount_paise, remarks, input_json, advance_summary_json, header_json, order_id, lead_payment_id)
+             VALUES (?1, ?2, ?3, ?2, ?3, ?4, (SELECT receipt_no FROM payments WHERE id = ?5), ?6, NULL, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL, ?18, ?19, ?5)`,
+          )
+          .bind(m.rowId, now, user.id, pl.kind, id, fy, b.date, pl.customerId, pl.payer.name, pl.payer.mobile, pl.payer.pan, pl.payer.address, m.mode, m.reference, m.amountPaise, b.remarks, JSON.stringify({ receiptOf: id }), headerJson, pl.orderId),
+      );
+    }
+    if (pl.pendingInvoiceId) {
+      // Spec 019c R5: the money is linked to the pending sale, and applied when its rate is fixed.
+      statements.push(db.prepare("UPDATE payments SET pending_invoice_id = ?2 WHERE id = ?1").bind(m.rowId, pl.pendingInvoiceId));
+    }
+    if (m.mode === "cheque") {
+      // Spec 019b C1, C8: the cheque details, and the first event: every cheque starts as 'received'.
+      statements.push(
+        db.prepare("UPDATE payments SET cheque_bank = ?2, cheque_date = ?3, cheque_drawer = ?4 WHERE id = ?1").bind(m.rowId, m.chequeBank, m.chequeDate, m.chequeDrawer),
+        db
+          .prepare("INSERT INTO cheque_events (id, payment_id, status, at, actor, reason, created_at, created_by) VALUES (?1, ?2, 'received', ?3, ?4, NULL, ?3, ?4)")
+          .bind(newId(), m.rowId, now, user.id),
+      );
+    }
+    for (const a of m.allocs) {
+      statements.push(
+        db
+          .prepare(`INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`)
+          .bind(newId(), m.rowId, a.invoiceId ?? null, a.openingBalanceId ?? null, a.amountPaise, now, user.id),
+      );
+    }
     statements.push(
-      db.prepare("UPDATE payments SET cheque_bank = ?2, cheque_date = ?3, cheque_drawer = ?4 WHERE id = ?1").bind(id, b.chequeBank, b.chequeDate, b.chequeDrawer),
-      db
-        .prepare("INSERT INTO cheque_events (id, payment_id, status, at, actor, reason, created_at, created_by) VALUES (?1, ?2, 'received', ?3, ?4, NULL, ?3, ?4)")
-        .bind(newId(), id, now, user.id),
+      auditStatement(db, {
+        actor: user.id,
+        action: "payment_create",
+        entity: "payment",
+        entityId: m.rowId,
+        detail: { kind: pl.kind, mode: m.mode, amountPaise: m.amountPaise, allocated: m.allocs.length, ...(rowsOut.length > 1 ? { receiptModes: rowsOut.length, receiptLead: id } : {}) },
+      }),
     );
-  }
-  for (const a of pl.allocations) {
-    statements.push(
-      db
-        .prepare(`INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`)
-        .bind(newId(), id, a.invoiceId ?? null, a.openingBalanceId ?? null, a.amountPaise, now, user.id),
-    );
-  }
-  statements.push(
-    auditStatement(db, {
-      actor: user.id,
-      action: "payment_create",
-      entity: "payment",
-      entityId: id,
-      detail: { kind: pl.kind, mode: b.mode, amountPaise: b.amountPaise, allocated: pl.allocations.length },
-    }),
-  );
+  });
 
   try {
     await db.batch(statements);
   } catch (e) {
     if (isUniqueError(e)) {
       const again = classifyReplay(await db.prepare("SELECT * FROM payments WHERE id = ?1").bind(id).first<DbPayment>(), (row) => row.input_json === canonical(b));
-      if (again.kind === "replay") return c.json<PaymentSaveResponse>({ payment: toResponse(again.row, await allocationsOf(db, id), await refundedOf(db, id), await chequeEventsOf(db, id)), warnings: [] });
+      if (again.kind === "replay") return c.json<PaymentSaveResponse>({ payment: (await respond(db, id))!, warnings: [] });
       return c.json({ error: "id_conflict", message: "This id is already used by a different payment" }, 409);
     }
     const g = guardCode(e);
     if (g) return c.json({ error: g, message: g === "exceeds_due" ? "An invoice would be paid more than it owes. Check the amounts." : "The amounts allocated are more than the payment." }, 409);
     throw e;
   }
-  const saved = await loadPayment(db, id);
-  return c.json<PaymentSaveResponse>({ payment: toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events), warnings }, 201);
+  return c.json<PaymentSaveResponse>({ payment: (await respond(db, id))!, warnings }, 201);
 });
 
 // ---- search (R9) ----
@@ -463,11 +546,16 @@ paymentRoutes.get("/", async (c) => {
   if (q) {
     where.push(`(p.receipt_no LIKE ${add(`%${escapeLike(q.toUpperCase())}%`)} ESCAPE '\\' OR p.payer_name LIKE ${add(`%${escapeLike(nameSearchKey(q))}%`)} ESCAPE '\\' OR p.reference LIKE ${add(`%${escapeLike(q)}%`)} ESCAPE '\\')`);
   }
+  // Feedback point 3: a receipt with several modes is listed once (by its lead row), with all its modes and the total.
+  where.push("p.lead_payment_id IS NULL");
   if (customerId) where.push(`p.customer_id = ${add(customerId)}`);
-  if (mode) where.push(`p.mode = ${add(mode)}`);
+  if (mode) {
+    const m = add(mode);
+    where.push(`(p.mode = ${m} OR EXISTS (SELECT 1 FROM payments f WHERE f.lead_payment_id = p.id AND f.mode = ${m}))`);
+  }
   if (kind) where.push(`p.kind = ${add(kind)}`);
-  if (status === "active") where.push("p.voided_at IS NULL");
-  if (status === "voided") where.push("p.voided_at IS NOT NULL");
+  if (status === "active") where.push(`(p.voided_at IS NULL OR EXISTS (SELECT 1 FROM payments f WHERE f.lead_payment_id = p.id AND f.voided_at IS NULL))`);
+  if (status === "voided") where.push(`(p.voided_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM payments f WHERE f.lead_payment_id = p.id AND f.voided_at IS NULL))`);
   if (from) where.push(`p.receipt_date >= ${add(from)}`);
   if (to) where.push(`p.receipt_date <= ${add(to)}`);
   // Spec 019b C12: the cheque filter. "pending" is a cheque not yet cleared or bounced.
@@ -479,25 +567,38 @@ paymentRoutes.get("/", async (c) => {
 
   const rows = (
     await c.env.DB.prepare(
-      `SELECT p.*, CASE WHEN p.voided_at IS NULL THEN p.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = p.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = p.id AND r.reversed_at IS NULL), 0) ELSE 0 END AS remaining_paise,
+      `SELECT p.*,
+         (SELECT COALESCE(SUM(x.amount_paise - COALESCE((SELECT SUM(a.amount_paise) FROM payment_allocations a WHERE a.payment_id = x.id AND a.reversed_at IS NULL), 0) - COALESCE((SELECT SUM(r.amount_paise) FROM payment_refunds r WHERE r.payment_id = x.id AND r.reversed_at IS NULL), 0)), 0)
+            FROM payments x WHERE (x.id = p.id OR x.lead_payment_id = p.id) AND x.voided_at IS NULL) AS remaining_paise,
+         (SELECT SUM(x.amount_paise) FROM payments x WHERE x.id = p.id OR x.lead_payment_id = p.id) AS total_paise,
+         (SELECT COUNT(*) FROM payments x WHERE x.lead_payment_id = p.id AND x.voided_at IS NULL) AS live_followers,
          ${LATEST_CHEQUE} AS cheque_status
        FROM payments p ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
        ORDER BY p.receipt_date DESC, p.created_at DESC, p.id DESC LIMIT ${PAGE_SIZE + 1} OFFSET ${offset}`,
     )
       .bind(...args)
-      .all<DbPayment & { remaining_paise: number; cheque_status: ChequeStatus | null }>()
+      .all<DbPayment & { remaining_paise: number; total_paise: number; live_followers: number; cheque_status: ChequeStatus | null }>()
   ).results;
+  // The further modes of the receipts on this page, in the order they were typed.
+  const pageRows = rows.slice(0, PAGE_SIZE);
+  const extraModes = new Map<string, PaymentMode[]>();
+  if (pageRows.length) {
+    const marks = pageRows.map((_, i) => `?${i + 1}`).join(", ");
+    const followers = (await c.env.DB.prepare(`SELECT lead_payment_id AS lead, mode FROM payments WHERE lead_payment_id IN (${marks}) ORDER BY rowid`).bind(...pageRows.map((r) => r.id)).all<{ lead: string; mode: PaymentMode }>()).results;
+    for (const f of followers) extraModes.set(f.lead, [...(extraModes.get(f.lead) ?? []), f.mode]);
+  }
   const body: PaymentListResponse = {
-    items: rows.slice(0, PAGE_SIZE).map<PaymentSummary>((r) => ({
+    items: pageRows.map<PaymentSummary>((r) => ({
       id: r.id,
       kind: r.kind,
       receiptNo: r.receipt_no,
       receiptDate: r.receipt_date,
       payerName: r.payer_name,
       mode: r.mode,
-      amountPaise: r.amount_paise,
+      modes: [r.mode, ...(extraModes.get(r.id) ?? [])],
+      amountPaise: r.total_paise,
       remainingPaise: r.remaining_paise,
-      voided: r.voided_at !== null,
+      voided: r.voided_at !== null && r.live_followers === 0,
       chequeStatus: r.cheque_status ?? null,
     })),
     nextCursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
@@ -506,9 +607,9 @@ paymentRoutes.get("/", async (c) => {
 });
 
 paymentRoutes.get("/:id", async (c) => {
-  const found = await loadPayment(c.env.DB, c.req.param("id"));
+  const found = await respond(c.env.DB, c.req.param("id"));
   if (!found) return c.json({ error: "not_found" }, 404);
-  return c.json(toResponse(found.row, found.allocs, found.refunded, found.events));
+  return c.json(found);
 });
 
 /** Remarks are the only thing that can change on a payment (R11). */
@@ -517,17 +618,18 @@ paymentRoutes.patch("/:id", async (c) => {
   const user = c.get("user");
   const parsed = paymentRemarksSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json(validationBody(parsed.error), 400);
-  const found = await loadPayment(db, c.req.param("id"));
-  if (!found) return c.json({ error: "not_found" }, 404);
+  const rows = await receiptRows(db, c.req.param("id"));
+  const lead = rows[0];
+  if (!lead) return c.json({ error: "not_found" }, 404);
   const next = parsed.data.remarks || null;
-  if (next === found.row.remarks) return c.json(toResponse(found.row, found.allocs, found.refunded, found.events));
+  if (next === lead.remarks) return c.json((await respond(db, lead.id))!);
+  // The remarks belong to the whole receipt, so every mode's row carries the same text.
   await db.batch([
-    revisionStatement(db, { entity: "payment", entityId: found.row.id, snapshot: found.row, reason: "remarks changed", actor: user.id }),
-    db.prepare("UPDATE payments SET remarks = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?1").bind(found.row.id, next, new Date().toISOString(), user.id),
-    auditStatement(db, { actor: user.id, action: "payment_remarks", entity: "payment", entityId: found.row.id }),
+    revisionStatement(db, { entity: "payment", entityId: lead.id, snapshot: lead, reason: "remarks changed", actor: user.id }),
+    db.prepare("UPDATE payments SET remarks = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?1 OR lead_payment_id = ?1").bind(lead.id, next, new Date().toISOString(), user.id),
+    auditStatement(db, { actor: user.id, action: "payment_remarks", entity: "payment", entityId: lead.id }),
   ]);
-  const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
+  return c.json((await respond(db, lead.id))!);
 });
 
 /** Spec 015 R8, M7: voiding reverses the allocations in the same batch. Old gold receipts are voided with their receipt. */
@@ -536,25 +638,27 @@ paymentRoutes.post("/:id/void", async (c) => {
   const user = c.get("user");
   const parsed = voidPaymentSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json(validationBody(parsed.error), 400);
-  const found = await loadPayment(db, c.req.param("id"));
-  if (!found) return c.json({ error: "not_found" }, 404);
-  if (found.row.voided_at) return c.json({ error: "already_voided", message: "This payment is already voided" }, 409);
-  if ((await refundedOf(db, found.row.id)) > 0) {
-    return c.json({ error: "has_refunds", message: "This payment has refunds. Reverse the refunds first." }, 409);
-  }
-  if (found.row.kind === "old_gold") {
-    return c.json({ error: "old_gold_payment", message: "This payment came from an old gold receipt. Void the old gold receipt instead." }, 409);
+  const rows = await receiptRows(db, c.req.param("id"));
+  if (rows.length === 0) return c.json({ error: "not_found" }, 404);
+  // Voiding a receipt voids every one of its modes still live (a mode that was a bounced cheque is already voided and stays as it is).
+  const live = rows.filter((r) => !r.voided_at);
+  if (live.length === 0) return c.json({ error: "already_voided", message: "This payment is already voided" }, 409);
+  for (const r of live) {
+    if ((await refundedOf(db, r.id)) > 0) return c.json({ error: "has_refunds", message: "This payment has refunds. Reverse the refunds first." }, 409);
+    if (r.kind === "old_gold") return c.json({ error: "old_gold_payment", message: "This payment came from an old gold receipt. Void the old gold receipt instead." }, 409);
   }
   const now = new Date().toISOString();
-  const live = found.allocs.filter((a) => !a.reversed_at);
-  const statements = [
-    db.prepare("UPDATE payments SET voided_at = ?2, voided_by = ?3, void_reason = ?4, updated_at = ?2, updated_by = ?3 WHERE id = ?1").bind(found.row.id, now, user.id, parsed.data.reason),
-    ...live.map((a) => db.prepare("UPDATE payment_allocations SET reversed_at = ?2, reversed_by = ?3, reverse_reason = ?4 WHERE id = ?1").bind(a.id, now, user.id, `payment ${found.row.receipt_no ?? found.row.id} voided`)),
-    auditStatement(db, { actor: user.id, action: "payment_void", entity: "payment", entityId: found.row.id, detail: { reason: parsed.data.reason, reversedAllocations: live.length } }),
-  ];
+  const statements = [];
+  for (const r of live) {
+    const liveAllocs = (await allocationsOf(db, r.id)).filter((a) => !a.reversed_at);
+    statements.push(
+      db.prepare("UPDATE payments SET voided_at = ?2, voided_by = ?3, void_reason = ?4, updated_at = ?2, updated_by = ?3 WHERE id = ?1").bind(r.id, now, user.id, parsed.data.reason),
+      ...liveAllocs.map((a) => db.prepare("UPDATE payment_allocations SET reversed_at = ?2, reversed_by = ?3, reverse_reason = ?4 WHERE id = ?1").bind(a.id, now, user.id, `payment ${r.receipt_no ?? r.id} voided`)),
+      auditStatement(db, { actor: user.id, action: "payment_void", entity: "payment", entityId: r.id, detail: { reason: parsed.data.reason, reversedAllocations: liveAllocs.length } }),
+    );
+  }
   await db.batch(statements);
-  const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
+  return c.json((await respond(db, rows[0]!.id))!);
 });
 
 /** Spec 019b C12: the cheques not yet cleared or bounced, for the Payments page. Declared before /:id routes. */
@@ -622,8 +726,7 @@ paymentRoutes.post("/:id/cheque", async (c) => {
       }),
     ]);
   }
-  const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
+  return c.json((await respond(db, found.row.id))!);
 });
 
 /** Spec 016 R8: pay money back from an advance. Refunds are never deleted; they are reversed. */
@@ -642,7 +745,7 @@ paymentRoutes.post("/:id/refunds", async (c) => {
   const id = b.id ?? newId();
   const existing = await db.prepare("SELECT payment_id, amount_paise FROM payment_refunds WHERE id = ?1").bind(id).first<{ payment_id: string; amount_paise: number }>();
   if (existing) {
-    if (existing.payment_id === found.row.id && existing.amount_paise === b.amountPaise) return c.json(toResponse(found.row, found.allocs, found.refunded, found.events));
+    if (existing.payment_id === found.row.id && existing.amount_paise === b.amountPaise) return c.json((await respond(db, found.row.id))!);
     return c.json({ error: "id_conflict", message: "This id is already used by a different refund" }, 409);
   }
   try {
@@ -656,8 +759,7 @@ paymentRoutes.post("/:id/refunds", async (c) => {
     if (guardCode(e) || guardCodeRefund(e)) return c.json({ error: "exceeds_remaining", message: "A refund is more than this payment still holds." }, 409);
     throw e;
   }
-  const saved = await loadPayment(db, found.row.id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events), 201);
+  return c.json((await respond(db, found.row.id))!, 201);
 });
 
 /** Spec 015 R7: one allocation is undone; the money goes back to the payment's remaining. */
@@ -675,6 +777,5 @@ allocationRoutes.post("/:id/reverse", async (c) => {
     db.prepare("UPDATE payment_allocations SET reversed_at = ?2, reversed_by = ?3, reverse_reason = ?4 WHERE id = ?1").bind(alloc.id, new Date().toISOString(), user.id, parsed.data.reason),
     auditStatement(db, { actor: user.id, action: "allocation_reverse", entity: "payment", entityId: alloc.payment_id, detail: { allocation: alloc.id, reason: parsed.data.reason } }),
   ]);
-  const saved = await loadPayment(db, alloc.payment_id);
-  return c.json(toResponse(saved!.row, saved!.allocs, saved!.refunded, saved!.events));
+  return c.json((await respond(db, alloc.payment_id))!);
 });
