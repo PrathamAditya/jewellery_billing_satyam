@@ -231,13 +231,33 @@ function aggregate(parts: PaymentResponse[]): PaymentResponse {
   };
 }
 
+/** Combined remaining balance due across all live (non-reversed, non-voided, fixed-rate) invoices paid by this receipt, or null if none. */
+async function invoiceBalanceDueOf(db: D1Database, parts: PaymentResponse[]): Promise<number | null> {
+  const invoiceIds = [...new Set(parts.flatMap((p) => p.allocations).filter((a) => !a.reversed && a.invoiceId).map((a) => a.invoiceId!))];
+  if (invoiceIds.length === 0) return null;
+  let totalDue = 0;
+  let counted = 0;
+  for (const invId of invoiceIds) {
+    const iv = await db
+      .prepare("SELECT payable_paise, voided_at, rate_status FROM invoices WHERE id = ?1")
+      .bind(invId)
+      .first<{ payable_paise: number; voided_at: string | null; rate_status: string }>();
+    if (!iv || iv.voided_at || (iv.rate_status ?? "fixed") !== "fixed") continue;
+    counted++;
+    totalDue += Math.max(0, iv.payable_paise - (await receivedFor(db, invId)));
+  }
+  return counted > 0 ? totalDue : null;
+}
+
 /** The receipt that payment `anyId` belongs to, as the API answers for it. */
 async function respond(db: D1Database, anyId: string): Promise<PaymentResponse | null> {
   const rows = await receiptRows(db, anyId);
   if (rows.length === 0) return null;
   const parts: PaymentResponse[] = [];
   for (const r of rows) parts.push(toResponse(r, await allocationsOf(db, r.id), await refundedOf(db, r.id), await chequeEventsOf(db, r.id)));
-  return aggregate(parts);
+  const out = aggregate(parts);
+  out.invoiceBalanceDuePaise = await invoiceBalanceDueOf(db, parts);
+  return out;
 }
 
 /** The payment as it was asked for. A safe retry with the same id and content returns the first result (R4). */
@@ -303,6 +323,28 @@ async function plan(db: D1Database, b: PaymentRequest): Promise<{ ok: true; plan
     return { ok: true, plan: { kind: "advance", customerId: c.id, payer: { name: c.name, mobile: c.mobile, pan: c.pan, address: c.address }, allocations: [], orderId: null, pendingInvoiceId: b.invoiceId } };
   }
 
+  if (!b.customerId && b.purpose === "against_invoices" && b.invoiceId) {
+    // Later payment on a walk-in invoice (no saved customer): pay that invoice directly up to what it owes.
+    const inv = await db
+      .prepare("SELECT id, customer_id, customer_name, customer_mobile, customer_pan, customer_address, payable_paise, voided_at, rate_status FROM invoices WHERE id = ?1")
+      .bind(b.invoiceId)
+      .first<{ id: string; customer_id: string | null; customer_name: string; customer_mobile: string | null; customer_pan: string | null; customer_address: string | null; payable_paise: number; voided_at: string | null; rate_status: string }>();
+    if (!inv) return { ok: false, status: 400, body: { error: "invoice_not_found", message: "That invoice does not exist" } };
+    if (inv.voided_at) return { ok: false, status: 409, body: { error: "invoice_voided", message: "That invoice is voided" } };
+    if ((inv.rate_status ?? "fixed") === "pending") return { ok: false, status: 409, body: { error: "rate_pending", message: "The rate of that sale is not fixed yet." } };
+    const due = inv.payable_paise - (await receivedFor(db, inv.id));
+    if (b.amountPaise > due) return { ok: false, status: 409, body: { error: "exceeds_due", message: `The invoice only owes ₹${(due / 100).toFixed(2)}`, dueAmountPaise: due } };
+    return {
+      ok: true,
+      plan: {
+        kind: "invoice_payment",
+        orderId: null,
+        customerId: inv.customer_id,
+        payer: { name: inv.customer_name, mobile: inv.customer_mobile, pan: inv.customer_pan, address: inv.customer_address },
+        allocations: [{ invoiceId: inv.id, amountPaise: b.amountPaise }],
+      },
+    };
+  }
   if (!b.customerId) return { ok: false, status: 400, body: { error: "validation", issues: [{ field: "customerId", message: "Choose the customer" }] } };
   const cust = await db.prepare("SELECT id, name, mobile, pan, address, voided_at FROM customers WHERE id = ?1").bind(b.customerId).first<{ id: string; name: string; mobile: string | null; pan: string | null; address: string | null; voided_at: string | null }>();
   if (!cust) return { ok: false, status: 400, body: { error: "customer_not_found", message: "That customer does not exist" } };

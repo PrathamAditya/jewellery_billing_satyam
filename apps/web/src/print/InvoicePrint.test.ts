@@ -62,12 +62,28 @@ describe("invoice print: reference figures", () => {
     }
   });
 
-  it("prints the settlement on the back: advance received and balance due", () => {
-    const html = render(invoice(1));
+  it("prints the settlement on the back: advance, old gold, and payment sections with balance due", () => {
+    const rich = {
+      ...settlement,
+      lines: [
+        { allocationId: "a1", paymentId: "p1", date: "2026-10-30", mode: "UPI", reference: "PAY-0001", type: "Advance", kind: "advance", amountPaise: 1_000_000, paymentRemainingPaise: 0, receiptNo: "PAY-0001", fromCustomer: null },
+        { allocationId: "a2", paymentId: "p2", date: "2026-10-31", mode: "Old Gold", reference: "OGP-0001", type: "Old gold", kind: "old_gold", amountPaise: 500_000, paymentRemainingPaise: 0, receiptNo: null, fromCustomer: null },
+        { allocationId: "a3", paymentId: "p3", date: "2026-11-01", mode: "Cash", reference: "PAY-0002", type: "Later payment", kind: "invoice_payment", amountPaise: 200_000, paymentRemainingPaise: 0, receiptNo: "PAY-0002", fromCustomer: null },
+      ],
+    } as unknown as SettlementResponse;
+    const html = render(invoice(1), rich);
     expect(html).toContain("Settlement and Payment Record");
+    expect(html).toContain("Advance");
+    expect(html).toContain("Old Gold");
+    expect(html).toContain("Payment");
+    expect(html).toContain("10,000.00");
+    expect(html).toContain("5,000.00");
+    expect(html).toContain("2,000.00");
     expect(html).toContain("17,000.00");
     expect(html).toContain("1,89,323.00");
     expect(html).toContain("PAY-0001");
+    expect(html).toContain("OGP-0001");
+    expect(html).toContain("PAY-0002");
   });
 
   it("never prints internal fields: gold and labour rates are not in the markup", () => {

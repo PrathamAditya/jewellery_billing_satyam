@@ -65,6 +65,8 @@ export type OldGoldResponse = {
   settlementMethod: "Ledger Adjustment" | "Direct Payment";
   settlementNote: string;
   invoiceId: string | null;
+  invoiceNo?: string | null;
+  invoiceBalanceDuePaise?: number | null;
   orderId: string | null;
   rows: OldGoldRowResponse[];
   originalPaise: number;

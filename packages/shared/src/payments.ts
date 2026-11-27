@@ -136,6 +136,8 @@ export type PaymentResponse = {
   voidReason: string | null;
   allocations: PaymentAllocationResponse[];
   advanceSummary: { previousRemainingPaise: number; thisRemainingPaise: number; totalAvailablePaise: number } | null;
+  /** Combined remaining balance due across live invoices paid by this receipt, or null if not against an invoice. */
+  invoiceBalanceDuePaise?: number | null;
   /** Spec 019b: the cheque record for a cheque payment, null for other modes. For a receipt with several modes: the first mode's. */
   cheque: ChequeResponse | null;
   /** Feedback point 3: every payment mode of this receipt, first mode first. `amountPaise`, `remainingPaise` and `allocations` above are totals over all of them. */

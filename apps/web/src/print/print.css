@@ -27,30 +27,21 @@
 .front-main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .front-foot { flex: none; padding-top: 3mm; }
 
-/* An A5 receipt block: content first, the footer follows it (feedback points 10 and 12). The padding of .receipt-a5 is 7mm 9mm. */
+/* An A5 landscape receipt page: content first, the footer follows it. */
 .receipt-col { height: 100%; display: flex; flex-direction: column; }
 .receipt-main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .receipt-foot { flex: none; padding-top: 2mm; }
 
-/* An A5 landscape receipt block. Two blocks make one A4 sheet. */
+/* Actual A5 landscape page (210mm x 148mm). */
 .receipt-a5 {
   width: 210mm;
-  height: 148.5mm;
-  padding: 7mm 9mm;
+  height: 148mm;
+  padding: 6.5mm 9mm;
   box-sizing: border-box;
   position: relative;
   background: var(--print-cream);
   overflow: hidden;
 }
-.a4-sheet {
-  width: 210mm;
-  height: 297mm;
-  box-sizing: border-box;
-  position: relative;
-  background: var(--print-cream);
-  overflow: hidden;
-}
-.cut-line { border-top: 1px dashed #888; width: 210mm; }
 
 .watermark {
   position: absolute; inset: 0; pointer-events: none; opacity: 0.05;
@@ -61,10 +52,11 @@
 .value { font-size: 9pt; font-weight: 600; }
 /* Named ptable, not grid: Tailwind's "grid" class sets display:grid, which breaks table layout. */
 table.ptable { width: 100%; border-collapse: collapse; font-size: 8pt; }
-table.ptable th { background: var(--print-burgundy); color: #fff; font-weight: 600; text-align: left; padding: 2mm; font-size: 7pt; letter-spacing: 0.04em; }
-table.ptable td { padding: 1.6mm 2mm; border-bottom: 1px solid var(--print-line); vertical-align: top; }
+table.ptable th { background: var(--print-burgundy); color: #fff; font-weight: 600; text-align: left; padding: 1.7mm 2mm; font-size: 7pt; letter-spacing: 0.04em; }
+table.ptable td { padding: 1.4mm 2mm; border-bottom: 1px solid var(--print-line); vertical-align: top; }
 table.ptable td.r, table.ptable th.r { text-align: right; }
-.total-box { background: var(--print-burgundy); color: #fff; padding: 2.5mm 3mm; border-radius: 1.5mm; }
+.total-box { background: var(--print-burgundy); color: #fff; padding: 2.2mm 3mm; border-radius: 1.5mm; }
+.sign-line { border-top: 1px solid var(--print-ink); padding-top: 1mm; min-width: 34mm; text-align: right; }
 .void-stamp {
   position: absolute; top: 90mm; left: 30mm; transform: rotate(-22deg);
   font-size: 46pt; font-weight: 700; color: rgba(180, 30, 30, 0.35);
@@ -83,7 +75,7 @@ table.ptable td.r, table.ptable th.r { text-align: right; }
   .print-stage { background: #d9d6cf; padding: 16px 0 32px; min-height: 100vh; overflow-x: auto; }
   .print-stage > * { margin: 0 auto 8mm; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); }
 }
-/* Phones: scale the A4 pages down so they fit the width without sideways scrolling of the page. */
+/* Phones: scale the pages down so they fit the width without sideways scrolling of the page. */
 @media screen and (max-width: 820px) {
   .print-stage { zoom: 0.42; }
 }
@@ -96,5 +88,5 @@ table.ptable td.r, table.ptable th.r { text-align: right; }
   .print-stage > * { margin: 0 !important; box-shadow: none !important; }
   /* Each sheet starts a new printed page; the first one does not add a blank page before it. */
   .print-stage > * + * { break-before: page; }
-  .page, .a4-sheet, .receipt-a5, .print-stage { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page, .receipt-a5, .print-stage { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

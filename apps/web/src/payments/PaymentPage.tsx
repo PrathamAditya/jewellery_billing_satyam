@@ -95,6 +95,9 @@ export default function PaymentPage({ id }: { id: string }) {
       <dl className="bg-white border border-stone-200 rounded-xl px-4 py-2 grid sm:grid-cols-2 gap-x-6">
         <div className="py-1.5"><dt className="text-sm text-stone-500">Amount</dt><dd className="font-medium">{formatMoney(p.amountPaise)}</dd></div>
         <div className="py-1.5"><dt className="text-sm text-stone-500">Left as advance</dt><dd className="font-medium">{formatMoney(p.remainingPaise)}</dd></div>
+        {p.invoiceBalanceDuePaise !== null && p.invoiceBalanceDuePaise !== undefined && (
+          <div className="py-1.5"><dt className="text-sm text-stone-500">Balance due on invoice(s)</dt><dd className="font-medium">{formatMoney(p.invoiceBalanceDuePaise)}</dd></div>
+        )}
         <div className="py-1.5">
           <dt className="text-sm text-stone-500">{p.modeLines.length > 1 ? "Modes" : "Mode"}</dt>
           <dd>

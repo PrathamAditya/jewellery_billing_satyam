@@ -338,6 +338,7 @@ export function OldGoldPage({ id }: { id: string }) {
       <dl className="bg-white border border-stone-200 rounded-xl px-4 py-2 grid sm:grid-cols-2 gap-x-6">
         <div className="py-1.5"><dt className="text-sm text-stone-500">Settled as</dt><dd>{r.treatmentLabel}</dd></div>
         <div className="py-1.5"><dt className="text-sm text-stone-500">Settlement note</dt><dd>{r.settlementNote}</dd></div>
+        {r.invoiceNo && <div className="py-1.5"><dt className="text-sm text-stone-500">Against invoice</dt><dd><a className="underline" href={`#/invoices/${r.invoiceId}`}>{r.invoiceNo}</a>{r.invoiceBalanceDuePaise !== null && r.invoiceBalanceDuePaise !== undefined ? ` · Balance due: ${formatMoney(r.invoiceBalanceDuePaise)}` : ""}</dd></div>}
         {r.payment?.receiptNo && <div className="py-1.5"><dt className="text-sm text-stone-500">Advance receipt</dt><dd><a className="underline" href={`#/payments/${r.payment.id}`}>{r.payment.receiptNo}</a> · {formatMoney(r.payment.remainingPaise)} still held</dd></div>}
         {r.payouts.map((p) => <div key={p.id} className="py-1.5"><dt className="text-sm text-stone-500">Paid to customer</dt><dd>{formatMoney(p.amountPaise)} by {p.mode.replace("_", " ")}{p.reference ? ` · ${p.reference}` : ""}</dd></div>)}
       </dl>

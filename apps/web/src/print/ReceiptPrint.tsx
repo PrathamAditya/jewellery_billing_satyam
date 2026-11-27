@@ -7,7 +7,7 @@ import { niceDate } from "./InvoicePrint";
 const PAYMENT_TYPE: Record<PaymentResponse["kind"], string> = {
   advance: "Advance Payment",
   invoice_payment: "Payment Against Invoice",
-  at_sale: "Payment At Sale",
+  at_sale: "Payment At Delivery",
   opening_advance: "Opening Advance",
   old_gold: "Old Gold",
 };
@@ -15,93 +15,131 @@ const PAYMENT_TYPE: Record<PaymentResponse["kind"], string> = {
 /** Spec 014 R19: rate per gram from the stored rate per kg (paise). */
 const ratePerGram = (rateKgPaise: number) => formatMoney(Math.round(rateKgPaise / 1000));
 
-/** Spec 014 R18: payment receipt, A5 landscape. */
+/** Spec 014 R18: payment receipt on A5 landscape paper, matching the reference PDF design. */
 export function PaymentReceipt({ p, header, copyLabel }: { p: PaymentResponse; header: Header; copyLabel: string }) {
-  const against = p.allocations.map((a) => a.invoiceNo).filter((n): n is string => Boolean(n)).join(", ") || "-";
+  const against = [...new Set(p.allocations.filter((a) => !a.reversed).map((a) => a.invoiceNo).filter((n): n is string => Boolean(n)))].join(", ") || "-";
   const summary = p.advanceSummary;
+  const hasBalanceDue = p.invoiceBalanceDuePaise !== null && p.invoiceBalanceDuePaise !== undefined;
+  const isAdvanceReceipt = p.kind === "advance" || p.kind === "opening_advance" || p.kind === "old_gold";
   return (
     <div className="receipt-a5">
       {p.voided && <div className="void-stamp small">VOID</div>}
       <div className="watermark" />
       <div className="receipt-col">
-      <div className="receipt-main">
-      <div className="flex justify-between items-start">
-        <Brand header={header} />
-        <div className="text-right">
-          <div className="label">{copyLabel}</div>
-          <div className="serif text-[18pt] leading-none mt-1">Payment Receipt</div>
-          <div className="text-[6.5pt] tracking-[0.2em] mt-1" style={{ color: "var(--print-gold)" }}>PAYMENT ACKNOWLEDGEMENT</div>
-        </div>
-      </div>
-      <div className="rule mt-2" />
-
-      <div className="grid grid-cols-3 gap-3 mt-2">
-        <Field label="Receipt number">{p.receiptNo}</Field>
-        <Field label="Receipt date">{niceDate(p.receiptDate)}</Field>
-        <Field label="Received from">{p.payer.name}</Field>
-        {p.payer.mobile && <Field label="Mobile">{p.payer.mobile}</Field>}
-        {p.payer.pan && <Field label="PAN">{p.payer.pan}</Field>}
-      </div>
-
-      <table className="ptable mt-3">
-        <thead>
-          <tr><th>Particular</th><th>Payment mode</th><th>Against</th><th className="r">Amount</th></tr>
-        </thead>
-        <tbody>
-          {/* Feedback point 3: one line per payment mode (cash and UPI on the same receipt). */}
-          {p.modeLines.map((l, i) => (
-            <tr key={l.id}>
-              <td>{p.modeLines.length > 1 ? `Payment received (${i + 1} of ${p.modeLines.length})` : "Payment received"}</td>
-              <td>{MODE_LABEL[l.mode]}{l.reference ? ` · ${l.reference}` : ""}{l.voided && p.modeLines.length > 1 ? " · VOID" : ""}</td>
-              <td>{i === 0 ? against : ""}</td>
-              <td className="r">{money(l.amountPaise)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex justify-between items-end mt-3">
-        <div className="total-box">
-          <div className="label" style={{ color: "#f1e6d2" }}>Total amount received</div>
-          <div className="serif text-[16pt]">{money(p.amountPaise)}</div>
-        </div>
-        <div className="text-[8pt] max-w-[95mm]">
-          <span className="label">Amount in words</span>
-          <br />
-          {amountInWords(p.amountPaise)}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mt-2 text-[8pt]">
-        <div><span className="label">Payment type</span><br />{PAYMENT_TYPE[p.kind]}</div>
-        {summary && (
-          <div>
-            <span className="label">Advance summary</span>
-            <div>Previous advance remaining: {money(summary.previousRemainingPaise)}</div>
-            <div>This receipt remaining: {money(summary.thisRemainingPaise)}</div>
-            <div className="font-semibold">Total available: {money(summary.totalAvailablePaise)}</div>
+        <div className="receipt-main">
+          <div className="flex justify-between items-start">
+            <Brand header={header} />
+            <div className="text-right">
+              <div className="label">{copyLabel}</div>
+              <div className="serif text-[18pt] leading-none mt-0.5">Payment Receipt</div>
+              <div className="text-[6.5pt] tracking-[0.2em] mt-1" style={{ color: "var(--print-gold)" }}>PAYMENT ACKNOWLEDGEMENT</div>
+            </div>
           </div>
-        )}
-      </div>
-      {p.remarks && <p className="text-[8pt] mt-2"><span className="label">Remarks</span> {p.remarks}</p>}
-      </div>
-      <div className="receipt-foot flex justify-between text-[6.5pt]" style={{ color: "#7a6a5f" }}>
-        <span>{header.texts.receiptFooter}</span>
-        <span className="label" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
-      </div>
+          <div className="rule mt-2" />
+
+          <div className="grid grid-cols-2 gap-3 mt-1.5 pb-1.5 border-b border-[var(--print-line)]">
+            <Field label="Receipt number">{p.receiptNo}</Field>
+            <Field label="Receipt date">{niceDate(p.receiptDate)}</Field>
+          </div>
+
+          <div className="mt-1.5 p-2 border border-[var(--print-line)]" style={{ background: "#f7f1e3" }}>
+            <div className="flex justify-between items-center">
+              <div className="label" style={{ color: "var(--print-gold)" }}>Received from (customer details)</div>
+              <div className="label">Payment received</div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              <div>
+                <div className="serif text-[11pt] font-semibold leading-tight">{p.payer.name}</div>
+                <div className="text-[7pt] text-stone-600">INDIA</div>
+              </div>
+              {p.payer.mobile && <Field label="Contact / mobile">{p.payer.mobile}</Field>}
+              {p.payer.pan && <Field label="PAN number">{p.payer.pan}</Field>}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-baseline mt-2">
+            <div className="serif text-[11pt] font-semibold">Payment Details</div>
+            <div className="label">{isAdvanceReceipt ? "Advance receipt" : "Payment receipt"}</div>
+          </div>
+          <table className="ptable mt-0.5">
+            <thead>
+              <tr><th>Particular</th><th>Payment mode</th><th>{isAdvanceReceipt && against === "-" ? "Against order" : "Against"}</th><th className="r">Amount</th></tr>
+            </thead>
+            <tbody>
+              {p.modeLines.map((l, i) => (
+                <tr key={l.id}>
+                  <td>{p.modeLines.length > 1 ? `Payment received (${i + 1} of ${p.modeLines.length})` : "Payment received"}</td>
+                  <td>
+                    <span className="font-semibold">{MODE_LABEL[l.mode]}</span>
+                    {l.voided && p.modeLines.length > 1 ? " · VOID" : ""}
+                    {l.reference && <div className="text-[7pt] text-stone-600">Txn: {l.reference}</div>}
+                  </td>
+                  <td>{i === 0 ? against : ""}</td>
+                  <td className="r font-semibold">{money(l.amountPaise)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-2 p-2 border border-[var(--print-gold)] rounded" style={{ background: "#f7f1e3" }}>
+            <div className="flex justify-between items-center gap-3">
+              <div>
+                <div className="label" style={{ color: "var(--print-burgundy)" }}>Total amount received</div>
+                <div className="serif text-[15pt] font-bold leading-tight" style={{ color: "var(--print-burgundy)" }}>{money(p.amountPaise)}</div>
+              </div>
+              {hasBalanceDue && (
+                <div className="total-box text-right">
+                  <div className="label" style={{ color: "#f1e6d2" }}>Balance due</div>
+                  <div className="serif text-[14pt] leading-tight">{money(p.invoiceBalanceDuePaise!)}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-1.5 px-2 py-1 border border-[var(--print-line)] text-[7.5pt]">
+            <span className="label">Amount in words</span>{" "}
+            <span className="italic ml-1">{amountInWords(p.amountPaise)}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-1.5 text-[7.5pt]">
+            <div>
+              <span className="label">Payment type</span>
+              <div className="font-semibold">{PAYMENT_TYPE[p.kind]}</div>
+            </div>
+            {summary && (isAdvanceReceipt || summary.thisRemainingPaise > 0) && (
+              <div>
+                <span className="label">Advance summary</span>
+                <div>Previous advance remaining: {money(summary.previousRemainingPaise)}</div>
+                <div>This receipt remaining: {money(summary.thisRemainingPaise)}</div>
+                <div className="font-semibold">Total available: {money(summary.totalAvailablePaise)}</div>
+              </div>
+            )}
+          </div>
+          {p.remarks && (
+            <div className="mt-1.5 px-2 py-1 border border-[var(--print-line)] text-[7.5pt]" style={{ background: "#f7f1e3" }}>
+              <span className="label">Remarks</span> {p.remarks}
+            </div>
+          )}
+        </div>
+        <div className="receipt-foot flex justify-between items-end text-[6.5pt]" style={{ color: "#7a6a5f" }}>
+          <span>{header.texts.receiptFooter}</span>
+          <span className="label sign-line" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
+        </div>
       </div>
     </div>
   );
 }
 
 /**
- * Spec 014 R19: old gold purchase receipt, A5 landscape.
- * Feedback point 12 allows up to 50 rows, so the rows are spread over as many A5 blocks as they need. Every block repeats the
- * heading; only the last one carries the settlement, the totals and the amount in words.
+ * Spec 014 R19: old gold purchase receipt on A5 landscape paper, matching the reference PDF design.
+ * Feedback point 12 allows up to 50 rows across as many A5 sheets as needed.
  */
 type OldGoldRows = OldGoldResponse["rows"];
 
 function OldGoldBlock({ r, header, copyLabel, rows, partNo, partCount, isLast }: { r: OldGoldResponse; header: Header; copyLabel: string; rows: OldGoldRows; partNo: number; partCount: number; isLast: boolean }) {
+  const refParts = [r.invoiceNo, r.payment?.receiptNo].filter(Boolean);
+  const refText = refParts.join(" · ") || "-";
+  const hasBalanceDue = r.invoiceBalanceDuePaise !== null && r.invoiceBalanceDuePaise !== undefined;
   return (
     <div className="receipt-a5">
       {r.voided && <div className="void-stamp small">VOID</div>}
@@ -112,26 +150,39 @@ function OldGoldBlock({ r, header, copyLabel, rows, partNo, partCount, isLast }:
             <Brand header={header} />
             <div className="text-right">
               <div className="label">{copyLabel}{partCount > 1 ? ` · Sheet ${partNo} of ${partCount}` : ""}</div>
-              <div className="serif text-[18pt] leading-none mt-1">Old Gold Purchase</div>
-              <div className="text-[6.5pt] tracking-[0.2em] mt-1" style={{ color: "var(--print-gold)" }}>PURCHASE AND SETTLEMENT RECORD</div>
+              <div className="serif text-[18pt] leading-none mt-0.5">Old Gold Purchase</div>
+              <div className="text-[6.5pt] tracking-[0.2em] mt-1" style={{ color: "var(--print-gold)" }}>PURCHASE &amp; SETTLEMENT RECORD</div>
             </div>
           </div>
           <div className="rule mt-2" />
 
-          <div className="grid grid-cols-3 gap-3 mt-2">
+          <div className="grid grid-cols-3 gap-3 mt-1.5 pb-1 border-b border-[var(--print-line)]">
             <Field label="Purchase receipt no.">{r.receiptNo}</Field>
             <Field label="Receipt date">{niceDate(r.receiptDate)}</Field>
             <Field label="Settlement treatment">{r.treatmentLabel}</Field>
-            <Field label="Received from">{r.payer.name}</Field>
-            {r.payer.mobile && <Field label="Mobile">{r.payer.mobile}</Field>}
-            {r.payer.pan && <Field label="PAN">{r.payer.pan}</Field>}
           </div>
 
-          <table className="ptable mt-2">
+          <div className="mt-1.5 p-2 border border-[var(--print-line)]" style={{ background: "#f7f1e3" }}>
+            <div className="flex justify-between items-center">
+              <div className="label" style={{ color: "var(--print-gold)" }}>Received from (customer details)</div>
+              <div className="label">Old gold seller</div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              <div>
+                <div className="serif text-[11pt] font-semibold leading-tight">{r.payer.name}</div>
+                <div className="text-[7pt] text-stone-600">INDIA</div>
+              </div>
+              {r.payer.mobile && <Field label="Contact / mobile">{r.payer.mobile}</Field>}
+              {r.payer.pan && <Field label="PAN number">{r.payer.pan}</Field>}
+            </div>
+          </div>
+
+          <div className="serif text-[11pt] font-semibold mt-1.5">Old Gold Details</div>
+          <table className="ptable mt-0.5">
             <thead>
               <tr>
-                <th>S.no.</th><th>Description</th><th className="r">Gross (g)</th><th className="r">Less (g)</th><th className="r">Net (g)</th>
-                <th className="r">Purity %</th><th className="r">Rate (₹/g)</th><th className="r">Amount</th>
+                <th>S.no.</th><th>Description</th><th className="r">Gross wt. (gm)</th><th className="r">Less (gm)</th><th className="r">Net wt. (gm)</th>
+                <th className="r">Purity (%)</th><th className="r">Rate (₹/gm)</th><th className="r">Amount (₹)</th>
               </tr>
             </thead>
             <tbody>
@@ -152,42 +203,61 @@ function OldGoldBlock({ r, header, copyLabel, rows, partNo, partCount, isLast }:
 
           {isLast ? (
             <>
-              <div className="grid grid-cols-3 gap-3 mt-2 text-[8pt]">
-                <div><span className="label">Settlement method</span><br />{r.settlementMethod}</div>
-                <div><span className="label">Order / advance reference</span><br />{r.payment?.receiptNo ?? "-"}</div>
-                <div><span className="label">Payment status</span><br />{r.status}</div>
+              <div className="grid grid-cols-3 gap-3 mt-1.5 text-[7.5pt]">
+                <div><span className="label">Settlement method</span><br /><strong>{r.settlementMethod}</strong></div>
+                <div><span className="label">{r.invoiceNo ? "Invoice / advance ref." : "Order / advance reference"}</span><br /><strong>{refText}</strong></div>
+                <div><span className="label">Payment status</span><br /><strong>{r.status}</strong></div>
               </div>
 
-              <div className="flex justify-between items-end mt-2">
-                <div className="text-[8pt]">
-                  <div>Original amount {money(r.originalPaise)}</div>
-                  <div>Round off {formatRoundOffPrint(r.roundOffPaise)}</div>
-                </div>
-                <div className="total-box">
-                  <div className="label" style={{ color: "#f1e6d2" }}>Final amount</div>
-                  <div className="serif text-[16pt]">{money(r.finalPaise)}</div>
+              <div className="mt-1.5 p-1.5 border border-[var(--print-gold)] rounded">
+                <div className="label mb-1">Amount summary</div>
+                <div className={`grid gap-2 ${hasBalanceDue ? "grid-cols-4" : "grid-cols-3"}`}>
+                  <div className="border border-[var(--print-line)] px-2 py-1 rounded-sm" style={{ background: "#f7f1e3" }}>
+                    <div className="label">Original amount</div>
+                    <div className="text-[9pt] font-semibold">{money(r.originalPaise)}</div>
+                  </div>
+                  <div className="border border-[var(--print-line)] px-2 py-1 rounded-sm" style={{ background: "#f7f1e3" }}>
+                    <div className="label">Round off</div>
+                    <div className="text-[9pt] font-semibold">{formatRoundOffPrint(r.roundOffPaise)}</div>
+                  </div>
+                  <div className="total-box flex flex-col justify-center">
+                    <div className="label" style={{ color: "#f1e6d2" }}>Final amount</div>
+                    <div className="serif text-[13pt] leading-tight">{money(r.finalPaise)}</div>
+                  </div>
+                  {hasBalanceDue && (
+                    <div className="border border-[var(--print-burgundy)] px-2 py-1 rounded-sm flex flex-col justify-center" style={{ background: "#f7f1e3" }}>
+                      <div className="label" style={{ color: "var(--print-burgundy)" }}>Balance due</div>
+                      <div className="serif text-[12pt] font-bold leading-tight" style={{ color: "var(--print-burgundy)" }}>{money(r.invoiceBalanceDuePaise!)}</div>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="text-[8pt] mt-2"><span className="label">Amount in words</span> {amountInWords(r.finalPaise)}</div>
-              <p className="text-[7.5pt] mt-1">{r.settlementNote}</p>
+              <div className="mt-1 px-2 py-1 border border-[var(--print-line)] text-[7.5pt]">
+                <span className="label">Amount in words</span>{" "}
+                <span className="italic ml-1">{amountInWords(r.finalPaise)}</span>
+              </div>
+              <div className="mt-1 px-2 py-1 border border-[var(--print-line)] text-[7pt]" style={{ background: "#f7f1e3" }}>
+                <span className="label">Settlement note</span> {r.settlementNote}
+              </div>
             </>
           ) : (
             <div className="mt-2 text-[8pt] italic" style={{ color: "#7a6a5f" }}>Continued on the next sheet.</div>
           )}
         </div>
-        <div className="receipt-foot flex justify-between text-[6.5pt]" style={{ color: "#7a6a5f" }}>
-          <span>{header.texts.oldGoldSlogan}</span>
-          <span className="label" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
+        <div className="receipt-foot flex justify-between items-end text-[6.5pt]" style={{ color: "#7a6a5f" }}>
+          <span>This is a computer-generated old gold purchase record.</span>
+          <span className="tracking-[0.14em] uppercase">{header.texts.oldGoldSlogan}</span>
+          <span className="label sign-line" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
         </div>
       </div>
     </div>
   );
 }
 
-/** The old gold receipt as printed: one or more A5 blocks per copy, two blocks to an A4 sheet with a cut line between them. */
+/** The old gold receipt as printed: one A5 landscape page per sheet/copy. */
 export function OldGoldSheets({ r, header, labels }: { r: OldGoldResponse; header: Header; labels: string[] }) {
   // The starting room is a guess. After layout, a block whose content does not fit gives up one unit and the rows are placed again.
-  const [caps, setCaps] = useState({ cont: 9, last: 4 });
+  const [caps, setCaps] = useState({ cont: 8, last: 3 });
   const pages = paginateByUnits(r.rows, (x) => rowUnits(x.description, 30), caps.cont, caps.last);
   const root = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -204,34 +274,20 @@ export function OldGoldSheets({ r, header, labels }: { r: OldGoldResponse; heade
   const blocks = labels.flatMap((label) =>
     pages.map((rows, i) => <OldGoldBlock key={`${label}-${i}`} r={r} header={header} copyLabel={label} rows={rows} partNo={i + 1} partCount={pages.length} isLast={i === pages.length - 1} />),
   );
-  const sheets: ReactNode[][] = [];
-  for (let i = 0; i < blocks.length; i += 2) sheets.push(blocks.slice(i, i + 2));
   return (
     <div ref={root} style={{ display: "contents" }}>
-      {sheets.map((pair, i) => (
-        <div className="a4-sheet" key={i}>
-          {pair.map((b, j) => (
-            <Fragment key={j}>
-              {j > 0 && <div className="cut-line" />}
-              {b}
-            </Fragment>
-          ))}
-        </div>
-      ))}
+      {blocks}
     </div>
   );
 }
 
-/** A5 receipts on A4 paper: one block at the top, or two copies with a dashed cut line between them (spec 014 R6, R8). */
+/** A5 receipts: each copy renders on its own A5 landscape page. */
 export function ReceiptSheet({ labels, render }: { labels: string[]; render: (label: string) => ReactNode }) {
   return (
-    <div className="a4-sheet">
+    <>
       {labels.map((label, i) => (
-        <Fragment key={`${label}-${i}`}>
-          {i > 0 && <div className="cut-line" />}
-          {render(label)}
-        </Fragment>
+        <Fragment key={`${label}-${i}`}>{render(label)}</Fragment>
       ))}
-    </div>
+    </>
   );
 }

@@ -16,7 +16,17 @@ export function NewInvoicePage() {
     <div className="flex flex-col gap-4">
       <PhoneNote />
       <div className={pcOnly}>
-        <InvoiceForm onCancel={() => navigate("/invoices")} onSaved={(i) => navigate(`/invoices/${i.id}`)} />
+        <InvoiceForm
+          onCancel={() => navigate("/invoices")}
+          onSaved={(i) => {
+            try {
+              sessionStorage.setItem("justCreatedInvoice", i.id);
+            } catch {
+              /* convenience only */
+            }
+            navigate(`/invoices/${i.id}`);
+          }}
+        />
       </div>
     </div>
   );

@@ -58,6 +58,7 @@ export async function settlementOf(db: D1Database, invoiceId: string): Promise<S
     // Old gold used straight on an invoice has no payment receipt (feedback point 2): its own old gold number is the reference.
     reference: r.receipt_no ?? r.ogp_no ?? r.reference ?? "-",
     type: TYPE_LABEL[r.kind],
+    kind: r.kind,
     amountPaise: r.amount_paise,
     paymentRemainingPaise: r.remaining,
     receiptNo: r.receipt_no,

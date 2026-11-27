@@ -29,6 +29,10 @@ const isA4Portrait = (file) => {
   const [, w, h] = /Page size:\s+([\d.]+) x ([\d.]+) pts/.exec(execFileSync("pdfinfo", [file]).toString());
   return Math.abs(Number(w) - 595) < 1 && Math.abs(Number(h) - 842) < 1;
 };
+const isA5Landscape = (file) => {
+  const [, w, h] = /Page size:\s+([\d.]+) x ([\d.]+) pts/.exec(execFileSync("pdfinfo", [file]).toString());
+  return Math.abs(Number(w) - 595) < 2 && Math.abs(Number(h) - 420) < 2;
+};
 const textOf = (file) => execFileSync("pdftotext", [file, "-"]).toString().replace(/\s+/g, " ");
 async function saveAsPdf(name) {
   await page.waitForLoadState("networkidle");
@@ -255,7 +259,7 @@ let multiPaymentId;
   await openPrint(`/print/payment/${multiPaymentId}`, rc);
   const pdf = await saveAsPdf("feedback-receipt-two-modes");
   const text = textOf(pdf);
-  ok(pagesOf(pdf) === 1 && isA4Portrait(pdf), "10: the receipt is one A4 sheet holding the A5 receipt");
+  ok(pagesOf(pdf) === 1 && isA5Landscape(pdf), "10: the receipt is one A5 landscape page");
   ok(text.includes("Payment received (1 of 2)") && text.includes("Payment received (2 of 2)") && text.includes("Cash") && text.includes("UPI") && text.includes(`UPI-${uniq}`) && text.includes("14,500.00"), "3: the printed receipt has a line for cash and a line for UPI, and the total");
   ok(text.includes("Previous advance remaining") && text.includes("3,000.00") && text.includes("17,500.00"), "15: the printed receipt shows the previous advance (₹3,000.00) and the total available (₹17,500.00)");
   await page.screenshot({ path: `${S}/shot-receipt-two-modes.png` });
@@ -325,8 +329,8 @@ let multiPaymentId;
   let all = true;
   for (let i = 1; i <= 12; i++) if (!new RegExp(`Old Gold ${i}(?!\\d)`).test(t)) all = false;
   ok(all, "12: all 12 old gold rows are printed");
-  ok(t.includes("5,49,600.00") && isA4Portrait(pdf), `10: the total is printed, on A4 paper holding A5 blocks (${pagesOf(pdf)} sheet${pagesOf(pdf) > 1 ? "s" : ""})`);
-  ok(t.includes("Sheet 1 of") || pagesOf(pdf) === 1, "12: when the rows need more than one A5 block, each says 'Sheet n of m'");
+  ok(t.includes("5,49,600.00") && isA5Landscape(pdf), `10: the total is printed on A5 landscape (${pagesOf(pdf)} page${pagesOf(pdf) > 1 ? "s" : ""})`);
+  ok(/sheet 1 of/i.test(t) || pagesOf(pdf) === 1, "12: when the rows need more than one A5 block, each says 'Sheet n of m'");
   const clipped = await page.evaluate(() => [...document.querySelectorAll("[data-receipt-main]")].some((m) => m.scrollHeight > m.clientHeight + 1));
   ok(!clipped, "12: no row or total is cut off on the A5 blocks");
   await page.screenshot({ path: `${S}/shot-old-gold-12-rows.png` });

@@ -96,6 +96,20 @@ async function viewOf(db: D1Database, r: DbReceipt): Promise<OldGoldResponse> {
     if (p) payment = { id: p.id, receiptNo: p.receipt_no, remainingPaise: r.voided_at ? 0 : p.remaining };
   }
   const method: OldGoldResponse["settlementMethod"] = r.advance_paise + r.invoice_adjust_paise > 0 ? "Ledger Adjustment" : "Direct Payment";
+  let invoiceNo: string | null = null;
+  let invoiceBalanceDuePaise: number | null = null;
+  if (r.invoice_id) {
+    const iv = await db
+      .prepare("SELECT invoice_no, payable_paise, voided_at, rate_status FROM invoices WHERE id = ?1")
+      .bind(r.invoice_id)
+      .first<{ invoice_no: string; payable_paise: number; voided_at: string | null; rate_status: string }>();
+    if (iv) {
+      invoiceNo = iv.invoice_no;
+      if (!iv.voided_at && (iv.rate_status ?? "fixed") === "fixed") {
+        invoiceBalanceDuePaise = Math.max(0, iv.payable_paise - (await settledOn(db, r.invoice_id)));
+      }
+    }
+  }
   return {
     id: r.id,
     receiptNo: r.receipt_no,
@@ -108,6 +122,8 @@ async function viewOf(db: D1Database, r: DbReceipt): Promise<OldGoldResponse> {
     settlementMethod: method,
     settlementNote: r.settlement_note || settlementNote(r.treatment),
     invoiceId: r.invoice_id,
+    invoiceNo,
+    invoiceBalanceDuePaise,
     orderId: r.order_id,
     rows: lines.map<OldGoldRowResponse>((l) => ({ lineNo: l.line_no, description: l.description, grossMg: l.gross_mg, lessMg: l.less_mg, netMg: l.net_mg, karat: l.karat, purityBps: l.purity_bps, rateKgPaise: l.rate_paise_per_kg, amountPaise: l.amount_paise })),
     originalPaise: r.original_paise,

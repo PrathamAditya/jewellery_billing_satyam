@@ -241,6 +241,21 @@ export type InvoiceResponse = InvoiceSummary & {
 
 export type InvoiceListResponse = { items: InvoiceSummary[]; nextCursor: string | null };
 
+export type ItemSuggestion = {
+  key: string;
+  source: "stock_item" | "item_type" | "previous_line";
+  label: string;
+  detail: string;
+  description: string;
+  purity?: Purity;
+  hsn?: "7113" | "9988";
+  grossWeightMg?: number;
+  netWeightMg?: number;
+  polishBps?: number;
+  labourRatePaisePerKg?: number;
+  stockUNo?: string | null;
+};
+
 export type InvoiceHistoryEntry = {
   /** The revision that was replaced by this edit. */
   revisionNo: number;

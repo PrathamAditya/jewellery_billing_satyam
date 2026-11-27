@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { calculateInvoice, type TaxMode } from "@jewellery/calc";
-import { blankDiscounts, discountTextsFrom, newId, parseDiscountTexts, type ApplicableRatesResponse, type BulkItemResponse, type CustomerResponse, type DiscountTexts, type InvoiceResponse } from "@jewellery/shared";
+import { blankDiscounts, discountTextsFrom, newId, paisePerKgToInput, parseDiscountTexts, PURITY_RATE_KIND, type ApplicableRatesResponse, type BulkItemResponse, type CustomerResponse, type DiscountTexts, type InvoiceResponse } from "@jewellery/shared";
 import { ApiError, api } from "../api";
 import CustomerPicker from "../customers/CustomerPicker";
 import { Alert, Field, btnPrimary, btnSecondary, inputClass } from "../customers/ui";
@@ -62,9 +62,22 @@ export default function InvoiceForm({ invoice, onSaved, onCancel }: Props) {
   useEffect(() => {
     if (!date) return;
     getApplicable(date)
-      .then((a) => setRates(a.rates))
+      .then((a) => {
+        setRates(a.rates);
+        if (!editing) {
+          // Automatic rate fill on initial load / date change for rows whose gold rate is still blank.
+          setRows((prev) =>
+            prev.map((r) => {
+              if (r.gold.trim() !== "") return r;
+              const kind = PURITY_RATE_KIND[r.purity];
+              const applicable = kind ? a.rates[kind] : null;
+              return applicable ? { ...r, gold: paisePerKgToInput(applicable.pricePaisePerKg, "gram") } : r;
+            }),
+          );
+        }
+      })
       .catch(() => setRates(null));
-  }, [date]);
+  }, [date, editing]);
 
   const active = useMemo(() => rows.map((t, i) => ({ t, i, p: parseLine(t) })).filter(({ t }) => isTouched(t)), [rows]);
   const allParsed = active.length > 0 && active.every(({ p }) => p.input);

@@ -106,7 +106,8 @@ function PaymentPrintPage({ id }: { id: string }) {
   const copies = copyOrder(data.header.texts.copyLabels, choice);
   return (
     <>
-      <Toolbar backTo={`/payments/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={() => window.print()} hint="A4 paper, scale 100%, margins none. Two copies share one sheet, cut along the dashed line." />
+      <style>{`@media print { @page { size: A5 landscape; margin: 0; } }`}</style>
+      <Toolbar backTo={`/payments/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={() => window.print()} hint="A5 landscape paper, scale 100%, margins none." />
       <div className="print-stage">
         <ReceiptSheet labels={copies} render={(label) => <PaymentReceipt p={data.p} header={data.header} copyLabel={label} />} />
       </div>
@@ -140,7 +141,8 @@ function OldGoldPrintPage({ id }: { id: string }) {
   const copies = copyOrder(data.header.texts.copyLabels, choice);
   return (
     <>
-      <Toolbar backTo={`/old-gold/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={() => window.print()} hint="A4 paper, scale 100%, margins none. Two copies share one sheet, cut along the dashed line." />
+      <style>{`@media print { @page { size: A5 landscape; margin: 0; } }`}</style>
+      <Toolbar backTo={`/old-gold/${id}`} choice={choice} onChoice={setChoice} labels={data.header.texts.copyLabels} onPrint={() => window.print()} hint="A5 landscape paper, scale 100%, margins none." />
       <div className="print-stage">
         <OldGoldSheets r={data.r} header={data.header} labels={copies} />
       </div>

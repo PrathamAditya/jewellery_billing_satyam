@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { PaymentKind } from "./payments";
+
 export const settlementRemarksSchema = z.object({
   remarks: z.string().trim().max(1000, "Remarks are too long (1000 characters at most)").nullable().transform((v) => (v ? v : null)),
 });
@@ -21,6 +23,7 @@ export type SettlementLine = {
   mode: string;
   reference: string;
   type: string;
+  kind?: PaymentKind;
   amountPaise: number;
   paymentRemainingPaise: number;
   receiptNo: string | null;

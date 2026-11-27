@@ -28,6 +28,10 @@ const isA4Portrait = (file) => {
   const [, w, h] = /Page size:\s+([\d.]+) x ([\d.]+) pts/.exec(execFileSync("pdfinfo", [file]).toString());
   return Math.abs(Number(w) - 595) < 1 && Math.abs(Number(h) - 842) < 1;
 };
+const isA5Landscape = (file) => {
+  const [, w, h] = /Page size:\s+([\d.]+) x ([\d.]+) pts/.exec(execFileSync("pdfinfo", [file]).toString());
+  return Math.abs(Number(w) - 595) < 2 && Math.abs(Number(h) - 420) < 2;
+};
 // Reading order (not -layout): the left and right columns would otherwise interleave the wrapped words.
 const textOf = (file) => execFileSync("pdftotext", [file, "-"]).toString().replace(/\s+/g, " ");
 
@@ -147,13 +151,13 @@ ok(pagesOf(await saveAsPdf("print-invoice-voided")) === 2, "voided invoice keeps
 // ---- receipts ----
 await openPrint(`/print/payment/${pay.body.payment.id}`, "Payment Receipt");
 const fPay = await saveAsPdf("print-payment-receipt");
-ok(pagesOf(fPay) === 1, `payment receipt: one A4 sheet (got ${pagesOf(fPay)})`);
+ok(pagesOf(fPay) === 1 && isA5Landscape(fPay), `payment receipt: one A5 landscape page (got ${pagesOf(fPay)})`);
 const tp = textOf(fPay);
-ok(tp.includes("17,000.00") && tp.includes("Payment Against Invoice"), "payment receipt prints the amount and the payment type");
+ok(tp.includes("17,000.00") && tp.includes("Payment Against Invoice") && tp.includes("1,89,323.00"), "payment receipt prints the amount, payment type, and balance due");
 
 await openPrint(`/print/old-gold/${og.body.id}`, "Old Gold Purchase");
 const fOg = await saveAsPdf("print-old-gold-receipt");
-ok(pagesOf(fOg) === 1, `old gold receipt: one A4 sheet (got ${pagesOf(fOg)})`);
+ok(pagesOf(fOg) === 1 && isA5Landscape(fOg), `old gold receipt: one A5 landscape page (got ${pagesOf(fOg)})`);
 const to = textOf(fOg);
 // Labels are uppercased by the stylesheet, so compare in lower case.
 for (const s of ["2,55,962.27", "- ₹ 0.27", "2,55,962.00", "amount in words"]) ok(to.toLowerCase().includes(s.toLowerCase()), `old gold receipt prints: ${s}`);
