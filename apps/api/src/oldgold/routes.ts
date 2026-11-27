@@ -96,6 +96,20 @@ async function viewOf(db: D1Database, r: DbReceipt): Promise<OldGoldResponse> {
     if (p) payment = { id: p.id, receiptNo: p.receipt_no, remainingPaise: r.voided_at ? 0 : p.remaining };
   }
   const method: OldGoldResponse["settlementMethod"] = r.advance_paise + r.invoice_adjust_paise > 0 ? "Ledger Adjustment" : "Direct Payment";
+  let invoiceNo: string | null = null;
+  let invoiceBalanceDuePaise: number | null = null;
+  if (r.invoice_id) {
+    const iv = await db
+      .prepare("SELECT invoice_no, payable_paise, voided_at, rate_status FROM invoices WHERE id = ?1")
+      .bind(r.invoice_id)
+      .first<{ invoice_no: string; payable_paise: number; voided_at: string | null; rate_status: string }>();
+    if (iv) {
+      invoiceNo = iv.invoice_no;
+      if (!iv.voided_at && (iv.rate_status ?? "fixed") === "fixed") {
+        invoiceBalanceDuePaise = Math.max(0, iv.payable_paise - (await settledOn(db, r.invoice_id)));
+      }
+    }
+  }
   return {
     id: r.id,
     receiptNo: r.receipt_no,
@@ -108,6 +122,8 @@ async function viewOf(db: D1Database, r: DbReceipt): Promise<OldGoldResponse> {
     settlementMethod: method,
     settlementNote: r.settlement_note || settlementNote(r.treatment),
     invoiceId: r.invoice_id,
+    invoiceNo,
+    invoiceBalanceDuePaise,
     orderId: r.order_id,
     rows: lines.map<OldGoldRowResponse>((l) => ({ lineNo: l.line_no, description: l.description, grossMg: l.gross_mg, lessMg: l.less_mg, netMg: l.net_mg, karat: l.karat, purityBps: l.purity_bps, rateKgPaise: l.rate_paise_per_kg, amountPaise: l.amount_paise })),
     originalPaise: r.original_paise,
@@ -184,6 +200,9 @@ oldGoldRoutes.post("/", async (c) => {
   const fy = financialYearOf(b.date);
   const previous = advance + inv > 0 ? await advanceHeld(db, cust.id) : 0;
   const paymentId = advance + inv > 0 ? newId() : null;
+  // Feedback point 2: a payment receipt (PAY- number) is made only when old gold becomes an advance. Old gold used straight on an
+  // invoice still needs the payment row that carries it to the invoice, but that row has no receipt number and no receipt to print.
+  const payReceipt = paymentId !== null && advance > 0;
   const now = new Date().toISOString();
   const statements = [];
   const note = settlementNote(b.treatment);
@@ -205,7 +224,7 @@ oldGoldRoutes.post("/", async (c) => {
   const ogpFormat = printedNumberValues(settings.numbering, "OGP", fy);
   const ogpAt = [1, 2, 3].map((i) => `?${receiptCols.length + i}`) as [string, string, string];
   statements.push(db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('OGP', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy));
-  if (paymentId) statements.push(db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('PAY', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy));
+  if (payReceipt) statements.push(db.prepare(`INSERT INTO number_series (series, fy, last_no) VALUES ('PAY', ?1, 1) ON CONFLICT (series, fy) DO UPDATE SET last_no = last_no + 1`).bind(fy));
   statements.push(
     db
       .prepare(
@@ -223,20 +242,29 @@ oldGoldRoutes.post("/", async (c) => {
       ["payer_mobile", cust.mobile], ["payer_pan", cust.pan], ["payer_address", cust.address], ["mode", "old_gold"],
       ["reference", null], ["amount_paise", advance + inv], ["order_id", advance > 0 ? b.orderId ?? null : null],
       ["source_ogp_id", id], ["input_json", "{}"],
-      ["advance_summary_json", JSON.stringify({ previousRemainingPaise: previous, thisRemainingPaise: advance, totalAvailablePaise: previous + advance })],
+      ["advance_summary_json", payReceipt ? JSON.stringify({ previousRemainingPaise: previous, thisRemainingPaise: advance, totalAvailablePaise: previous + advance }) : null],
       // Same full bundle as the old gold receipt, so the PAY receipt prints with the same details and copy labels (spec 003 R5).
       ["header_json", JSON.stringify({ business: settings.business, bank: settings.bank, texts: settings.texts, numbering: settings.numbering, print: settings.print, logo: settings.logo })],
     ];
     const payAt = [1, 2, 3].map((i) => `?${payCols.length + i}`) as [string, string, string];
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO payments (${[...payCols.map(([c]) => c), "receipt_no", "serial"].join(", ")})
-           VALUES (${payCols.map((_, i) => `?${i + 1}`).join(", ")}, ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7)", payAt)},
-                   (SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7))`,
-        )
-        .bind(...payCols.map(([, v]) => v), ...printedNumberValues(settings.numbering, "PAY", fy)),
-    );
+    if (payReceipt) {
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO payments (${[...payCols.map(([c]) => c), "receipt_no", "serial"].join(", ")})
+             VALUES (${payCols.map((_, i) => `?${i + 1}`).join(", ")}, ${printedNumberSql("(SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7)", payAt)},
+                     (SELECT last_no FROM number_series WHERE series = 'PAY' AND fy = ?7))`,
+          )
+          .bind(...payCols.map(([, v]) => v), ...printedNumberValues(settings.numbering, "PAY", fy)),
+      );
+    } else {
+      // No receipt number and no serial: this row only carries the old gold's value to the invoice.
+      statements.push(
+        db
+          .prepare(`INSERT INTO payments (${payCols.map(([c]) => c).join(", ")}) VALUES (${payCols.map((_, i) => `?${i + 1}`).join(", ")})`)
+          .bind(...payCols.map(([, v]) => v)),
+      );
+    }
     if (inv > 0) {
       statements.push(db.prepare("INSERT INTO payment_allocations (id, payment_id, invoice_id, opening_balance_id, amount_paise, created_at, created_by) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)").bind(newId(), paymentId, b.invoiceId, inv, now, user.id));
     }

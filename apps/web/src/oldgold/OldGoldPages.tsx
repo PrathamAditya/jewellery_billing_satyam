@@ -161,7 +161,18 @@ export function NewOldGoldPage() {
     setBusy(true);
     try {
       const r = await createOldGold(body);
-      navigate(`/old-gold/${r.id}`);
+      if (prefill) {
+        // Feedback point 13: the form was opened from an invoice's settlement page, so go back to that page, with the new receipt one click away.
+        try {
+          sessionStorage.setItem(`invoiceTab:${prefill.invoiceId}`, "settlement");
+          sessionStorage.setItem(`oldGoldSaved:${prefill.invoiceId}`, JSON.stringify({ id: r.id, receiptNo: r.receiptNo }));
+        } catch {
+          /* the page still opens; it just does not land on the settlement tab */
+        }
+        navigate(`/invoices/${prefill.invoiceId}`);
+      } else {
+        navigate(`/old-gold/${r.id}`);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the receipt");
     } finally {
@@ -191,7 +202,7 @@ export function NewOldGoldPage() {
                   const amount = calc ? calc.rows[i]?.amountPaise : undefined;
                   return (
                     <tr key={i} className="align-top">
-                      <td className="pr-2 pb-2"><input className={`${inputClass} w-32`} value={r.description} onChange={(e) => set(i, { description: e.target.value })} aria-label={`Description row ${i + 1}`} /></td>
+                      <td className="pr-2 pb-2"><textarea className={`${inputClass} min-h-[3.5rem] resize-y`} style={{ width: "14rem", minWidth: "14rem" }} rows={2} maxLength={100} value={r.description} onChange={(e) => set(i, { description: e.target.value })} aria-label={`Description row ${i + 1}`} /></td>
                       <td className="pr-2 pb-2"><input className={`${inputClass} w-24`} value={r.gross} onChange={(e) => set(i, { gross: e.target.value })} aria-label={`Gross g row ${i + 1}`} placeholder="25.00" /></td>
                       <td className="pr-2 pb-2"><input className={`${inputClass} w-24`} value={r.less} onChange={(e) => set(i, { less: e.target.value })} aria-label={`Less g row ${i + 1}`} placeholder="2.02" /></td>
                       <td className="pr-2 pb-2 pt-2 whitespace-nowrap">{p.gross > p.less ? formatWeightGrams(p.gross - p.less) : "-"}</td>
@@ -210,7 +221,7 @@ export function NewOldGoldPage() {
               </tbody>
             </table>
           </div>
-          <div><button className={btnSecondary} disabled={rows.length >= 10} onClick={() => setRows((rs) => [...rs, blankRow()])}>Add row</button></div>
+          <div><button className={btnSecondary} disabled={rows.length >= 50} onClick={() => setRows((rs) => [...rs, blankRow()])}>Add row</button></div>
           <p className="text-xs text-stone-500">Amount = net weight x purity % x rate. Type the rate per gram for this receipt. Nothing is taken from today's rates.</p>
           {calc && (
             <dl className="ml-auto text-sm flex flex-col gap-1 w-full max-w-sm">
@@ -327,7 +338,8 @@ export function OldGoldPage({ id }: { id: string }) {
       <dl className="bg-white border border-stone-200 rounded-xl px-4 py-2 grid sm:grid-cols-2 gap-x-6">
         <div className="py-1.5"><dt className="text-sm text-stone-500">Settled as</dt><dd>{r.treatmentLabel}</dd></div>
         <div className="py-1.5"><dt className="text-sm text-stone-500">Settlement note</dt><dd>{r.settlementNote}</dd></div>
-        {r.payment && <div className="py-1.5"><dt className="text-sm text-stone-500">Advance receipt</dt><dd><a className="underline" href={`#/payments/${r.payment.id}`}>{r.payment.receiptNo}</a> · {formatMoney(r.payment.remainingPaise)} still held</dd></div>}
+        {r.invoiceNo && <div className="py-1.5"><dt className="text-sm text-stone-500">Against invoice</dt><dd><a className="underline" href={`#/invoices/${r.invoiceId}`}>{r.invoiceNo}</a>{r.invoiceBalanceDuePaise !== null && r.invoiceBalanceDuePaise !== undefined ? ` · Balance due: ${formatMoney(r.invoiceBalanceDuePaise)}` : ""}</dd></div>}
+        {r.payment?.receiptNo && <div className="py-1.5"><dt className="text-sm text-stone-500">Advance receipt</dt><dd><a className="underline" href={`#/payments/${r.payment.id}`}>{r.payment.receiptNo}</a> · {formatMoney(r.payment.remainingPaise)} still held</dd></div>}
         {r.payouts.map((p) => <div key={p.id} className="py-1.5"><dt className="text-sm text-stone-500">Paid to customer</dt><dd>{formatMoney(p.amountPaise)} by {p.mode.replace("_", " ")}{p.reference ? ` · ${p.reference}` : ""}</dd></div>)}
       </dl>
       {voiding && (

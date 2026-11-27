@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { InvoiceResult } from "@jewellery/calc";
-import { formatMoney, formatPerGram, formatWeightGrams, type InvoiceHistoryEntry, type InvoiceResponse } from "@jewellery/shared";
+import { formatMoney, formatPerGram, formatWeightGrams, type InvoiceHistoryEntry, type InvoiceResponse, type OldGoldResponse, type PaymentResponse } from "@jewellery/shared";
 import { ApiError } from "../api";
 import { Alert, Field, Modal, btnPrimary, btnSecondary, inputClass, pcOnly } from "../customers/ui";
 import { navigate } from "../router";
@@ -10,6 +10,7 @@ import { getInvoice, getInvoiceHistory, voidInvoice } from "./api";
 import { FixRateDialog, PendingNote, ReceiveOnSaleDialog } from "./PendingRate";
 import { getApplicable } from "../rates/api";
 import ReceiveDialog from "../payments/ReceiveDialog";
+import OldGoldAdjustDialog from "../oldgold/OldGoldAdjustDialog";
 import SettlementTab from "../settlement/SettlementTab";
 import CreditNoteDialog from "../creditNotes/CreditNoteDialog";
 import { formatMoney as fm } from "@jewellery/shared";
@@ -89,10 +90,37 @@ export default function InvoicePage({ id }: { id: string }) {
   const { can } = useAuth();
   const [inv, setInv] = useState<InvoiceResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"details" | "settlement" | "history">("details");
+  // Feedback point 13: coming back from a form that was opened from the settlement page lands on the settlement page again.
+  const [tab, setTab] = useState<"details" | "settlement" | "history">(() => {
+    try {
+      return sessionStorage.getItem(`invoiceTab:${id}`) === "settlement" ? "settlement" : "details";
+    } catch {
+      return "details";
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(`invoiceTab:${id}`);
+    } catch {
+      /* only a convenience */
+    }
+  }, [id]);
   const [voiding, setVoiding] = useState(false);
   const [receiving, setReceiving] = useState(false);
+  const [adjustingOldGold, setAdjustingOldGold] = useState(false);
   const [crediting, setCrediting] = useState(false);
+  const [settlementTick, setSettlementTick] = useState(0);
+  const [actionNotice, setActionNotice] = useState<{ text: string; href?: string; linkLabel?: string; printHref?: string } | null>(null);
+  // Default payment timing: "At time of delivery" right after generating a new invoice; "Later payment" when opened later.
+  const [justCreated] = useState(() => {
+    try {
+      const flag = sessionStorage.getItem("justCreatedInvoice") === id;
+      if (flag) sessionStorage.removeItem("justCreatedInvoice");
+      return flag;
+    } catch {
+      return false;
+    }
+  });
   // Spec 019c: the pending-rate dialogs.
   const [receivingOnSale, setReceivingOnSale] = useState(false);
   const [fixing, setFixing] = useState(false);
@@ -215,10 +243,25 @@ export default function InvoicePage({ id }: { id: string }) {
             <span>Balance due <strong>{fm(inv.balanceDuePaise)}</strong></span>
             <span className="text-stone-600">{inv.paymentStatus === "paid" ? "Paid in full" : inv.paymentStatus === "part_paid" ? "Part paid" : "Not paid"}</span>
           </div>
-          {!inv.isEarlierVersion && can("payments.create") && inv.balanceDuePaise > 0 && (
-            <button className={btnPrimary} onClick={() => setReceiving(true)}>Receive payment</button>
+          {!inv.isEarlierVersion && inv.balanceDuePaise > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {can("oldgold.create") && inv.customerId && (
+                <button className={btnSecondary} onClick={() => setAdjustingOldGold(true)}>Adjust old gold</button>
+              )}
+              {can("payments.create") && (
+                <button className={btnPrimary} onClick={() => setReceiving(true)}>Receive payment</button>
+              )}
+            </div>
           )}
         </div>
+      )}
+
+      {actionNotice && (
+        <Alert kind="ok">
+          {actionNotice.text}
+          {actionNotice.href && <> <a className="underline ml-2" href={actionNotice.href}>{actionNotice.linkLabel ?? "Open"}</a></>}
+          {actionNotice.printHref && <> · <a className="underline" href={actionNotice.printHref}>Print receipt</a></>}
+        </Alert>
       )}
 
       {tab === "details" && (
@@ -288,7 +331,11 @@ export default function InvoicePage({ id }: { id: string }) {
           {inv.rateStatus === "pending" ? <PendingNote inv={inv} /> : <Breakdown r={calc} descriptions={inv.lines.map((l) => l.description)} />}
         </div>
       )}
-      {tab === "settlement" && (inv.rateStatus === "pending" ? <Alert kind="info">The settlement opens when the rate is fixed.</Alert> : <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} />)}
+      {tab === "settlement" && (
+        inv.rateStatus === "pending"
+          ? <Alert kind="info">The settlement opens when the rate is fixed.</Alert>
+          : <SettlementTab invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, balanceDuePaise: inv.balanceDuePaise }} refreshKey={settlementTick} defaultInvoicePurpose={justCreated ? "at_sale" : "against_invoices"} onChanged={() => load()} />
+      )}
       {tab === "history" && <History id={inv.id} current={inv.revisionNo} onOpen={(rev) => (setTab("details"), load(rev))} />}
 
       {crediting && (
@@ -297,8 +344,46 @@ export default function InvoicePage({ id }: { id: string }) {
       {receiving && (
         <ReceiveDialog
           invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, balanceDuePaise: inv.balanceDuePaise, customerId: inv.customerId }}
+          defaultInvoicePurpose={justCreated ? "at_sale" : "against_invoices"}
           onClose={() => setReceiving(false)}
-          onSaved={(pid) => navigate(`/payments/${pid}`)}
+          onSaved={(pid: string, saved?: PaymentResponse) => {
+            setReceiving(false);
+            load();
+            setSettlementTick((n) => n + 1);
+            setActionNotice({
+              text: saved?.receiptNo ? `Payment ${saved.receiptNo} (${formatMoney(saved.amountPaise)}) added to ${inv.invoiceNo}.` : `Payment added to ${inv.invoiceNo}.`,
+              href: `#/payments/${pid}`,
+              linkLabel: "View payment",
+              printHref: saved?.receiptNo ? `#/print/payment/${pid}` : undefined,
+            });
+          }}
+          onAnotherSaved={(saved: PaymentResponse) => {
+            load();
+            setSettlementTick((n) => n + 1);
+            setActionNotice({
+              text: saved.receiptNo ? `Payment ${saved.receiptNo} (${formatMoney(saved.amountPaise)}) added to ${inv.invoiceNo}.` : `Payment added to ${inv.invoiceNo}.`,
+              href: `#/payments/${saved.id}`,
+              linkLabel: "View payment",
+              printHref: saved.receiptNo ? `#/print/payment/${saved.id}` : undefined,
+            });
+          }}
+        />
+      )}
+      {adjustingOldGold && inv.customerId && (
+        <OldGoldAdjustDialog
+          invoice={{ id: inv.id, invoiceNo: inv.invoiceNo, customerId: inv.customerId, customerName: inv.customerName, balanceDuePaise: inv.balanceDuePaise }}
+          onClose={() => setAdjustingOldGold(false)}
+          onSaved={(r: OldGoldResponse) => {
+            setAdjustingOldGold(false);
+            load();
+            setSettlementTick((n) => n + 1);
+            setActionNotice({
+              text: `Old gold ${r.receiptNo} (${formatMoney(r.finalPaise)}) adjusted against ${inv.invoiceNo}.`,
+              href: `#/old-gold/${r.id}`,
+              linkLabel: "View OGP receipt",
+              printHref: `#/print/old-gold/${r.id}`,
+            });
+          }}
         />
       )}
       {receivingOnSale && (

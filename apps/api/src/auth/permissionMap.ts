@@ -29,6 +29,7 @@ export const PERMISSION_MAP: Rule[] = [
   { method: "GET", path: "/api/rates/:date/:kind/history", permission: "rates.view" },
 
   { method: "GET", path: "/api/invoices", permission: "invoices.view" },
+  { method: "GET", path: "/api/invoices/item-suggestions", permission: "invoices.view" },
   { method: "POST", path: "/api/invoices", permission: "invoices.create" },
   { method: "GET", path: "/api/invoices/:id", permission: "invoices.view" },
   { method: "PUT", path: "/api/invoices/:id", permission: "invoices.edit" },

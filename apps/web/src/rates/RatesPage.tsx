@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   RATE_KINDS,
+  gold22From24PaisePerKg,
+  paisePerKgToInput,
   RATE_LABELS,
   formatPerGram,
   formatPerKg,
@@ -51,6 +53,8 @@ export default function RatesPage() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [dialog, setDialog] = useState<null | { date?: string; kind?: RateKind; current?: RateRow }>(null);
+  // Feedback point 1: typing the 24K rate fills the 22K rate (24K x 916 / 995) until the owner types a 22K rate herself or himself.
+  const [auto22, setAuto22] = useState(true);
 
   const today = applicable?.date ?? "";
 
@@ -80,6 +84,21 @@ export default function RatesPage() {
 
   const setRow = (kind: RateKind, patch: Partial<Row>) => setRows((p) => ({ ...p, [kind]: { ...p[kind], ...patch } }));
 
+  /** Typing in a rate box. The 24K box also fills the 22K box while the owner has not typed there. */
+  function typeRate(kind: RateKind, value: string, unit: RateUnit) {
+    setRows((p) => {
+      const next = { ...p, [kind]: { value, unit, error: null } };
+      if (kind === "gold_24k995" && auto22) {
+        const parsed = value.trim() ? parseRateInput(value, unit) : null;
+        next.gold_22k916 = parsed?.ok
+          ? { value: paisePerKgToInput(gold22From24PaisePerKg(parsed.paisePerKg), "gram"), unit: "gram", error: null }
+          : { value: "", unit: "gram", error: null };
+      }
+      return next;
+    });
+    if (kind === "gold_22k916") setAuto22(value.trim() === "");
+  }
+
   /** Saves one row. Returns "saved", "skipped" (nothing to do) or "confirm" (typo guard asked). */
   async function saveOne(kind: RateKind, confirmLargeChange = false): Promise<"saved" | "skipped" | "confirm" | "error"> {
     const row = rows[kind];
@@ -92,6 +111,7 @@ export default function RatesPage() {
     try {
       await saveRate(today, kind, { price: row.value, unit: row.unit, confirmLargeChange });
       setRow(kind, { value: "", error: null });
+      if (kind === "gold_22k916") setAuto22(true);
       return "saved";
     } catch (e) {
       if (e instanceof ApiError && e.body.error === "needs_confirmation") {
@@ -183,8 +203,11 @@ export default function RatesPage() {
                 value={rows[k].value}
                 unit={rows[k].unit}
                 error={rows[k].error}
-                onChange={(value, unit) => setRow(k, { value, unit, error: null })}
+                onChange={(value, unit) => typeRate(k, value, unit)}
               />
+              {k === "gold_22k916" && auto22 && rows.gold_22k916.value && (
+                <div className="text-xs pl-[7.5rem] text-stone-600">Worked out from the 24K rate (× 916 ÷ 995). You can type a different 22K rate.</div>
+              )}
               <div className="text-xs pl-[7.5rem]">
                 <Status rate={applicable?.rates[k] ?? null} />
               </div>

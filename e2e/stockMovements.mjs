@@ -51,7 +51,7 @@ async function newInvoiceLine(description, rate = "285.72") {
   await page.goto(`${B}/#/invoices/new`);
   await page.waitForSelector("text=Customer name");
   await page.fill('label:has-text("Customer name") input', `Stock Buyer ${uniq}`);
-  await page.fill('input[aria-label="Description line 1"]', description);
+  await page.fill('[aria-label="Description line 1"]', description);
   await page.fill('input[aria-label="Net g line 1"]', "9.800");
   await page.fill('input[aria-label="Gold rate line 1"]', rate);
 }

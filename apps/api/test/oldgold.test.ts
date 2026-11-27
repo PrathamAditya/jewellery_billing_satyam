@@ -225,3 +225,46 @@ describe("reading and search", () => {
     await expect(t.db.prepare("DELETE FROM old_gold_payouts").run()).rejects.toThrow(/never deleted/);
   });
 });
+
+/** Feedback points 2 and 12. */
+describe("old gold: a payment receipt only when it becomes an advance; up to 50 rows", () => {
+  const payNo = async () => (await t.db.prepare("SELECT COALESCE(MAX(last_no), 0) AS n FROM number_series WHERE series = 'PAY'").first<{ n: number }>())!.n;
+
+  it("turned into an advance it makes a PAY- receipt; adjusted against an invoice, or paid out, it makes none and uses no PAY number", async () => {
+    const c = await customer();
+    const before = await payNo();
+    const adv = (await (await receipt({ customerId: c, treatment: "advance" })).json()) as { payment: { receiptNo: string } | null };
+    expect(adv.payment?.receiptNo).toMatch(/^PAY-\d{4}$/);
+    expect(await payNo()).toBe(before + 1);
+
+    const unnumberedBefore = (await t.db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'old_gold' AND receipt_no IS NULL").first<{ n: number }>())!.n;
+    const big = await customer();
+    const bigInv = await invoice(big, 2_000_000);
+    const adj = (await (await receipt({ customerId: big, treatment: "invoice_adjustment", invoiceId: bigInv.id })).json()) as { payment: { receiptNo: string | null } | null; status: string };
+    expect(adj.status).toBe("Adjusted Against Invoice");
+    expect(adj.payment?.receiptNo ?? null).toBeNull(); // the row that carries the value to the invoice has no receipt number
+    expect(await t.db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'old_gold' AND receipt_no IS NULL").first<{ n: number }>()).toMatchObject({ n: unnumberedBefore + 1 });
+    // ...and the invoice really was paid by it
+    const settle = (await (await call(`/api/invoices/${bigInv.id}/settlement`)).json()) as { receivedPaise: number; lines: { reference: string; type: string }[]; autoNote: string[] };
+    expect(settle.receivedPaise).toBeGreaterThan(0);
+    expect(settle.lines[0]!.reference).toMatch(/^OGP-\d{4}$/);
+    expect(settle.autoNote.join(" ")).toMatch(/Old gold OGP-\d{4} adjusted against this invoice/);
+    const paid = (await (await receipt({ customerId: c, treatment: "direct_payment", payoutMode: "upi" })).json()) as { payment: unknown };
+    expect(paid.payment).toBeNull();
+    expect(await payNo()).toBe(before + 1); // still just the one, from the advance
+  });
+
+  it("a receipt may have up to 50 rows, each worked out exactly; 51 is refused", async () => {
+    const c = await customer();
+    const rows = Array.from({ length: 50 }, (_, i) => ({ ...sampleRow, description: `Old Gold ${i + 1}` }));
+    const res = await receipt({ customerId: c, treatment: "direct_payment", payoutMode: "upi", rows });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { rows: { lineNo: number; amountPaise: number }[]; originalPaise: number };
+    expect(body.rows).toHaveLength(50);
+    // every row is the owner's sample row: net 22.98 g x 75.26% x 14,800 per gram
+    expect(new Set(body.rows.map((r) => r.amountPaise)).size).toBe(1);
+    expect(body.originalPaise).toBe(body.rows.reduce((s, r) => s + r.amountPaise, 0));
+    const tooMany = await receipt({ customerId: c, treatment: "direct_payment", payoutMode: "upi", rows: [...rows, sampleRow] });
+    expect(tooMany.status).toBe(400);
+  });
+});

@@ -46,7 +46,7 @@ export default function Breakdown({ r, descriptions }: { r: InvoiceResult; descr
           <tbody>
             {lines.map((l, i) => (
               <tr key={i} className="border-t border-stone-100">
-                <td className="px-3 py-2">{descriptions[i] || `Line ${i + 1}`}</td>
+                <td className="px-3 py-2 whitespace-pre-line">{descriptions[i] || `Line ${i + 1}`}</td>
                 <td className={cell}>{formatWeightGrams(l.chargeableWeightMg)} g</td>
                 <td className={cell}>{formatMoney(l.goldAmountPaise)}</td>
                 <td className={cell}>{formatMoney(l.labourAmountPaise)}</td>

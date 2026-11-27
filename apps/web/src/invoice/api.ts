@@ -1,5 +1,7 @@
-import type { InvoiceHistoryEntry, InvoiceListResponse, InvoiceResponse } from "@jewellery/shared";
+import type { InvoiceHistoryEntry, InvoiceListResponse, InvoiceResponse, ItemSuggestion } from "@jewellery/shared";
 import { api } from "../api";
+
+export const getItemSuggestions = (q: string) => api<{ items: ItemSuggestion[] }>(`/api/invoices/item-suggestions?q=${encodeURIComponent(q)}`);
 
 export const searchInvoices = (q: string, o: { status?: string; rateStatus?: string; from?: string; to?: string; cursor?: string | null; customerId?: string } = {}) => {
   const p = new URLSearchParams({ q });

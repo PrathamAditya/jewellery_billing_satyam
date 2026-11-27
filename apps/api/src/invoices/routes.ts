@@ -21,8 +21,10 @@ import {
   pendingInvoiceRequestSchema,
   stockLinkProblems,
   type BulkUnit,
+  type ItemSuggestion,
   type PendingInvoiceRequest,
   type Purity,
+  formatWeightGrams,
 } from "@jewellery/shared";
 import { financialYearOf } from "@jewellery/calc";
 import { settingsSnapshot } from "../settings/routes";
@@ -534,6 +536,104 @@ invoiceRoutes.post("/", async (c) => {
   }
   const row = (await loadRow(db, id))!;
   return c.json(toResponse(row, await loadLines(db, id, 1), false), 201);
+});
+
+// ---- item autocomplete suggestions (in-stock items + item types + previous invoice lines) ----
+invoiceRoutes.get("/item-suggestions", async (c) => {
+  const db = c.env.DB;
+  const q = (c.req.query("q") ?? "").trim();
+  const esc = q.replace(/[\\%_]/g, "\\$&");
+  const like = `%${esc}%`;
+  const items: ItemSuggestion[] = [];
+
+  // 1. Individual in-stock inventory items (matched by type name or U No.)
+  const stockRows = (
+    await db
+      .prepare(
+        `SELECT i.u_no, t.name AS type_name, i.purity, i.hsn, i.gross_weight_mg, i.net_weight_mg
+         FROM inventory_items i
+         JOIN inventory_item_types t ON t.id = i.type_id
+         WHERE i.status = 'in_stock' AND i.voided_at IS NULL
+           ${q ? "AND (t.name LIKE ?1 ESCAPE '\\' OR i.u_no LIKE ?1 ESCAPE '\\')" : ""}
+         ORDER BY ${q ? "CASE WHEN t.name LIKE ?2 ESCAPE '\\' OR i.u_no LIKE ?2 ESCAPE '\\' THEN 0 ELSE 1 END," : ""} t.name COLLATE NOCASE, i.u_no
+         LIMIT 25`,
+      )
+      .bind(...(q ? [like, `${esc}%`] : []))
+      .all<{ u_no: string; type_name: string; purity: Purity; hsn: "7113" | "9988"; gross_weight_mg: number; net_weight_mg: number }>()
+  ).results;
+  for (const r of stockRows) {
+    items.push({
+      key: `stock:${r.u_no}`,
+      source: "stock_item",
+      label: `${r.type_name} (${r.u_no})`,
+      detail: `In stock · ${r.purity} · Net ${formatWeightGrams(r.net_weight_mg)} g`,
+      description: r.type_name,
+      purity: r.purity,
+      hsn: r.hsn,
+      grossWeightMg: r.gross_weight_mg,
+      netWeightMg: r.net_weight_mg,
+      stockUNo: r.u_no,
+    });
+  }
+
+  // 2. Saved inventory item types (e.g. Ring, Chain, Earring, Bangle, Necklace)
+  const typeRows = (
+    await db
+      .prepare(
+        `SELECT id, name, item_code FROM inventory_item_types
+         WHERE active = 1 ${q ? "AND (name LIKE ?1 ESCAPE '\\' OR item_code LIKE ?1 ESCAPE '\\')" : ""}
+         ORDER BY ${q ? "CASE WHEN name LIKE ?2 ESCAPE '\\' THEN 0 ELSE 1 END," : ""} name COLLATE NOCASE
+         LIMIT 15`,
+      )
+      .bind(...(q ? [like, `${esc}%`] : []))
+      .all<{ id: string; name: string; item_code: string }>()
+  ).results;
+  const seenNames = new Set<string>();
+  for (const t of typeRows) {
+    seenNames.add(t.name.toLowerCase());
+    items.push({
+      key: `type:${t.id}`,
+      source: "item_type",
+      label: t.name,
+      detail: `Saved item · ${t.item_code}`,
+      description: t.name,
+    });
+  }
+
+  // 3. Previously billed item descriptions (excluding duplicates of item types)
+  const prevRows = (
+    await db
+      .prepare(
+        `SELECT l.description, l.purity, l.hsn, l.polish_bps, l.labour_rate_paise_per_kg, MAX(i.created_at) AS last_used
+         FROM invoice_lines l
+         JOIN invoices i ON i.id = l.invoice_id AND l.revision_no = i.revision_no
+         WHERE i.voided_at IS NULL AND trim(l.description) <> ''
+           ${q ? "AND l.description LIKE ?1 ESCAPE '\\'" : ""}
+         GROUP BY lower(trim(l.description))
+         ORDER BY ${q ? "CASE WHEN l.description LIKE ?2 ESCAPE '\\' THEN 0 ELSE 1 END," : ""} last_used DESC
+         LIMIT 15`,
+      )
+      .bind(...(q ? [like, `${esc}%`] : []))
+      .all<{ description: string; purity: Purity; hsn: "7113" | "9988"; polish_bps: number; labour_rate_paise_per_kg: number }>()
+  ).results;
+  for (const p of prevRows) {
+    const clean = p.description.trim();
+    if (seenNames.has(clean.toLowerCase())) continue;
+    seenNames.add(clean.toLowerCase());
+    items.push({
+      key: `prev:${clean.toLowerCase()}`,
+      source: "previous_line",
+      label: clean,
+      detail: `Recent bill · ${p.purity} · HSN ${p.hsn}`,
+      description: clean,
+      purity: p.purity,
+      hsn: p.hsn,
+      polishBps: p.polish_bps,
+      labourRatePaisePerKg: p.labour_rate_paise_per_kg,
+    });
+  }
+
+  return c.json({ items });
 });
 
 // ---- read ----

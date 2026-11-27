@@ -20,7 +20,7 @@ export const oldGoldRequestSchema = z.object({
   id: z.string().uuid().optional(),
   date: z.string().refine(isValidBusinessDate, "Date must look like 2026-11-01"),
   customerId: z.string().uuid({ error: "Choose the customer" }),
-  rows: z.array(oldGoldRowSchema).min(1, "Add at least one row").max(10, "A receipt can have at most 10 rows"),
+  rows: z.array(oldGoldRowSchema).min(1, "Add at least one row").max(50, "A receipt can have at most 50 rows"),
   treatment: z.enum(OLD_GOLD_TREATMENTS, { error: "Choose how the old gold is settled" }),
   /** Direct payment and split: the money paid to the customer now. */
   directPaise: z.number().int().min(0).default(0),
@@ -65,6 +65,8 @@ export type OldGoldResponse = {
   settlementMethod: "Ledger Adjustment" | "Direct Payment";
   settlementNote: string;
   invoiceId: string | null;
+  invoiceNo?: string | null;
+  invoiceBalanceDuePaise?: number | null;
   orderId: string | null;
   rows: OldGoldRowResponse[];
   originalPaise: number;

@@ -41,6 +41,7 @@ type DbOrder = {
 
 type AdvanceRow = {
   id: string;
+  mode?: string;
   receipt_no: string | null;
   receipt_date: string;
   kind: string;
@@ -281,13 +282,13 @@ export async function customerAdvances(db: D1Database, customerId: string): Prom
   return (
     await db
       .prepare(
-        `SELECT p.id, p.receipt_no, p.receipt_date, p.kind, p.amount_paise, ${REMAINING_SQL} AS remaining_paise, p.voided_at, o.order_no, p.customer_id
+        `SELECT p.id, p.mode, p.receipt_no, p.receipt_date, p.kind, p.amount_paise, ${REMAINING_SQL} AS remaining_paise, p.voided_at, o.order_no, p.customer_id
          FROM payments p LEFT JOIN orders o ON o.id = p.order_id
-         WHERE p.customer_id = ?1 AND p.voided_at IS NULL ORDER BY p.receipt_date, p.created_at, p.id`,
+         WHERE p.customer_id = ?1 AND p.voided_at IS NULL ORDER BY p.receipt_date, p.created_at, p.rowid`,
       )
       .bind(customerId)
       .all<AdvanceRow>()
   ).results
     .filter((r) => r.remaining_paise > 0)
-    .map((r) => ({ paymentId: r.id, receiptNo: r.receipt_no, orderNo: r.order_no, receiptDate: r.receipt_date, kind: r.kind, amountPaise: r.amount_paise, remainingPaise: r.remaining_paise }));
+    .map((r) => ({ paymentId: r.id, mode: r.mode, receiptNo: r.receipt_no, orderNo: r.order_no, receiptDate: r.receipt_date, kind: r.kind, amountPaise: r.amount_paise, remainingPaise: r.remaining_paise }));
 }

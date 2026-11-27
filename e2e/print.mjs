@@ -28,6 +28,10 @@ const isA4Portrait = (file) => {
   const [, w, h] = /Page size:\s+([\d.]+) x ([\d.]+) pts/.exec(execFileSync("pdfinfo", [file]).toString());
   return Math.abs(Number(w) - 595) < 1 && Math.abs(Number(h) - 842) < 1;
 };
+const isA5Landscape = (file) => {
+  const [, w, h] = /Page size:\s+([\d.]+) x ([\d.]+) pts/.exec(execFileSync("pdfinfo", [file]).toString());
+  return Math.abs(Number(w) - 595) < 2 && Math.abs(Number(h) - 420) < 2;
+};
 // Reading order (not -layout): the left and right columns would otherwise interleave the wrapped words.
 const textOf = (file) => execFileSync("pdftotext", [file, "-"]).toString().replace(/\s+/g, " ");
 
@@ -129,8 +133,14 @@ ok(pagesOf(fBoth) === 4, `both copies (the default): 4 pages, shop then customer
 await openPrint(`/print/invoice/${long.body.id}`, long.body.invoiceNo);
 await page.selectOption("select", "first");
 const fLong = await saveAsPdf("print-invoice-20-lines");
-ok(pagesOf(fLong) === 4, `20 lines: front, blank back, front, settlement back (got ${pagesOf(fLong)})`);
-ok(textOf(fLong).includes("Bangle 20"), "the 20th line is printed on the second page");
+// Spec 014 R7 changed on 2026-11-25 (feedback point 8): rows go on pages by their height, so how many sheets 20 lines need depends on
+// the footer (bank, terms). What must hold: whole sheets (a front and a back each), at least two fronts, every line printed once,
+// nothing cut off, and the settlement on the back of the last sheet.
+const longText = textOf(fLong);
+ok(pagesOf(fLong) >= 4 && pagesOf(fLong) % 2 === 0, `20 lines: two or more fronts, each with a back (got ${pagesOf(fLong)} pages)`);
+ok(Array.from({ length: 20 }, (_, i) => (longText.match(new RegExp(`Bangle ${i + 1}(?!\\d)`, "g")) ?? []).length).every((n) => n === 1), "every one of the 20 lines is printed exactly once");
+ok(longText.indexOf("Settlement and Payment Record") > longText.indexOf("Bangle 20"), "the settlement is the back of the last sheet, after the 20th line");
+ok(!(await page.evaluate(() => [...document.querySelectorAll("[data-front-main]")].some((m) => m.scrollHeight > m.clientHeight + 1))), "no sheet has content cut off");
 
 await openPrint(`/print/invoice/${voided.body.id}`, voided.body.invoiceNo);
 await page.selectOption("select", "first");
@@ -141,13 +151,13 @@ ok(pagesOf(await saveAsPdf("print-invoice-voided")) === 2, "voided invoice keeps
 // ---- receipts ----
 await openPrint(`/print/payment/${pay.body.payment.id}`, "Payment Receipt");
 const fPay = await saveAsPdf("print-payment-receipt");
-ok(pagesOf(fPay) === 1, `payment receipt: one A4 sheet (got ${pagesOf(fPay)})`);
+ok(pagesOf(fPay) === 1 && isA5Landscape(fPay), `payment receipt: one A5 landscape page (got ${pagesOf(fPay)})`);
 const tp = textOf(fPay);
-ok(tp.includes("17,000.00") && tp.includes("Payment Against Invoice"), "payment receipt prints the amount and the payment type");
+ok(tp.includes("17,000.00") && tp.includes("Payment Against Invoice") && tp.includes("1,89,323.00"), "payment receipt prints the amount, payment type, and balance due");
 
 await openPrint(`/print/old-gold/${og.body.id}`, "Old Gold Purchase");
 const fOg = await saveAsPdf("print-old-gold-receipt");
-ok(pagesOf(fOg) === 1, `old gold receipt: one A4 sheet (got ${pagesOf(fOg)})`);
+ok(pagesOf(fOg) === 1 && isA5Landscape(fOg), `old gold receipt: one A5 landscape page (got ${pagesOf(fOg)})`);
 const to = textOf(fOg);
 // Labels are uppercased by the stylesheet, so compare in lower case.
 for (const s of ["2,55,962.27", "- ₹ 0.27", "2,55,962.00", "amount in words"]) ok(to.toLowerCase().includes(s.toLowerCase()), `old gold receipt prints: ${s}`);

@@ -38,7 +38,7 @@ await page.fill('input[type="date"]', "2026-02-03");
 await page.selectOption('select[aria-label="Purity line 1"]', "silver");
 const fromRate = await page.locator('input[aria-label="Gold rate line 1"]').inputValue();
 ok(fromRate === "150.123", "choosing silver fills today's silver rate (" + fromRate + ")");
-await page.fill('input[aria-label="Description line 1"]', "Silver Ornament");
+await page.fill('[aria-label="Description line 1"]', "Silver Ornament");
 await page.fill('input[aria-label="Net g line 1"]', "9.800");
 await page.fill('input[aria-label="Gold rate line 1"]', "285.72");
 await page.waitForSelector('[aria-label="Totals"]');

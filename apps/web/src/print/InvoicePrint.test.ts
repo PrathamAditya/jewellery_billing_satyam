@@ -62,12 +62,28 @@ describe("invoice print: reference figures", () => {
     }
   });
 
-  it("prints the settlement on the back: advance received and balance due", () => {
-    const html = render(invoice(1));
+  it("prints the settlement on the back: advance, old gold, and payment sections with balance due", () => {
+    const rich = {
+      ...settlement,
+      lines: [
+        { allocationId: "a1", paymentId: "p1", date: "2026-10-30", mode: "UPI", reference: "PAY-0001", type: "Advance", kind: "advance", amountPaise: 1_000_000, paymentRemainingPaise: 0, receiptNo: "PAY-0001", fromCustomer: null },
+        { allocationId: "a2", paymentId: "p2", date: "2026-10-31", mode: "Old Gold", reference: "OGP-0001", type: "Old gold", kind: "old_gold", amountPaise: 500_000, paymentRemainingPaise: 0, receiptNo: null, fromCustomer: null },
+        { allocationId: "a3", paymentId: "p3", date: "2026-11-01", mode: "Cash", reference: "PAY-0002", type: "Later payment", kind: "invoice_payment", amountPaise: 200_000, paymentRemainingPaise: 0, receiptNo: "PAY-0002", fromCustomer: null },
+      ],
+    } as unknown as SettlementResponse;
+    const html = render(invoice(1), rich);
     expect(html).toContain("Settlement and Payment Record");
+    expect(html).toContain("Advance");
+    expect(html).toContain("Old Gold");
+    expect(html).toContain("Payment");
+    expect(html).toContain("10,000.00");
+    expect(html).toContain("5,000.00");
+    expect(html).toContain("2,000.00");
     expect(html).toContain("17,000.00");
     expect(html).toContain("1,89,323.00");
     expect(html).toContain("PAY-0001");
+    expect(html).toContain("OGP-0001");
+    expect(html).toContain("PAY-0002");
   });
 
   it("never prints internal fields: gold and labour rates are not in the markup", () => {
@@ -85,8 +101,31 @@ describe("invoice print: reference figures", () => {
 });
 
 describe("invoice print: pages", () => {
-  it("one page of up to 14 lines is a front and the settlement back", () => {
-    expect(pageCount(render(invoice(14)))).toBe(2);
+  // Spec 014 R7 changed (feedback point 8): rows go on pages by their height, not 14 to a page, so a long bill is never cut off.
+  it("a short bill (up to 8 lines) is one front and the settlement back", () => {
+    expect(pageCount(render(invoice(1)))).toBe(2);
+    expect(pageCount(render(invoice(8)))).toBe(2);
+  });
+
+  it.each([9, 14, 15, 28, 29, 50])("%i lines: every item is printed exactly once, in order, and nothing is lost", (n) => {
+    const html = render(invoice(n));
+    let at = -1;
+    for (let i = 1; i <= n; i++) {
+      const found = html.split(`>Item ${i}<`).length - 1;
+      expect(found, `Item ${i}`).toBe(1);
+      const where = html.indexOf(`>Item ${i}<`);
+      expect(where).toBeGreaterThan(at);
+      at = where;
+    }
+  });
+
+  it.each([14, 29, 50])("%i lines: the totals are printed once, after the last item, and earlier sheets say they continue", (n) => {
+    const html = render(invoice(n));
+    expect(html.split("Total invoice value").length - 1).toBe(1);
+    expect(html.indexOf("Total invoice value")).toBeGreaterThan(html.indexOf(`>Item ${n}<`));
+    expect(html.split("Settlement and Payment Record").length - 1).toBe(1);
+    const fronts = html.split("Continued on the next page.").length - 1;
+    expect(pageCount(html)).toBe(2 * (fronts + 1)); // a front and a back for every sheet
   });
 
   it("15 lines: two fronts, a blank back after the first, and the settlement on the last back", () => {
@@ -94,11 +133,6 @@ describe("invoice print: pages", () => {
     expect(pageCount(html)).toBe(4);
     expect(html).toContain("Continued on the next page.");
     expect(html.indexOf("Settlement and Payment Record")).toBeGreaterThan(html.indexOf("Item 15"));
-  });
-
-  it("28 lines: two fronts and the settlement; 29 lines starts a third sheet", () => {
-    expect(pageCount(render(invoice(28)))).toBe(4);
-    expect(pageCount(render(invoice(29)))).toBe(6);
   });
 
   it("with no settlement loaded, the back shows nothing received and the full value due", () => {

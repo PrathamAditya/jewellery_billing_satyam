@@ -48,7 +48,7 @@ await page.fill('input[aria-label="Find customer"]', name);
 await page.waitForSelector('[role="option"]');
 await page.locator('[role="option"]').first().click();
 await page.waitForSelector("text=Saved customer:");
-await page.fill('input[aria-label="Description line 1"]', "Silver Chain");
+await page.fill('[aria-label="Description line 1"]', "Silver Chain");
 await page.selectOption('select[aria-label="Purity line 1"]', "silver");
 await page.fill('input[aria-label="Net g line 1"]', "9.800");
 ok((await page.locator('input[aria-label="Gold rate line 1"]').count()) === 0, "a sale with the rate fixed later has no gold rate box");

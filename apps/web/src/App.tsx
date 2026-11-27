@@ -168,6 +168,11 @@ function Shell() {
       {label}
     </a>
   );
+  const wide =
+    path === "/invoices/new" ||
+    /^\/invoices\/[^/]+\/edit$/.test(path) ||
+    path === "/calculator" ||
+    path === "/old-gold/new";
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col">
       <header className="flex items-center justify-between gap-2 px-2 sm:px-4 py-3 bg-white border-b border-stone-200">
@@ -196,7 +201,7 @@ function Shell() {
           <AccountMenu />
         </div>
       </header>
-      <main className="flex-1 w-full max-w-5xl mx-auto p-4">
+      <main className={`flex-1 w-full ${wide ? "max-w-[92rem]" : "max-w-5xl"} mx-auto p-4`}>
         <Page path={path} meId={user?.id ?? ""} />
       </main>
     </div>

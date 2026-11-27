@@ -1,5 +1,5 @@
-import { Fragment } from "react";
-import { amountInWords, formatMoney, formatRoundOffPrint, formatWeightPrint, metalLine, paginate, type InvoiceResponse, type SettlementResponse } from "@jewellery/shared";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { amountInWords, formatMoney, formatRoundOffPrint, formatWeightPrint, metalLine, paginateByUnits, rowUnits, type InvoiceResponse, type PaymentKind, type SettlementLine, type SettlementResponse } from "@jewellery/shared";
 import { Brand, Field, money, type Header } from "./common";
 
 /** The calculation stored with the invoice (spec 012 R14). Only the fields printed here. */
@@ -24,19 +24,35 @@ export type InvoiceSheetsProps = { invoice: InvoiceResponse; settlement: Settlem
  */
 export function InvoiceSheets({ invoice, settlement, header, copyLabel }: InvoiceSheetsProps) {
   const calc = invoice.calc as StoredCalc;
-  const pages = paginate(invoice.lines);
+  // Feedback point 8: rows go on pages by their height. The starting room is a guess; after the page is laid out, any page whose
+  // content does not fit gives up one unit and the rows are placed again, until nothing is cut off or overlaps the footer.
+  const [caps, setCaps] = useState({ cont: 12, last: 9 });
+  const pages = paginateByUnits(invoice.lines, (l) => rowUnits(l.description), caps.cont, caps.last);
   const last = pages.length - 1;
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const mains = root.current?.querySelectorAll<HTMLElement>("[data-front-main]");
+    if (!mains) return;
+    let tooFullLast = false;
+    let tooFullCont = false;
+    mains.forEach((m) => {
+      if (m.scrollHeight > m.clientHeight + 1) (m.dataset.frontLast === "1" ? (tooFullLast = true) : (tooFullCont = true));
+    });
+    if (tooFullLast || tooFullCont) {
+      setCaps((c) => ({ cont: tooFullCont ? Math.max(1, c.cont - 1) : c.cont, last: tooFullLast ? Math.max(1, c.last - 1) : c.last }));
+    }
+  }, [caps, invoice, header, settlement]);
   // Spec 019c Q95: a sale whose rate is not fixed has no amounts to print, and no settlement page.
   const pending = invoice.rateStatus === "pending";
   return (
-    <>
+    <div ref={root} style={{ display: "contents" }}>
       {pages.map((rows, i) => (
         <Fragment key={i}>
           <FrontPage invoice={invoice} calc={calc} header={header} copyLabel={copyLabel} rows={rows} pageNo={i + 1} isLast={i === last} pending={pending} />
           {i === last && !pending ? <SettlementPage invoice={invoice} calc={calc} header={header} settlement={settlement} /> : <div className="page" />}
         </Fragment>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -49,6 +65,8 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
     <div className="page">
       {invoice.voidedAt && <div className="void-stamp">VOID</div>}
       <div className="watermark" />
+      <div className="front-col">
+      <div className="front-main" data-front-main data-front-last={isLast ? "1" : "0"}>
       <div className="flex justify-between items-start">
         <Brand header={header} />
         <div className="text-right">
@@ -83,14 +101,20 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
           <div className="label">Retail buyer / consumer</div>
         </div>
         <div className="grid grid-cols-3 gap-2 mt-1">
-          <Field label="Name">{invoice.customerName}</Field>
+          <div>
+            <Field label="Name">{invoice.customerName}</Field>
+            <div className="text-[7pt] text-stone-600">INDIA</div>
+          </div>
           {invoice.customerMobile && <Field label="Mobile">{invoice.customerMobile}</Field>}
           {invoice.customerPan && <Field label="PAN">{invoice.customerPan}</Field>}
         </div>
         {invoice.customerAddress && <div className="mt-1"><Field label="Address">{invoice.customerAddress}</Field></div>}
       </div>
 
-      <div className="serif text-[12pt] mt-3">Particulars</div>
+      <div className="flex justify-between items-baseline mt-3">
+        <div className="serif text-[12pt]">Particulars</div>
+        <div className="label">Goods &amp; services</div>
+      </div>
       <table className="ptable mt-1">
         <thead>
           <tr>
@@ -102,7 +126,7 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
           {rows.map((l) => (
             <tr key={l.lineNo}>
               <td>{l.lineNo}</td>
-              <td><div className="value">{l.description || "Item"}</div><div className="label">{metalLine(l.purity, l.hsn)}</div></td>
+              <td><div className="value" style={{ whiteSpace: "pre-line" }}>{l.description || "Item"}</div><div className="label">{metalLine(l.purity, l.hsn)}</div></td>
               <td>{l.hsn}</td>
               <td>{l.purity}</td>
               <td className="r">{formatWeightPrint(l.grossWeightMg)}</td>
@@ -163,7 +187,8 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
         <div className="mt-4 text-[8pt] italic" style={{ color: "#7a6a5f" }}>Continued on the next page.</div>
       )}
 
-      <div className="absolute left-[12mm] right-[12mm] bottom-[10mm]">
+      </div>
+      <div className="front-foot">
         {isLast && (
           <p className="text-[7.5pt] mb-2">Settlement details are printed on the reverse side. Quote invoice number {invoice.invoiceNo} for all future payments.</p>
         )}
@@ -181,17 +206,78 @@ function FrontPage({ invoice, calc, header, copyLabel, rows, pageNo, isLast, pen
         </div>
         <div className="flex justify-between items-end mt-3 text-[6.5pt]" style={{ color: "#7a6a5f" }}>
           <span>This is a computer-generated tax invoice.</span>
-          <span className="label" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
+          <span className="label sign-line" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
         </div>
+      </div>
       </div>
     </div>
   );
 }
 
+function settlementKindOf(l: SettlementLine): PaymentKind {
+  if (l.kind) return l.kind;
+  if (l.type === "Old gold") return "old_gold";
+  if (l.type === "Advance" || l.type === "Opening advance") return "advance";
+  return "invoice_payment";
+}
+
 function SettlementPage({ invoice, calc, header, settlement }: { invoice: InvoiceResponse; calc: StoredCalc; header: Header; settlement: SettlementResponse | null }) {
   const lines = settlement?.lines ?? [];
+  const creditLines = settlement?.creditLines ?? [];
   const received = settlement?.receivedPaise ?? 0;
   const balance = settlement?.balanceDuePaise ?? calc.payablePaise;
+
+  const advanceLines = lines.filter((l) => {
+    const k = settlementKindOf(l);
+    return k === "advance" || k === "opening_advance";
+  });
+  const oldGoldLines = lines.filter((l) => settlementKindOf(l) === "old_gold");
+  const paymentLines = lines.filter((l) => {
+    const k = settlementKindOf(l);
+    return k === "at_sale" || k === "invoice_payment";
+  });
+
+  const section = (title: string, subtitle: string, totalLabel: string, rows: SettlementLine[], extraCredits = false) => {
+    const sub = rows.reduce((s, l) => s + l.amountPaise, 0) + (extraCredits ? creditLines.reduce((s, c) => s + c.amountPaise, 0) : 0);
+    return (
+      <div className="mt-2.5">
+        <div className="flex justify-between items-baseline">
+          <div className="serif text-[11pt] font-semibold">{title}</div>
+          <div className="label">{subtitle}</div>
+        </div>
+        <table className="ptable mt-0.5">
+          <thead>
+            <tr><th>Date</th><th>Mode</th><th>Reference / transaction no.</th><th>Type</th><th className="r">Amount</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.allocationId}>
+                <td>{niceDate(l.date)}</td>
+                <td>{l.mode}</td>
+                <td>{l.reference}{l.fromCustomer ? ` (of ${l.fromCustomer})` : ""}</td>
+                <td>{l.type}</td>
+                <td className="r">{money(l.amountPaise)}</td>
+              </tr>
+            ))}
+            {extraCredits && creditLines.map((c) => (
+              <tr key={c.applicationId}>
+                <td>{niceDate(c.date)}</td>
+                <td>Credit</td>
+                <td>{c.creditNoteNo}</td>
+                <td>Credit note</td>
+                <td className="r">{money(c.amountPaise)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (!extraCredits || creditLines.length === 0) && (
+              <tr><td colSpan={5} style={{ color: "#7a6a5f" }}>Nothing received yet</td></tr>
+            )}
+            <tr><td colSpan={4} className="value">{totalLabel}</td><td className="r value">{money(sub)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="page">
       <div className="watermark" />
@@ -204,29 +290,18 @@ function SettlementPage({ invoice, calc, header, settlement }: { invoice: Invoic
           <div>Invoice no. <strong>{invoice.invoiceNo}</strong></div>
           <div>Invoice date <strong>{niceDate(invoice.invoiceDate)}</strong></div>
           <div>Customer <strong>{invoice.customerName}</strong></div>
+          <div className="label mt-0.5">Page 1</div>
         </div>
       </div>
-      <div className="rule mt-3" />
+      <div className="rule mt-2" />
 
-      <div className="serif text-[12pt] mt-3">Advance payments</div>
-      <div className="label">Received before or against the sale</div>
-      <table className="ptable mt-1">
-        <thead>
-          <tr><th>Date</th><th>Mode</th><th>Reference / transaction no.</th><th>Type</th><th className="r">Amount</th></tr>
-        </thead>
-        <tbody>
-          {lines.map((l) => (
-            <tr key={l.allocationId}>
-              <td>{niceDate(l.date)}</td><td>{l.mode}</td><td>{l.reference}</td><td>{l.type}</td><td className="r">{money(l.amountPaise)}</td>
-            </tr>
-          ))}
-          {lines.length === 0 && <tr><td colSpan={5}>Nothing received yet</td></tr>}
-          <tr><td colSpan={4} className="value">Total advance payments</td><td className="r value">{money(received)}</td></tr>
-        </tbody>
-      </table>
-      {settlement?.advanceReference && <p className="text-[8pt] mt-2"><span className="label">Advance reference</span> {settlement.advanceReference}</p>}
+      {section("Advance", "Advances applied to this invoice", "Total advance", advanceLines, true)}
+      {section("Old Gold", "Old gold adjusted against this invoice", "Total old gold", oldGoldLines)}
+      {section("Payment", "Payments received against this invoice", "Total payment", paymentLines)}
 
-      <div className="grid grid-cols-2 gap-4 mt-4">
+      {settlement?.advanceReference && <p className="text-[8pt] mt-2"><span className="label">Advance / payment reference</span> {settlement.advanceReference}</p>}
+
+      <div className="grid grid-cols-2 gap-4 mt-3">
         <div className="p-3 border border-[var(--print-line)]" style={{ background: "#f7f1e3" }}>
           <div className="label">Settlement note</div>
           <p className="text-[7.5pt] mt-1">{header.texts.settlementNote}</p>
@@ -237,7 +312,7 @@ function SettlementPage({ invoice, calc, header, settlement }: { invoice: Invoic
           <table className="ptable">
             <tbody>
               <tr><td>Invoice value</td><td className="r">{money(calc.payablePaise)}</td></tr>
-              <tr><td>Less: advance received</td><td className="r">{money(received)}</td></tr>
+              <tr><td>Less: total received</td><td className="r">{money(received)}</td></tr>
             </tbody>
           </table>
           <div className="total-box mt-2 flex justify-between items-center">
@@ -248,7 +323,7 @@ function SettlementPage({ invoice, calc, header, settlement }: { invoice: Invoic
       </div>
 
       <div className="absolute left-[12mm] right-[12mm] bottom-[10mm] flex justify-end">
-        <span className="label" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
+        <span className="label sign-line" style={{ color: "var(--print-ink)" }}>Authorised signatory</span>
       </div>
     </div>
   );
